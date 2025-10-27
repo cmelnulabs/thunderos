@@ -3,8 +3,11 @@
  */
 
 #include "hal/hal_uart.h"
+#include "hal/hal_timer.h"
 #include "trap.h"
-#include "clint.h"
+
+// Timer interval: 1 second = 1,000,000 microseconds
+#define TIMER_INTERVAL_US 1000000
 
 void kernel_main(void) {
     // Initialize UART for serial output
@@ -25,7 +28,7 @@ void kernel_main(void) {
     hal_uart_puts("[OK] Trap handler initialized\n");
     
     // Initialize timer interrupts
-    clint_init();
+    hal_timer_init(TIMER_INTERVAL_US);
     hal_uart_puts("[OK] Timer interrupts enabled\n");
     
     hal_uart_puts("[  ] Memory management: TODO\n");

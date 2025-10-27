@@ -4,7 +4,7 @@
 
 #include "trap.h"
 #include "hal/hal_uart.h"
-#include "clint.h"
+#include "hal/hal_timer.h"
 
 // CSR read helpers
 static inline unsigned long read_scause(void) {
@@ -93,7 +93,7 @@ static void handle_interrupt(struct trap_frame *tf __attribute__((unused)), unsi
     switch (cause) {
         case IRQ_S_TIMER:
             // Handle timer interrupt
-            clint_handle_timer();
+            hal_timer_handle_interrupt();
             break;
         case IRQ_S_SOFT:
             hal_uart_puts("Software interrupt\n");
