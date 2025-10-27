@@ -9,6 +9,9 @@ This section documents the internal implementation details of ThunderOS.
 
    bootloader
    uart_driver
+   trap_handler
+   timer_clint
+   testing_framework
    linker_script
    memory_layout
    registers
@@ -40,12 +43,18 @@ Component Status
    * - :doc:`uart_driver`
      - ✓ Done
      - NS16550A UART driver for serial I/O
+   * - :doc:`trap_handler`
+     - ✓ Done
+     - Exception and interrupt handling infrastructure
+   * - :doc:`timer_clint`
+     - ✓ Done
+     - CLINT timer driver using SBI for timer interrupts
+   * - :doc:`testing_framework`
+     - ✓ Done
+     - KUnit-inspired testing framework for kernel
    * - :doc:`linker_script`
      - ✓ Done
      - Memory layout and section placement
-   * - Interrupt Handling
-     - TODO
-     - PLIC/CLINT, trap handlers
    * - Memory Management
      - TODO
      - Physical allocator, paging, heap
@@ -67,14 +76,27 @@ Source Files
    kernel/
    ├── main.c              # Kernel entry point
    ├── arch/riscv64/
-   │   └── kernel.ld       # Linker script
+   │   ├── kernel.ld       # Linker script
+   │   ├── trap_entry.S    # Assembly trap vector
+   │   └── trap.c          # C trap handler
    ├── core/               # (Future) Core kernel
    ├── drivers/
-   │   └── uart.c          # UART driver
+   │   ├── uart.c          # UART driver
+   │   └── clint.c         # CLINT timer driver
    └── mm/                 # (Future) Memory management
 
    include/
-   └── uart.h              # Public headers
+   ├── uart.h              # UART interface
+   ├── trap.h              # Trap structures and constants
+   └── clint.h             # Timer interface
+   
+   tests/
+   ├── framework/
+   │   ├── kunit.h         # Test framework header
+   │   └── kunit.c         # Test framework implementation
+   ├── test_trap.c         # Trap handler tests
+   ├── test_timer.c        # Timer interrupt tests
+   └── Makefile            # Test build system
 
 Coding Conventions
 ~~~~~~~~~~~~~~~~~~

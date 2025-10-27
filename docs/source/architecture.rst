@@ -16,15 +16,26 @@ High-Level Overview
                     │      Kernel Space           │
                     │  ┌──────────────────────┐   │
                     │  │   Process Scheduler  │   │
+                    │  │      (TODO)          │   │
                     │  └──────────────────────┘   │
                     │  ┌──────────────────────┐   │
                     │  │  Memory Management   │   │
+                    │  │      (TODO)          │   │
+                    │  └──────────────────────┘   │
+                    │  ┌──────────────────────┐   │
+                    │  │   Interrupt System   │   │
+                    │  │  - Trap Handler   ✓  │   │
+                    │  │  - Timer (CLINT)  ✓  │   │
+                    │  │  - PLIC (TODO)       │   │
                     │  └──────────────────────┘   │
                     │  ┌──────────────────────┐   │
                     │  │   Device Drivers     │   │
-                    │  │   - UART             │   │
-                    │  │   - PLIC/CLINT       │   │
-                    │  │   - AI Accelerators  │   │
+                    │  │   - UART          ✓  │   │
+                    │  │   - AI Accel (TODO)  │   │
+                    │  └──────────────────────┘   │
+                    │  ┌──────────────────────┐   │
+                    │  │   Testing Framework  │   │
+                    │  │   - KUnit-style   ✓  │   │
                     │  └──────────────────────┘   │
                     └─────────────────────────────┘
                                │
@@ -68,9 +79,11 @@ The boot sequence follows this flow:
 4. **Kernel Initialization (kernel_main)**
    
    * Initialize UART
+   * Setup trap handler
+   * Initialize timer (CLINT)
+   * Enable interrupts
    * Print boot messages
-   * (Future) Setup interrupts, memory, processes
-   * Enter idle loop
+   * Enter idle loop (WFI - Wait For Interrupt)
 
 Memory Layout
 -------------
@@ -132,10 +145,14 @@ Bootloader
 * **File**: ``boot/boot.S``
 * **Purpose**: First code executed after firmware
 * **Language**: RISC-V assembly
+* **Status**: ✓ Implemented
 * Responsibilities:
 
+  * Disable interrupts
   * Environment setup (stack, BSS)
   * Transfer control to C code
+
+See :doc:`internals/bootloader` for details.
 
 UART Driver
 ~~~~~~~~~~~
@@ -143,12 +160,81 @@ UART Driver
 * **Files**: ``kernel/drivers/uart.c``, ``include/uart.h``
 * **Purpose**: Serial console I/O
 * **Hardware**: NS16550A compatible UART
+* **Status**: ✓ Implemented
 * Functions:
 
   * ``uart_init()`` - Initialize driver
   * ``uart_putc()`` - Output character
   * ``uart_puts()`` - Output string
   * ``uart_getc()`` - Input character
+
+See :doc:`internals/uart_driver` for details.
+
+Trap Handler
+~~~~~~~~~~~~
+
+* **Files**: ``kernel/arch/riscv64/trap_entry.S``, ``kernel/arch/riscv64/trap.c``, ``include/trap.h``
+* **Purpose**: Handle exceptions and interrupts
+* **Status**: ✓ Implemented
+* Components:
+
+  * ``trap_vector`` - Assembly entry point (saves/restores context)
+  * ``trap_handler()`` - C handler (dispatches by cause)
+  * ``handle_exception()`` - Exception handler
+  * ``handle_interrupt()`` - Interrupt dispatcher
+
+Features:
+
+* Complete register save/restore (34 registers)
+* Exception identification and reporting
+* Interrupt routing (timer, software, external)
+* Integration with timer driver
+
+See :doc:`internals/trap_handler` for details.
+
+Timer Driver (CLINT)
+~~~~~~~~~~~~~~~~~~~~
+
+* **Files**: ``kernel/drivers/clint.c``, ``include/clint.h``
+* **Purpose**: Periodic timer interrupts for timekeeping
+* **Hardware**: CLINT (Core Local Interruptor) via SBI
+* **Status**: ✓ Implemented
+* Functions:
+
+  * ``clint_init()`` - Initialize timer and enable interrupts
+  * ``clint_get_ticks()`` - Get tick counter
+  * ``clint_set_timer()`` - Schedule next interrupt
+  * ``clint_handle_timer()`` - Interrupt handler
+
+Features:
+
+* SBI-based timer programming (S-mode compatible)
+* Configurable interrupt interval (default: 1 second)
+* Tick counter for timekeeping
+* Uses ``rdtime`` instruction for precise timing
+
+See :doc:`internals/timer_clint` for details.
+
+Testing Framework
+~~~~~~~~~~~~~~~~~
+
+* **Files**: ``tests/framework/kunit.{c,h}``
+* **Purpose**: Automated kernel testing
+* **Status**: ✓ Implemented
+* Features:
+
+  * KUnit-inspired API
+  * Assertion macros (EXPECT_EQ, EXPECT_NE, etc.)
+  * Test suite organization
+  * Formatted TAP-style output
+  * Separate test kernels for isolation
+
+Test Suites:
+
+* ``tests/test_trap.c`` - Trap handler tests (4 tests)
+* ``tests/test_timer.c`` - Timer interrupt tests (6 tests)
+
+See :doc:`internals/testing_framework` for details.
 
 Kernel Main
 ~~~~~~~~~~~
@@ -158,8 +244,10 @@ Kernel Main
 * **Current functionality**:
 
   * Initialize UART
+  * Setup trap handler
+  * Initialize timer
   * Print boot messages
-  * Idle loop (WFI)
+  * Idle loop with WFI (Wait For Interrupt)
 
 Build System
 ------------
@@ -213,24 +301,34 @@ Future Architecture
 
 Planned components:
 
-**Interrupt Handling**
-   * PLIC driver for external interrupts
-   * CLINT driver for timer interrupts
-   * Trap handlers for exceptions
+**External Interrupts (PLIC)**
+   * Platform-Level Interrupt Controller driver
+   * External device interrupt routing
+   * Interrupt priority management
+   * Integration with UART and other devices
 
 **Memory Management**
-   * Physical memory allocator
-   * Virtual memory (paging)
-   * Kernel heap
+   * Physical memory allocator (page-based)
+   * Virtual memory with SV39 paging
+   * Kernel heap allocator
+   * Memory protection
 
 **Process Management**
    * Process/task structures
    * Context switching
-   * Scheduler (AI-aware)
+   * Scheduler (AI-aware, time-slicing)
+   * Inter-process communication
+
+**System Calls**
+   * User/kernel mode boundary
+   * System call interface via ecall
+   * Argument passing and validation
+   * Error handling
 
 **AI Acceleration**
    * Vector instruction support (RVV)
    * Accelerator drivers
    * DMA management
+   * Specialized scheduling for AI workloads
 
 See :doc:`internals/index` for detailed implementation documentation.

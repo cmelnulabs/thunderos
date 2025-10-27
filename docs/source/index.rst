@@ -47,8 +47,12 @@ Current Status
      - ✓ Implemented
    * - UART Driver
      - ✓ Implemented
-   * - Interrupt Handling
-     - ⏳ TODO
+   * - Trap Handler
+     - ✓ Implemented
+   * - Timer Interrupts (CLINT)
+     - ✓ Implemented
+   * - Testing Framework
+     - ✓ Implemented
    * - Memory Management
      - ⏳ TODO
    * - Process Scheduler
