@@ -3,6 +3,7 @@
  */
 
 #include "uart.h"
+#include "trap.h"
 
 void kernel_main(void) {
     // Initialize UART for serial output
@@ -17,7 +18,11 @@ void kernel_main(void) {
     uart_puts("Initializing...\n\n");
     
     uart_puts("[OK] UART initialized\n");
-    uart_puts("[  ] Interrupts: TODO\n");
+    
+    // Initialize trap handling
+    trap_init();
+    uart_puts("[OK] Trap handler initialized\n");
+    
     uart_puts("[  ] Memory management: TODO\n");
     uart_puts("[  ] Process scheduler: TODO\n");
     uart_puts("[  ] AI accelerators: TODO\n");

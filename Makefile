@@ -31,12 +31,15 @@ KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/*.c)
 KERNEL_ASM_SOURCES := $(wildcard $(KERNEL_DIR)/arch/riscv64/*.S)
 
+KERNEL_ASM_SOURCES := $(sort $(KERNEL_ASM_SOURCES))
+
 # Object files
 BOOT_OBJS := $(patsubst $(BOOT_DIR)/%.S,$(BUILD_DIR)/boot/%.o,$(BOOT_SOURCES))
 KERNEL_C_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C_SOURCES))
 KERNEL_ASM_OBJS := $(patsubst %.S,$(BUILD_DIR)/%.o,$(KERNEL_ASM_SOURCES))
 
-ALL_OBJS := $(BOOT_OBJS) $(KERNEL_C_OBJS) $(KERNEL_ASM_OBJS)
+# Remove duplicates
+ALL_OBJS := $(sort $(BOOT_OBJS) $(KERNEL_C_OBJS) $(KERNEL_ASM_OBJS))
 
 # Target binary
 KERNEL_ELF := $(BUILD_DIR)/thunderos.elf
