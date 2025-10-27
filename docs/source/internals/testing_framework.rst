@@ -306,96 +306,10 @@ The ``KUNIT_CASE`` macro simplifies this:
 Build System
 ------------
 
-Test Makefile
-~~~~~~~~~~~~~
-
-Each test is built into a separate kernel binary:
-
-.. code-block:: make
-
-   # tests/Makefile
-   
-   # Common objects needed by all tests
-   BOOT_OBJ := $(BUILD_DIR)/boot.o
-   UART_OBJ := $(BUILD_DIR)/uart.o
-   TRAP_OBJ := $(BUILD_DIR)/trap.o
-   TRAP_ENTRY_OBJ := $(BUILD_DIR)/trap_entry.o
-   KUNIT_OBJ := $(BUILD_DIR)/kunit.o
-   CLINT_OBJ := $(BUILD_DIR)/clint.o
-   
-   COMMON_OBJS := $(BOOT_OBJ) $(UART_OBJ) $(TRAP_OBJ) $(TRAP_ENTRY_OBJ) $(KUNIT_OBJ)
-   COMMON_OBJS_WITH_CLINT := $(COMMON_OBJS) $(CLINT_OBJ)
-   
-   # Test targets
-   TEST_TRAP := $(BUILD_DIR)/test_trap.elf
-   TEST_TIMER := $(BUILD_DIR)/test_timer.elf
-   
-   # Build test_trap
-   $(TEST_TRAP): $(BUILD_DIR)/test_trap.o $(COMMON_OBJS_WITH_CLINT)
-       $(LD) $(LDFLAGS) -o $@ $^
-   
-   # Build test_timer
-   $(TEST_TIMER): $(BUILD_DIR)/test_timer.o $(COMMON_OBJS_WITH_CLINT)
-       $(LD) $(LDFLAGS) -o $@ $^
-
-Running Tests
-~~~~~~~~~~~~~
-
-.. code-block:: make
-
-   # Run trap handler tests
-   run-test-trap: $(TEST_TRAP)
-       @echo "Running trap handler tests..."
-       @timeout 5 qemu-system-riscv64 -machine virt -m 128M -nographic \
-           -serial mon:stdio -bios default -kernel $(TEST_TRAP) || true
-   
-   # Run timer interrupt tests
-   run-test-timer: $(TEST_TIMER)
-       @echo "Running timer interrupt tests..."
-       @timeout 10 qemu-system-riscv64 -machine virt -m 128M -nographic \
-           -serial mon:stdio -bios default -kernel $(TEST_TIMER) || true
-
-The ``timeout`` command ensures tests don't hang forever.
 
 Writing Tests
 -------------
 
-Example: Testing UART
-~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: c
-
-   // tests/test_uart.c (hypothetical)
-   
-   #include "kunit.h"
-   #include "uart.h"
-   
-   static void test_uart_initialized(void) {
-       // Check UART LSR register is accessible
-       volatile unsigned char *lsr = (unsigned char *)0x10000005;
-       unsigned char status = *lsr;
-       
-       // THR should be empty after init
-       KUNIT_EXPECT_TRUE(status & 0x20);
-   }
-   
-   static void test_uart_echo(void) {
-       // This would require mocking or actual input
-       uart_putc('A');
-       // In real hardware, check if 'A' was transmitted
-   }
-   
-   static struct kunit_case uart_tests[] = {
-       KUNIT_CASE(test_uart_initialized),
-       KUNIT_CASE(test_uart_echo),
-       {}
-   };
-   
-   void test_main(void) {
-       uart_init();
-       kunit_run_tests(uart_tests);
-       while (1) asm volatile("wfi");
-   }
 
 Example: Testing Timer
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -429,26 +343,6 @@ Example: Testing Timer
        KUNIT_EXPECT_EQ(clint_get_ticks(), start_ticks + 1);
    }
 
-Example: Testing Memory
-~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: c
-
-   // tests/test_memory.c (future)
-   
-   static void test_page_allocation(void) {
-       void *page = alloc_page();
-       KUNIT_EXPECT_NOT_NULL(page);
-       
-       // Check alignment
-       KUNIT_EXPECT_EQ((unsigned long)page % 4096, 0);
-       
-       // Check we can write to it
-       *(unsigned long *)page = 0xdeadbeef;
-       KUNIT_EXPECT_EQ(*(unsigned long *)page, 0xdeadbeef);
-       
-       free_page(page);
-   }
 
 Test Output Format
 ------------------

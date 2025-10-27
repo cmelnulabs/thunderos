@@ -11,6 +11,7 @@ The documentation is built using [Sphinx](https://www.sphinx-doc.org/) and organ
 - **Introduction** (`source/introduction.rst`) - Project overview, goals, and getting started
 - **Architecture** (`source/architecture.rst`) - High-level system architecture and component overview
 - **Internals** (`source/internals/`) - Detailed implementation documentation
+- **RISC-V Reference** (`source/riscv/`) - RISC-V architecture reference guide
 - **Development** (`source/development.rst`) - Development workflow, tools, and practices
 - **API Reference** (`source/api.rst`) - Function and data structure reference
 
@@ -51,9 +52,20 @@ The `internals/` directory contains detailed technical documentation for each im
    - Running tests in QEMU
    - Test output format
 
-6. **Linker Script** (`linker_script.rst`) - Memory layout definition
-7. **Memory Layout** (`memory_layout.rst`) - Address space organization
-8. **Registers** (`registers.rst`) - RISC-V register reference
+- **Linker Script** - Memory layout definition
+- **Memory Layout** - Address space organization
+- **Registers** - RISC-V register reference
+
+### RISC-V Reference Guide
+
+The `riscv/` directory contains practical reference material for RISC-V architecture:
+
+- **Instruction Set** - Complete instruction reference with examples
+- **Privilege Levels** - U/S/M modes and transitions
+- **CSR Registers** - Control and Status Registers
+- **Memory Model** - Weak ordering and virtual memory
+- **Interrupts/Exceptions** - Trap handling mechanism
+- **Assembly Guide** - Calling conventions and inline assembly
 
 ## Building Documentation
 
@@ -152,10 +164,11 @@ Focus on:
 ### For RISC-V Learners
 
 Study:
-1. Bootloader - Assembly and initialization
-2. Trap Handler - Exception/interrupt mechanism
-3. Registers - RISC-V CSR reference
-4. Timer/CLINT - SBI and interrupt programming
+1. **RISC-V Reference** - Start here for architecture basics
+2. Instruction Set - Complete instruction reference
+3. Privilege Levels - Understanding U/S/M modes
+4. Trap Handler - Exception/interrupt mechanism in practice
+5. Assembly Guide - Practical assembly programming
 
 ## Contributing to Documentation
 
@@ -256,11 +269,12 @@ open docs/build/html/index.html      # macOS
 ## Documentation Metrics
 
 Current documentation size:
-- **14 RST files** (source files)
-- **~8,000+ lines** of documentation
-- **~50+ code examples**
-- **~30+ diagrams/tables**
+- **20 RST files** (14 internals + 6 RISC-V reference)
+- **~12,000+ lines** of documentation
+- **~80+ code examples**
+- **~50+ diagrams/tables**
 - **100% coverage** of implemented components
+- **Complete RISC-V reference** for OS development
 
 ## License
 

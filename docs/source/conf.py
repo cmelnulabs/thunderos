@@ -6,6 +6,9 @@ copyright = '2025, ThunderOS Team'
 author = 'ThunderOS Team'
 release = '0.1.0'
 
+# License information
+project_license = 'GPL v3'
+
 # -- General configuration ---------------------------------------------------
 extensions = [
     'sphinx.ext.autodoc',

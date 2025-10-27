@@ -85,13 +85,7 @@ Step 1: Disable Interrupts
    * Interrupts will be re-enabled later when handlers are ready
 
 **RISC-V Details:**
-   * ``csrw`` = CSR Write (Control and Status Register write)
-   * ``sie`` = Supervisor Interrupt Enable register (CSR 0x104)
-   * Each bit controls a different interrupt source:
-   
-     * Bit 1: Supervisor software interrupt
-     * Bit 5: Supervisor timer interrupt  
-     * Bit 9: Supervisor external interrupt
+   For CSR instruction reference, see :doc:`../riscv/csr_registers` and :doc:`../riscv/instruction_set`.
 
 Step 2: Setup Stack Pointer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -113,13 +107,7 @@ Step 2: Setup Stack Pointer
    * Without a stack, calling any function would crash
 
 **RISC-V Details:**
-   * ``la`` = Load Address (pseudo-instruction)
-   
-     * Expands to: ``auipc + addi`` (address PC-relative + add immediate)
-   
-   * ``sp`` = Stack Pointer (x2 register)
-   * Stack grows **downward** in RISC-V (high address → low address)
-   * ``_stack_top`` points to highest address (16KB above ``_stack_bottom``)
+   See :doc:`../riscv/assembly_guide` for stack conventions and calling convention details.
 
 **Stack Layout:**
 
@@ -257,30 +245,13 @@ Stack Definition
 Register Usage
 --------------
 
-The bootloader uses these RISC-V registers:
+The bootloader uses:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 15 15 70
+* ``sp`` (x2) - Stack pointer (set to ``_stack_top``)
+* ``t0``/``t1`` (x5/x6) - Temporaries for BSS clearing loop
+* ``ra`` (x1) - Return address (set by ``call``)
 
-   * - Register
-     - Name
-     - Usage
-   * - x0
-     - zero
-     - Always zero (used for ``csrw sie, zero``)
-   * - x2
-     - sp
-     - Stack pointer (set to ``_stack_top``)
-   * - x5
-     - t0
-     - Temporary: BSS clear loop pointer
-   * - x6
-     - t1
-     - Temporary: BSS end address
-   * - x1
-     - ra
-     - Return address (set by ``call``)
+For complete register reference, see :doc:`../riscv/assembly_guide`.
 
 Control Flow
 ------------

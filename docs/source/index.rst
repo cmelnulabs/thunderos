@@ -5,6 +5,8 @@ ThunderOS Documentation
 It is designed from scratch to take advantage of RISC-V's open architecture 
 and extensibility, particularly the Vector Extension (RVV) for AI acceleration.
 
+**License**: GNU General Public License v3.0 (GPL v3)
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -12,6 +14,7 @@ and extensibility, particularly the Vector Extension (RVV) for AI acceleration.
    introduction
    architecture
    internals/index
+   riscv/index
    development
    api
 
@@ -65,3 +68,25 @@ Indices and tables
 
 * :ref:`genindex`
 * :ref:`search`
+
+License
+=======
+
+ThunderOS is free software licensed under the **GNU General Public License v3.0 (GPL v3)**.
+
+This means you are free to:
+
+* Use the software for any purpose
+* Study how it works and modify it
+* Distribute copies
+* Distribute modified versions
+
+Under the following conditions:
+
+* Source code must be made available when distributing the software
+* Modified versions must also be licensed under GPL v3
+* Changes must be documented
+
+See the full LICENSE file in the repository for complete terms and conditions.
+
+**Copyright © 2025 ThunderOS Team**
