@@ -28,7 +28,7 @@ The trap handling system consists of three main components:
 .. code-block:: text
 
    kernel/arch/riscv64/trap_entry.S  - Assembly trap vector and context save/restore
-   kernel/arch/riscv64/trap.c        - C trap handler logic
+   kernel/arch/riscv64/core/trap.c   - C trap handler logic
    include/trap.h                    - Trap frame structure and constants
 
 Trap Flow
@@ -55,10 +55,10 @@ Trap Flow
          │         ├─> Print exception info
          │         └─> Halt system (currently)
          |
-         └──> Interrupt: [handle_interrupt()]
-               ├─> Timer interrupt → clint_handle_timer()
-               ├─> Software interrupt → (TODO)
-               └─> External interrupt → (TODO)
+        └──> Interrupt: [handle_interrupt()]
+              ├─> Timer interrupt → hal_timer_handle_interrupt()
+              ├─> Software interrupt → (TODO)
+              └─> External interrupt → (TODO)
          |
          v
    [trap_vector restore] (trap_entry.S)
@@ -91,9 +91,11 @@ For RISC-V trap instructions, see :doc:`../riscv/instruction_set`.
 C Trap Handler
 --------------
 
-Location: ``kernel/arch/riscv64/trap.c``
+Location: ``kernel/arch/riscv64/core/trap.c``
 
 Reads ``scause`` to determine if trap is an exception or interrupt, then dispatches to ``handle_exception()`` or ``handle_interrupt()``.
+
+The timer interrupt handler now uses the HAL abstraction (``hal_timer_handle_interrupt()``) instead of directly calling CLINT functions. This makes the trap handler portable across architectures.
 
 Trap Causes
 -----------

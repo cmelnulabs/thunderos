@@ -5,7 +5,7 @@
 
 #include "kunit.h"
 #include "trap.h"
-#include "uart.h"
+#include "hal/hal_uart.h"
 
 // Global flag to track if exception was caught
 static volatile int exception_caught = 0;
@@ -66,14 +66,14 @@ static struct kunit_test trap_test_cases[] = {
 
 // Test kernel main
 void kernel_main(void) {
-    uart_init();
+    hal_uart_init();
     trap_init();
     
-    uart_puts("\n");
-    uart_puts("=================================\n");
-    uart_puts("   ThunderOS - Test Kernel\n");
-    uart_puts("=================================\n");
-    uart_puts("Running trap handler tests...\n");
+    hal_uart_puts("\n");
+    hal_uart_puts("=================================\n");
+    hal_uart_puts("   ThunderOS - Test Kernel\n");
+    hal_uart_puts("=================================\n");
+    hal_uart_puts("Running trap handler tests...\n");
     
     // Run all tests
     int num_tests = sizeof(trap_test_cases) / sizeof(trap_test_cases[0]);
@@ -81,9 +81,9 @@ void kernel_main(void) {
     
     // Exit with status code
     if (failed == 0) {
-        uart_puts("Test kernel exiting with success.\n");
+        hal_uart_puts("Test kernel exiting with success.\n");
     } else {
-        uart_puts("Test kernel exiting with failures.\n");
+        hal_uart_puts("Test kernel exiting with failures.\n");
     }
     
     // Halt

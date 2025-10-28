@@ -213,7 +213,7 @@ Features:
 * Tick counter for timekeeping
 * Uses ``rdtime`` instruction for precise timing
 
-See :doc:`internals/timer_clint` for details.
+See :doc:`internals/hal_timer` for details.
 
 Testing Framework
 ~~~~~~~~~~~~~~~~~

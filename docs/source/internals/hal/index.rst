@@ -20,6 +20,10 @@ Current Status
 
 The UART subsystem has been fully migrated to HAL.
 
+**Timer HAL - ✅ Implemented**
+
+The timer subsystem has been fully migrated to HAL, providing portable timer interfaces.
+
 Architecture Support
 --------------------
 
@@ -95,6 +99,84 @@ Portable kernel code:
 
 This code works unchanged on RISC-V, ARM64, or x86-64!
 
+HAL Timer Interface
+-------------------
+
+Located in ``include/hal/hal_timer.h``
+
+See :doc:`../hal_timer` for complete documentation.
+
+Functions
+~~~~~~~~~
+
+.. code-block:: c
+
+   void hal_timer_init(unsigned long interval_us);
+   unsigned long hal_timer_get_ticks(void);
+   void hal_timer_set_next(unsigned long interval_us);
+   void hal_timer_handle_interrupt(void);
+
+**hal_timer_init(interval_us)**
+   Initialize timer hardware and start periodic interrupts at specified interval
+   (in microseconds). Enables timer interrupts and global interrupts.
+
+**hal_timer_get_ticks()**
+   Returns the number of timer interrupts that have occurred since initialization.
+   Useful for timekeeping and scheduling decisions.
+
+**hal_timer_set_next(interval_us)**
+   Schedule the next timer interrupt to occur after the specified number of
+   microseconds. Typically called by ``hal_timer_handle_interrupt()``.
+
+**hal_timer_handle_interrupt()**
+   Called by the trap handler when a timer interrupt occurs. Increments tick
+   counter and schedules the next interrupt automatically.
+
+RISC-V Timer Implementation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+File: ``kernel/arch/riscv64/drivers/timer.c``
+
+The RISC-V implementation uses the CLINT (Core Local Interruptor) accessed via SBI:
+
+* **Timer Frequency**: 10 MHz on QEMU virt machine
+* **Interface**: SBI ecall for setting timer comparator
+* **Reading Time**: ``rdtime`` CSR instruction
+* **Interrupt Enable**: STIE bit in ``sie`` CSR
+* **Automatic Re-scheduling**: Each interrupt schedules the next
+
+Example Usage
+~~~~~~~~~~~~~
+
+Portable kernel code:
+
+.. code-block:: c
+
+   #include "hal/hal_timer.h"
+
+   void kernel_main(void) {
+       hal_uart_init();
+       trap_init();
+       
+       // Start timer: 1-second intervals
+       hal_timer_init(1000000);
+       
+       // Idle loop - interrupts will fire
+       while (1) {
+           asm volatile("wfi");  // Wait for interrupt
+       }
+   }
+
+**Output:**
+
+.. code-block:: text
+
+   Timer initialized (interval: 1 second)
+   Tick: 1
+   Tick: 2
+   Tick: 3
+   ...
+
 Migration Status
 ----------------
 
@@ -111,11 +193,11 @@ Migration Status
      - ✅ Complete
      - Fully tested on RISC-V QEMU
    * - Timer
-     - 🔄 Planned
-     - Next migration target
+     - ✅ Complete
+     - RISC-V implementation via SBI/CLINT
    * - Interrupts
      - 🔄 Planned
-     - After timer
+     - Next migration target
    * - CPU Control
      - 🔄 Planned
      - CSR access, power management
@@ -127,15 +209,18 @@ Files Updated
 ~~~~~~~~~~~~~
 
 **HAL Interface:**
-   * ``include/hal/hal_uart.h`` - Interface definition
+   * ``include/hal/hal_uart.h`` - UART interface definition
+   * ``include/hal/hal_timer.h`` - Timer interface definition
 
 **RISC-V Implementation:**
    * ``kernel/arch/riscv64/drivers/uart.c`` - NS16550A driver
+   * ``kernel/arch/riscv64/drivers/timer.c`` - CLINT/SBI timer driver
 
 **Portable Kernel Code:**
-   * ``kernel/main.c`` - Uses HAL UART
-   * ``kernel/arch/riscv64/trap.c`` - Uses HAL for error messages
-   * ``kernel/drivers/clint.c`` - Uses HAL for timer output
+   * ``kernel/main.c`` - Uses HAL UART and HAL Timer
+   * ``kernel/arch/riscv64/core/trap.c`` - Uses HAL for error messages and timer handling
+   * ``kernel/mm/pmm.c`` - Uses HAL UART for output
+   * ``kernel/mm/kmalloc.c`` - Uses HAL UART for error messages
 
 Benefits Achieved
 -----------------
@@ -161,28 +246,21 @@ Future HAL Subsystems
 
 Planned HAL interfaces (in order of implementation):
 
-1. **hal_timer.h** - Timer/CLINT abstraction
-   
-   * ``hal_timer_init()``
-   * ``hal_timer_set()``
-   * ``hal_timer_get_ticks()``
-   * ``hal_timer_delay()``
-
-2. **hal_interrupt.h** - Interrupt/trap handling
+1. **hal_interrupt.h** - Interrupt/trap handling
    
    * ``hal_interrupt_init()``
    * ``hal_interrupt_enable()``
    * ``hal_interrupt_disable()``
    * ``hal_trap_register()``
 
-3. **hal_cpu.h** - CPU control
+2. **hal_cpu.h** - CPU control
    
    * ``hal_cpu_halt()``
    * ``hal_cpu_relax()``
    * ``hal_cpu_id()``
    * CSR access functions (RISC-V specific)
 
-4. **hal_mmu.h** - Memory management unit
+3. **hal_mmu.h** - Memory management unit
    
    * ``hal_mmu_init()``
    * ``hal_mmu_map()``
@@ -221,7 +299,7 @@ To port ThunderOS to a new architecture:
 See Also
 --------
 
-* :doc:`../uart_driver` - Original UART implementation (pre-HAL)
+* :doc:`../uart_driver` - NS16550A UART hardware details
 * :doc:`../trap_handler` - Interrupt handling
-* :doc:`../timer_clint` - Timer implementation
+* :doc:`../hal_timer` - Timer HAL interface
 * :doc:`../../riscv/index` - RISC-V architecture reference

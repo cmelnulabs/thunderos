@@ -10,7 +10,10 @@ This section documents the internal implementation details of ThunderOS.
    bootloader
    uart_driver
    trap_handler
-   timer_clint
+   hal_timer
+   pmm
+   kmalloc
+   kstring
    testing_framework
    linker_script
    memory_layout
@@ -47,18 +50,27 @@ Component Status
    * - :doc:`trap_handler`
      - ✓ Done
      - Exception and interrupt handling infrastructure
-   * - :doc:`timer_clint`
+   * - :doc:`hal_timer`
      - ✓ Done
-     - CLINT timer driver using SBI for timer interrupts
+     - Hardware abstraction layer for timer (portable interface)
+   * - :doc:`pmm`
+     - ✓ Done
+     - Physical memory manager with bitmap allocator
+   * - :doc:`kmalloc`
+     - ✓ Done
+     - Kernel heap allocator (single-page limitation)
+   * - :doc:`kstring`
+     - ✓ Done
+     - Kernel string utilities (kprint_dec, kprint_hex)
    * - :doc:`testing_framework`
      - ✓ Done
      - KUnit-inspired testing framework for kernel
    * - :doc:`linker_script`
      - ✓ Done
      - Memory layout and section placement
-   * - Memory Management
+   * - Virtual Memory
      - TODO
-     - Physical allocator, paging, heap
+     - Paging, TLB management, VA→PA translation
    * - Process Scheduler
      - TODO
      - Task structures, context switching
@@ -79,17 +91,30 @@ Source Files
    ├── arch/riscv64/
    │   ├── kernel.ld       # Linker script
    │   ├── trap_entry.S    # Assembly trap vector
-   │   └── trap.c          # C trap handler
-   ├── core/               # (Future) Core kernel
-   ├── drivers/
-   │   ├── uart.c          # UART driver
-   │   └── clint.c         # CLINT timer driver
-   └── mm/                 # (Future) Memory management
+   │   ├── boot/
+   │   ├── core/
+   │   │   └── trap.c      # C trap handler
+   │   ├── cpu/
+   │   ├── drivers/
+   │   │   ├── uart.c      # UART HAL implementation
+   │   │   └── timer.c     # Timer HAL implementation
+   │   └── interrupt/
+   ├── core/
+   │   └── kstring.c       # String utilities
+   └── mm/
+       ├── pmm.c           # Physical memory manager
+       └── kmalloc.c       # Kernel heap allocator
 
    include/
-   ├── uart.h              # UART interface
    ├── trap.h              # Trap structures and constants
-   └── clint.h             # Timer interface
+   ├── hal/
+   │   ├── hal_uart.h      # UART HAL interface
+   │   └── hal_timer.h     # Timer HAL interface
+   ├── kernel/
+   │   └── kstring.h       # String utilities interface
+   └── mm/
+       ├── pmm.h           # PMM interface
+       └── kmalloc.h       # kmalloc interface
    
    tests/
    ├── framework/
@@ -230,22 +255,5 @@ Future Testing
 * Integration tests for subsystems
 * Automated QEMU tests with expect scripts
 * Hardware testing on real RISC-V boards
-
-Performance Considerations
---------------------------
-
-Current State
-~~~~~~~~~~~~~
-
-Performance is not yet a concern - the kernel does almost nothing.
-
-Future Optimizations
-~~~~~~~~~~~~~~~~~~~~
-
-* **Code Placement**: Hot code in same cache lines
-* **Branch Prediction**: Hint likely branches
-* **Vector Instructions**: Use RVV for data parallel operations
-* **Memory Alignment**: Align data structures to cache lines
-* **Instruction Selection**: Profile and optimize critical paths
 
 See individual component pages for detailed technical documentation.

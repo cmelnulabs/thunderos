@@ -1,12 +1,12 @@
 /*
  * Timer interrupt tests
- * Validates CLINT timer functionality
+ * Validates timer functionality via HAL
  */
 
 #include "kunit.h"
 #include "trap.h"
-#include "uart.h"
-#include "clint.h"
+#include "hal/hal_uart.h"
+#include "hal/hal_timer.h"
 
 // Test 1: Verify timer interrupts are enabled in sie
 static void test_timer_interrupts_enabled(struct kunit_test *test) {
@@ -32,24 +32,24 @@ static void test_global_interrupts_enabled(struct kunit_test *test) {
 
 // Test 3: Verify initial tick count is zero
 static void test_initial_ticks_zero(struct kunit_test *test) {
-    unsigned long ticks = clint_get_ticks();
+    unsigned long ticks = hal_timer_get_ticks();
     KUNIT_EXPECT_EQ(test, ticks, 0);
 }
 
 // Test 4: Wait for timer interrupt and verify tick increments
 static void test_timer_tick_increments(struct kunit_test *test) {
-    unsigned long initial_ticks = clint_get_ticks();
+    unsigned long initial_ticks = hal_timer_get_ticks();
     
-    uart_puts("Waiting for timer interrupt (1 second)...\n");
+    hal_uart_puts("Waiting for timer interrupt (1 second)...\n");
     
     // Wait for tick to increment (with timeout)
     int timeout = 0;
-    while (clint_get_ticks() == initial_ticks && timeout < 2000000) {
+    while (hal_timer_get_ticks() == initial_ticks && timeout < 2000000) {
         asm volatile("wfi");  // Wait for interrupt
         timeout++;
     }
     
-    unsigned long final_ticks = clint_get_ticks();
+    unsigned long final_ticks = hal_timer_get_ticks();
     
     // Tick should have incremented
     KUNIT_EXPECT_TRUE(test, final_ticks > initial_ticks);
@@ -57,18 +57,18 @@ static void test_timer_tick_increments(struct kunit_test *test) {
 
 // Test 5: Verify multiple ticks
 static void test_multiple_ticks(struct kunit_test *test) {
-    unsigned long start_ticks = clint_get_ticks();
+    unsigned long start_ticks = hal_timer_get_ticks();
     
-    uart_puts("Waiting for 2 timer interrupts...\n");
+    hal_uart_puts("Waiting for 2 timer interrupts...\n");
     
     // Wait for at least 2 ticks
     int timeout = 0;
-    while ((clint_get_ticks() - start_ticks) < 2 && timeout < 5000000) {
+    while ((hal_timer_get_ticks() - start_ticks) < 2 && timeout < 5000000) {
         asm volatile("wfi");
         timeout++;
     }
     
-    unsigned long final_ticks = clint_get_ticks();
+    unsigned long final_ticks = hal_timer_get_ticks();
     
     // Should have at least 2 more ticks
     KUNIT_EXPECT_TRUE(test, (final_ticks - start_ticks) >= 2);
@@ -101,15 +101,15 @@ static struct kunit_test timer_test_cases[] = {
 
 // Test kernel main
 void kernel_main(void) {
-    uart_init();
+    hal_uart_init();
     trap_init();
-    clint_init();
+    hal_timer_init(1000000);  // 1-second intervals
     
-    uart_puts("\n");
-    uart_puts("=================================\n");
-    uart_puts("   ThunderOS - Test Kernel\n");
-    uart_puts("   Timer Interrupt Tests\n");
-    uart_puts("=================================\n");
+    hal_uart_puts("\n");
+    hal_uart_puts("=================================\n");
+    hal_uart_puts("   ThunderOS - Test Kernel\n");
+    hal_uart_puts("   Timer Interrupt Tests\n");
+    hal_uart_puts("=================================\n");
     
     // Run all tests
     int num_tests = sizeof(timer_test_cases) / sizeof(timer_test_cases[0]);
@@ -117,9 +117,9 @@ void kernel_main(void) {
     
     // Exit with status code
     if (failed == 0) {
-        uart_puts("All timer tests passed!\n");
+        hal_uart_puts("All timer tests passed!\n");
     } else {
-        uart_puts("Some timer tests failed!\n");
+        hal_uart_puts("Some timer tests failed!\n");
     }
     
     // Halt

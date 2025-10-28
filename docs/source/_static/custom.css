@@ -1,0 +1,131 @@
+/* Custom CSS for ThunderOS documentation */
+
+/* Better code block styling */
+.highlight {
+    background: #272822 !important;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 15px 0;
+}
+
+.highlight pre {
+    color: #f8f8f2;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Inline code */
+code.literal {
+    background-color: #f0f0f0;
+    color: #c7254e;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 90%;
+}
+
+/* Better section headings */
+.rst-content h1 {
+    color: #2980B9;
+    border-bottom: 3px solid #2980B9;
+    padding-bottom: 10px;
+    margin-top: 30px;
+}
+
+.rst-content h2 {
+    color: #3498DB;
+    border-bottom: 2px solid #E8E8E8;
+    padding-bottom: 8px;
+    margin-top: 25px;
+}
+
+.rst-content h3 {
+    color: #555;
+    margin-top: 20px;
+}
+
+/* Better admonitions (notes, warnings, etc.) */
+.rst-content .admonition {
+    border-radius: 4px;
+    margin: 20px 0;
+}
+
+.rst-content .note {
+    background-color: #E7F2FA;
+    border-left: 4px solid #2980B9;
+}
+
+.rst-content .warning {
+    background-color: #FFEDCC;
+    border-left: 4px solid #E67E22;
+}
+
+.rst-content .tip {
+    background-color: #DBFAF4;
+    border-left: 4px solid #1ABC9C;
+}
+
+/* Better tables */
+.rst-content table.docutils {
+    border: none;
+    border-collapse: collapse;
+}
+
+.rst-content table.docutils thead {
+    background-color: #2980B9;
+    color: white;
+}
+
+.rst-content table.docutils th {
+    padding: 12px;
+    border: none;
+}
+
+.rst-content table.docutils td {
+    padding: 10px;
+    border-bottom: 1px solid #E8E8E8;
+}
+
+.rst-content table.docutils tr:hover {
+    background-color: #F5F5F5;
+}
+
+/* Improve readability */
+.rst-content {
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+.rst-content p {
+    margin-bottom: 15px;
+}
+
+/* Better list styling */
+.rst-content ul, .rst-content ol {
+    margin-bottom: 15px;
+    line-height: 1.8;
+}
+
+.rst-content li {
+    margin-bottom: 8px;
+}
+
+/* Code examples with better spacing */
+.rst-content .literal-block-wrapper {
+    margin: 20px 0;
+}
+
+/* Sidebar improvements */
+.wy-nav-side {
+    background-color: #2C3E50;
+}
+
+.wy-side-nav-search {
+    background-color: #34495E;
+}
+
+/* Mobile improvements */
+@media screen and (max-width: 768px) {
+    .rst-content {
+        font-size: 15px;
+    }
+}
