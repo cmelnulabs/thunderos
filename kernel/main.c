@@ -7,6 +7,7 @@
 #include "trap.h"
 #include "mm/pmm.h"
 #include "mm/kmalloc.h"
+#include "kernel/kstring.h"
 
 // Timer interval: 1 second = 1,000,000 microseconds
 #define TIMER_INTERVAL_US 1000000
@@ -58,14 +59,7 @@ void kernel_main(void) {
     uintptr_t page1 = pmm_alloc_page();
     if (page1) {
         hal_uart_puts("OK (addr: 0x");
-        // Print address
-        char hex[17];
-        for (int i = 15; i >= 0; i--) {
-            int digit = (page1 >> (i * 4)) & 0xF;
-            hex[15 - i] = digit < 10 ? '0' + digit : 'a' + digit - 10;
-        }
-        hex[16] = '\0';
-        hal_uart_puts(hex);
+        kprint_hex(page1);
         hal_uart_puts(")\n");
     } else {
         hal_uart_puts("FAILED\n");
@@ -104,27 +98,9 @@ void kernel_main(void) {
     pmm_get_stats(&total, &free);
     hal_uart_puts("\nMemory statistics:\n");
     hal_uart_puts("  Total pages: ");
-    // Print number
-    char buf[20];
-    int i = 0;
-    size_t n = total;
-    while (n > 0) {
-        buf[i++] = '0' + (n % 10);
-        n /= 10;
-    }
-    while (i > 0) {
-        hal_uart_putc(buf[--i]);
-    }
+    kprint_dec(total);
     hal_uart_puts("\n  Free pages:  ");
-    i = 0;
-    n = free;
-    while (n > 0) {
-        buf[i++] = '0' + (n % 10);
-        n /= 10;
-    }
-    while (i > 0) {
-        hal_uart_putc(buf[--i]);
-    }
+    kprint_dec(free);
     hal_uart_puts("\n");
     
     hal_uart_puts("\n[  ] Process scheduler: TODO\n");
