@@ -28,7 +28,8 @@ BOOT_SOURCES := $(wildcard $(BOOT_DIR)/*.S)
 KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/core/*.c) \
                     $(wildcard $(KERNEL_DIR)/drivers/*.c) \
-                    $(wildcard $(KERNEL_DIR)/arch/riscv64/*.c)
+                    $(wildcard $(KERNEL_DIR)/arch/riscv64/*.c) \
+                    $(wildcard $(KERNEL_DIR)/arch/riscv64/drivers/*.c)
 KERNEL_ASM_SOURCES := $(wildcard $(KERNEL_DIR)/arch/riscv64/*.S)
 
 KERNEL_ASM_SOURCES := $(sort $(KERNEL_ASM_SOURCES))

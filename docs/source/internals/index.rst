@@ -15,6 +15,7 @@ This section documents the internal implementation details of ThunderOS.
    linker_script
    memory_layout
    registers
+   hal/index
 
 Overview
 --------

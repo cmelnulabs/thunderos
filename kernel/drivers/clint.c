@@ -4,7 +4,7 @@
  */
 
 #include "clint.h"
-#include "uart.h"
+#include "hal/hal_uart.h"
 
 // Timer frequency on QEMU (10 MHz)
 #define TIMER_FREQ 10000000UL
@@ -54,13 +54,13 @@ void clint_init(void) {
     sstatus |= (1 << 1);  // SIE - Supervisor Interrupt Enable
     asm volatile("csrw sstatus, %0" :: "r"(sstatus));
     
-    uart_puts("CLINT timer initialized (interval: ");
+    hal_uart_puts("CLINT timer initialized (interval: ");
     // Simple number printing
     if (TIMER_INTERVAL_US >= 1000000) {
-        uart_putc('1');
-        uart_puts(" second)\n");
+        hal_uart_putc('1');
+        hal_uart_puts(" second)\n");
     } else {
-        uart_puts("? ms)\n");
+        hal_uart_puts("? ms)\n");
     }
 }
 
@@ -82,12 +82,12 @@ void clint_handle_timer(void) {
     ticks++;
     
     // Print tick (for debugging)
-    uart_puts("Tick: ");
+    hal_uart_puts("Tick: ");
     
     // Simple number printing (just print the tick count)
     unsigned long t = ticks;
     if (t == 0) {
-        uart_putc('0');
+        hal_uart_putc('0');
     } else {
         char buf[20];
         int i = 0;
@@ -96,10 +96,10 @@ void clint_handle_timer(void) {
             t /= 10;
         }
         while (i > 0) {
-            uart_putc(buf[--i]);
+            hal_uart_putc(buf[--i]);
         }
     }
-    uart_puts("\n");
+    hal_uart_puts("\n");
     
     // Schedule next interrupt (1 second from now)
     clint_set_timer(TIMER_INTERVAL_US);
