@@ -5,6 +5,7 @@
 #include "hal/hal_uart.h"
 #include "hal/hal_timer.h"
 #include "trap.h"
+#include "arch/interrupt.h"
 #include "mm/pmm.h"
 #include "mm/kmalloc.h"
 #include "mm/paging.h"
@@ -30,9 +31,17 @@ void kernel_main(void) {
     
     hal_uart_puts("[OK] UART initialized\n");
     
+    // Initialize interrupt subsystem (PLIC + CLINT)
+    interrupt_init();
+    hal_uart_puts("[OK] Interrupt subsystem initialized\n");
+    
     // Initialize trap handling
     trap_init();
     hal_uart_puts("[OK] Trap handler initialized\n");
+    
+    // Enable interrupts globally
+    interrupt_enable();
+    hal_uart_puts("[OK] Interrupts enabled\n");
     
     // Initialize timer interrupts
     hal_timer_init(TIMER_INTERVAL_US);

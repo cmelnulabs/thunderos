@@ -6,6 +6,9 @@
 #include "hal/hal_uart.h"
 #include "hal/hal_timer.h"
 
+/* Forward declaration for external interrupt handler */
+void handle_external_interrupt(void);
+
 // CSR read helpers
 static inline unsigned long read_scause(void) {
     unsigned long x;
@@ -99,7 +102,8 @@ static void handle_interrupt(struct trap_frame *tf __attribute__((unused)), unsi
             hal_uart_puts("Software interrupt\n");
             break;
         case IRQ_S_EXTERNAL:
-            hal_uart_puts("External interrupt\n");
+            // Handle external interrupt via PLIC
+            handle_external_interrupt();
             break;
         default:
             hal_uart_puts("Unknown interrupt: ");

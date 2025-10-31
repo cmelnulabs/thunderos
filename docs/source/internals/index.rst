@@ -10,6 +10,7 @@ This section documents the internal implementation details of ThunderOS.
    bootloader
    uart_driver
    trap_handler
+   interrupt_handling
    hal_timer
    pmm
    kmalloc
@@ -51,6 +52,9 @@ Component Status
    * - :doc:`trap_handler`
      - ✓ Done
      - Exception and interrupt handling infrastructure
+   * - :doc:`interrupt_handling`
+     - ✓ Done
+     - PLIC, CLINT drivers and interrupt management API
    * - :doc:`hal_timer`
      - ✓ Done
      - Hardware abstraction layer for timer (portable interface)
