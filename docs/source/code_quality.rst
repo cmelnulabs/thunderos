@@ -49,5 +49,3 @@ Conclusion
 ----------
 
 High code quality is critical for ThunderOS. Following these standards ensures the project remains reliable, maintainable, and easy to extend as it grows.
-
-ThunderOS is a modular operating system project. High code quality is essential for reliability, maintainability, and extensibility. This document outlines mandatory coding standards and refactoring principles for all contributions.
