@@ -8,17 +8,15 @@ TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-60}
 wait_for_qemu() {
   local pattern="$1"
   local timeout=${2:-$TIMEOUT_SECONDS}
-  local interval=1
-  local elapsed=0
   echo "Waiting up to ${timeout}s for pattern: ${pattern}"
-  while [ "$elapsed" -lt "$timeout" ]; do
-    if grep -q "$pattern" "$QEMU_OUT"; then
-      echo "Found pattern: $pattern"
-      return 0
-    fi
-    sleep $interval
-    elapsed=$((elapsed + interval))
-  done
+  
+  # Use tail -f with timeout for proper synchronization
+  # This avoids race conditions by continuously monitoring the file as it's written
+  if timeout "$timeout" tail -f "$QEMU_OUT" 2>/dev/null | grep -q -m 1 "$pattern"; then
+    echo "Found pattern: $pattern"
+    return 0
+  fi
+  
   echo "Timed out waiting for pattern: $pattern"
   echo "----- ${QEMU_OUT} -----"
   cat "$QEMU_OUT" || true
