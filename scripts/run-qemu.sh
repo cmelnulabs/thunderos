@@ -4,6 +4,7 @@ set -euo pipefail
 QEMU_OUT="qemu_output.log"
 QEMU_PID_FILE="qemu.pid"
 TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-60}
+QEMU_FILE_WAIT_ATTEMPTS=5
 
 wait_for_qemu() {
   local pattern="$1"
@@ -12,7 +13,7 @@ wait_for_qemu() {
   
   # Wait for the output file to be created (give QEMU a moment to create it)
   local wait_file=0
-  while [ ! -f "$QEMU_OUT" ] && [ "$wait_file" -lt 5 ]; do
+  while [ ! -f "$QEMU_OUT" ] && [ "$wait_file" -lt "$QEMU_FILE_WAIT_ATTEMPTS" ]; do
     sleep 0.5
     wait_file=$((wait_file + 1))
   done
