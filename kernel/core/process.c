@@ -226,7 +226,6 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     // Allocate user stack (in kernel space for now)
     proc->user_stack = (uintptr_t)kmalloc(USER_STACK_SIZE);
     if (!proc->user_stack) {
-        process_free(proc);
         kernel_panic("process_create: Failed to allocate user stack");
     }
     
