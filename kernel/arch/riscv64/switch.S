@@ -114,8 +114,9 @@ process_entry:
     ld t5, 232(sp)
     ld t6, 240(sp)
     
-    # Restore sp last
-    ld sp, 8(sp)
+    # Load sp into temporary register first, then restore sp last
+    ld t0, 8(sp)
+    mv sp, t0
     
     # Jump to process (in supervisor mode, not user mode for now)
     sret
