@@ -68,17 +68,10 @@ static void print_hex(unsigned long val) {
 static void handle_exception(struct trap_frame *tf, unsigned long cause) {
     // Check if this is an ECALL from user mode (syscall)
     if (cause == CAUSE_USER_ECALL) {
-        // System call - extract syscall number and arguments from trap frame
-        uint64_t syscall_num = tf->a7;
-        uint64_t arg0 = tf->a0;
-        uint64_t arg1 = tf->a1;
-        uint64_t arg2 = tf->a2;
-        uint64_t arg3 = tf->a3;
-        uint64_t arg4 = tf->a4;
-        uint64_t arg5 = tf->a5;
+        // System call - pass syscall number and arguments from trap frame directly
         
         // Call syscall handler
-        uint64_t ret = syscall_handler(syscall_num, arg0, arg1, arg2, arg3, arg4, arg5);
+        uint64_t ret = syscall_handler(tf->a7, tf->a0, tf->a1, tf->a2, tf->a3, tf->a4, tf->a5);
         
         // Store return value in a0
         tf->a0 = ret;
