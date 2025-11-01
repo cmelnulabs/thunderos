@@ -16,6 +16,7 @@ This section documents the internal implementation details of ThunderOS.
    kmalloc
    paging
    kstring
+   process_management
    testing_framework
    linker_script
    memory_layout
@@ -70,6 +71,9 @@ Component Status
    * - :doc:`paging`
      - ✓ Done
      - Virtual memory with Sv39 paging (identity mapping)
+   * - :doc:`process_management`
+     - ✓ Done
+     - Process control blocks, scheduling, context switching
    * - :doc:`testing_framework`
      - ✓ Done
      - KUnit-inspired testing framework for kernel
@@ -79,9 +83,12 @@ Component Status
    * - Higher-Half Kernel
      - TODO
      - Move kernel to 0xFFFFFFFF80000000
-   * - Process Scheduler
+   * - User Mode Processes
      - TODO
-     - Task structures, context switching
+     - Separate page tables, privilege switching
+   * - Fork/Exec
+     - TODO
+     - Process cloning and program loading
 
 Code Organization
 -----------------

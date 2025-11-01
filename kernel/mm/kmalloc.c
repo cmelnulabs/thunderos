@@ -34,22 +34,19 @@ void *kmalloc(size_t size) {
     // Calculate number of pages needed
     size_t pages_needed = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;
     
-    // For now, we only support single-page allocations
-    // Multi-page allocations would require contiguous page allocation
-    if (pages_needed > 1) {
-        hal_uart_puts("kmalloc: Multi-page allocation not yet supported\n");
-        return NULL;
+    // Allocate page(s)
+    uintptr_t page_addr;
+    if (pages_needed == 1) {
+        page_addr = pmm_alloc_page();
+    } else {
+        page_addr = pmm_alloc_pages(pages_needed);
     }
     
-    // Allocate page(s)
-    uintptr_t page_addr = pmm_alloc_page();
     if (page_addr == 0) {
         return NULL;
     }
     
     // Set up allocation header
-    // NOTE: Direct cast assumes identity mapping (VA == PA).
-    // Will need VA mapping when paging is enabled.
     struct kmalloc_header *header = (struct kmalloc_header *)page_addr;
     header->size = size;
     header->pages = pages_needed;
@@ -68,8 +65,6 @@ void kfree(void *ptr) {
     }
     
     // Get header
-    // NOTE: This assumes identity mapping (VA == PA) which is true in early boot.
-    // When virtual memory is implemented, this will need to use proper VA->PA translation.
     struct kmalloc_header *header = (struct kmalloc_header *)((uintptr_t)ptr - HEADER_SIZE);
     
     // Validate magic number
@@ -80,8 +75,10 @@ void kfree(void *ptr) {
     
     // Free pages
     uintptr_t page_addr = (uintptr_t)header;
-    for (size_t i = 0; i < header->pages; i++) {
-        pmm_free_page(page_addr + (i * PAGE_SIZE));
+    if (header->pages == 1) {
+        pmm_free_page(page_addr);
+    } else {
+        pmm_free_pages(page_addr, header->pages);
     }
 }
 

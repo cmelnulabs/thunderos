@@ -44,3 +44,60 @@ void kprint_hex(uintptr_t val) {
     
     hal_uart_puts(hex);
 }
+
+/**
+ * Copy a string
+ */
+char *kstrcpy(char *dest, const char *src) {
+    char *d = dest;
+    while ((*d++ = *src++));
+    return dest;
+}
+
+/**
+ * Copy a string with length limit
+ */
+char *kstrncpy(char *dest, const char *src, size_t n) {
+    size_t i;
+    for (i = 0; i < n && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+    for (; i < n; i++) {
+        dest[i] = '\0';
+    }
+    return dest;
+}
+
+/**
+ * Get string length
+ */
+size_t kstrlen(const char *str) {
+    size_t len = 0;
+    while (str[len]) {
+        len++;
+    }
+    return len;
+}
+
+/**
+ * Set memory to a value
+ */
+void *kmemset(void *s, int c, size_t n) {
+    unsigned char *p = s;
+    while (n--) {
+        *p++ = (unsigned char)c;
+    }
+    return s;
+}
+
+/**
+ * Copy memory
+ */
+void *kmemcpy(void *dest, const void *src, size_t n) {
+    unsigned char *d = dest;
+    const unsigned char *s = src;
+    while (n--) {
+        *d++ = *s++;
+    }
+    return dest;
+}

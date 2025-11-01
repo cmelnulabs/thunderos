@@ -94,6 +94,31 @@ void interrupt_disable(void)
 }
 
 /*
+ * Save interrupt state and disable interrupts
+ * Returns the previous interrupt enable state
+ */
+int interrupt_save_disable(void)
+{
+    unsigned long sstatus;
+    __asm__ volatile("csrr %0, sstatus" : "=r"(sstatus));
+    
+    disable_supervisor_interrupts();
+    
+    /* Return 1 if interrupts were enabled, 0 otherwise */
+    return (sstatus & SSTATUS_SIE) ? 1 : 0;
+}
+
+/*
+ * Restore interrupt state
+ */
+void interrupt_restore(int state)
+{
+    if (state) {
+        enable_supervisor_interrupts();
+    }
+}
+
+/*
  * Register an interrupt handler for a specific IRQ
  */
 bool interrupt_register_handler(uint32_t irq_number, interrupt_handler_t handler)

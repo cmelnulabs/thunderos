@@ -97,6 +97,9 @@ static void handle_interrupt(struct trap_frame *tf __attribute__((unused)), unsi
         case IRQ_S_TIMER:
             // Handle timer interrupt
             hal_timer_handle_interrupt();
+            // Call scheduler for preemptive multitasking
+            extern void schedule(void);
+            schedule();
             break;
         case IRQ_S_SOFT:
             hal_uart_puts("Software interrupt\n");
