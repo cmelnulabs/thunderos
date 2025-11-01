@@ -129,6 +129,16 @@ void process_free(struct process *proc) {
         kfree((void *)proc->kernel_stack);
     }
     
+    // Free user stack
+    if (proc->user_stack) {
+        kfree((void *)proc->user_stack);
+    }
+    
+    // Free trap frame
+    if (proc->trap_frame) {
+        kfree(proc->trap_frame);
+    }
+    
     // Free page table (not kernel page table)
     if (proc->page_table && proc->page_table != get_kernel_page_table()) {
         // TODO: Walk page table and free all pages
@@ -146,8 +156,11 @@ void process_free(struct process *proc) {
  * Helper to setup initial trap frame for new process
  */
 static void setup_trap_frame(struct process *proc, void (*entry_point)(void *), void *arg) {
-    // Allocate trap frame at top of kernel stack
-    proc->trap_frame = (struct trap_frame *)(proc->kernel_stack + KERNEL_STACK_SIZE - sizeof(struct trap_frame));
+    // Allocate trap frame separately (not on the stack to avoid corruption)
+    proc->trap_frame = (struct trap_frame *)kmalloc(sizeof(struct trap_frame));
+    if (!proc->trap_frame) {
+        return;  // Caller will check and handle
+    }
     
     // Zero out trap frame
     kmemset(proc->trap_frame, 0, sizeof(struct trap_frame));
@@ -222,13 +235,18 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     
     // Setup initial trap frame
     setup_trap_frame(proc, entry_point, arg);
+    if (!proc->trap_frame) {
+        hal_uart_puts("Failed to allocate trap frame\n");
+        process_free(proc);
+        return NULL;
+    }
     
     // Initialize context (kernel context for context switching)
     kmemset(&proc->context, 0, sizeof(struct context));
     // Set return address to wrapper function
     proc->context.ra = (unsigned long)process_wrapper;
-    // Set stack pointer to kernel stack (below trap frame)
-    proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - sizeof(struct trap_frame) - 16;
+    // Set stack pointer to top of kernel stack (grows downward)
+    proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - 16;
     
     // Initialize other fields
     proc->cpu_time = 0;
