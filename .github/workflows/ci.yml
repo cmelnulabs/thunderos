@@ -18,7 +18,11 @@ jobs:
     - name: Install RISC-V toolchain
       run: |
         sudo apt-get update
+        # Install specific version to match local environment
+        sudo apt-get install -y gcc-riscv64-unknown-elf=10.2.0* binutils-riscv64-unknown-elf || \
         sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+        # Show installed version for debugging
+        riscv64-unknown-elf-gcc --version | head -1
     
     - name: Install QEMU
       run: |
@@ -28,6 +32,9 @@ jobs:
       run: |
         riscv64-unknown-elf-gcc --version
         qemu-system-riscv64 --version
+    
+    - name: Clean build environment
+      run: make clean || true
     
     - name: Build kernel
       run: make
