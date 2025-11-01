@@ -26,9 +26,6 @@ RUN wget -q https://static.dev.sifive.com/dev-tools/freedom-tools/v2020.12/riscv
 # Add RISC-V toolchain to PATH
 ENV PATH="/opt/riscv/bin:${PATH}"
 
-# Add RISC-V toolchain to PATH
-ENV PATH="/opt/riscv/bin:${PATH}"
-
 # Install QEMU 6.2.0 (matching local version)
 RUN apt-get update && apt-get install -y \
     qemu-system-misc \
