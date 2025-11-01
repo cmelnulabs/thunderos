@@ -63,6 +63,22 @@ void hal_uart_puts(const char *s) {
     }
 }
 
+int hal_uart_write(const char *buffer, unsigned int count) {
+    unsigned int bytes_written = 0;
+    
+    for (unsigned int i = 0; i < count; i++) {
+        // Wait until transmitter holding register is empty
+        while ((uart_read_reg(UART_LSR) & LSR_TX_IDLE) == 0)
+            ;
+        
+        // Write character to transmitter
+        uart_write_reg(UART_THR, buffer[i]);
+        bytes_written++;
+    }
+    
+    return bytes_written;
+}
+
 char hal_uart_getc(void) {
     // Wait for data to be available
     while ((uart_read_reg(UART_LSR) & LSR_DATA_READY) == 0)

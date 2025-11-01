@@ -5,6 +5,7 @@
 #include "trap.h"
 #include "hal/hal_uart.h"
 #include "hal/hal_timer.h"
+#include "kernel/syscall.h"
 
 /* Forward declaration for external interrupt handler */
 void handle_external_interrupt(void);
@@ -65,6 +66,23 @@ static void print_hex(unsigned long val) {
 
 // Handle exceptions (synchronous traps)
 static void handle_exception(struct trap_frame *tf, unsigned long cause) {
+    // Check if this is an ECALL from user mode (syscall)
+    if (cause == CAUSE_USER_ECALL) {
+        // System call - pass syscall number and arguments from trap frame directly
+        
+        // Call syscall handler
+        uint64_t ret = syscall_handler(tf->a7, tf->a0, tf->a1, tf->a2, tf->a3, tf->a4, tf->a5);
+        
+        // Store return value in a0
+        tf->a0 = ret;
+        
+        // Advance sepc past the ECALL instruction (4 bytes)
+        tf->sepc += 4;
+        
+        return;
+    }
+    
+    // Not a syscall - handle as error
     hal_uart_puts("\n!!! EXCEPTION !!!\n");
     hal_uart_puts("Cause: ");
     
