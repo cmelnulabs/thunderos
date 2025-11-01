@@ -16,7 +16,7 @@
 #define HEX_BUFFER_SIZE 17      // 16 hex digits + null terminator
 #define HEX_DIGIT_SHIFT 4       // Bits per hex digit
 #define HEX_DIGIT_MASK 0xF      // Mask for one hex digit
-#define HEX_DIGIT_OFFSET 10     // Offset from '0' to 'a' for digits >= 10
+#define HEX_LETTER_BASE 10      // Base value for letter hex digits (a-f start at 10)
 #define HEX_DIGITS_IN_64BIT 16  // Number of hex digits in 64-bit value
 
 // Decimal conversion constants
@@ -83,7 +83,7 @@ void pmm_init(uintptr_t mem_start, size_t mem_size) {
     uintptr_t addr = memory_start;
     for (int i = HEX_DIGITS_IN_64BIT - 1; i >= 0; i--) {
         int digit = (addr >> (i * HEX_DIGIT_SHIFT)) & HEX_DIGIT_MASK;
-        hex[HEX_DIGITS_IN_64BIT - 1 - i] = digit < DECIMAL_BASE ? '0' + digit : 'a' + digit - HEX_DIGIT_OFFSET;
+        hex[HEX_DIGITS_IN_64BIT - 1 - i] = digit < DECIMAL_BASE ? '0' + digit : 'a' + digit - HEX_LETTER_BASE;
     }
     hex[HEX_DIGITS_IN_64BIT] = '\0';
     hal_uart_puts(hex);
