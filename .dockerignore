@@ -1,0 +1,33 @@
+# Docker ignore file for ThunderOS
+# Exclude build artifacts and generated files from Docker context
+
+# Build artifacts
+build/
+*.o
+*.elf
+*.bin
+*.img
+
+# Generated documentation
+docs/build/
+
+# Git
+.git/
+.gitignore
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# CI/CD
+.github/
+
+# OS files
+.DS_Store
+Thumbs.db

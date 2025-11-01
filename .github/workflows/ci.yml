@@ -15,29 +15,30 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Install RISC-V toolchain
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build Docker image with caching
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        tags: thunderos-build:latest
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Verify toolchain in Docker
       run: |
-        sudo apt-get update
-        # Install specific version to match local environment
-        sudo apt-get install -y gcc-riscv64-unknown-elf=10.2.0* binutils-riscv64-unknown-elf || \
-        sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
-        # Show installed version for debugging
-        riscv64-unknown-elf-gcc --version | head -1
+        docker run --rm thunderos-build:latest riscv64-unknown-elf-gcc --version
+        docker run --rm thunderos-build:latest qemu-system-riscv64 --version
     
-    - name: Install QEMU
+    - name: Build kernel in Docker
       run: |
-        sudo apt-get install -y qemu-system-misc
-    
-    - name: Verify toolchain installation
-      run: |
-        riscv64-unknown-elf-gcc --version
-        qemu-system-riscv64 --version
-    
-    - name: Clean build environment
-      run: make clean || true
-    
-    - name: Build kernel
-      run: make
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          thunderos-build:latest \
+          make clean && make
     
     - name: Verify build artifacts
       run: |
@@ -45,18 +46,19 @@ jobs:
         test -f build/thunderos.bin || (echo "thunderos.bin not found" && exit 1)
         ls -lh build/thunderos.*
     
-    - name: Run QEMU boot test
+    - name: Run QEMU boot test in Docker
       run: |
-        # Run QEMU in background and capture output
-        timeout --foreground 8s make qemu > qemu_output.log 2>&1 || EXIT_CODE=$?
-        
-        # timeout returns 124 if it had to kill the process (expected)
-        # Any other non-zero exit code indicates a real error
-        if [ "${EXIT_CODE:-0}" -ne 0 ] && [ "${EXIT_CODE:-0}" -ne 124 ]; then
-          echo "ERROR: QEMU exited with unexpected code $EXIT_CODE"
-          cat qemu_output.log
-          exit 1
-        fi
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          thunderos-build:latest \
+          bash -c "timeout --foreground 8s make qemu > qemu_output.log 2>&1 || EXIT_CODE=\$?; \
+                   if [ \"\${EXIT_CODE:-0}\" -ne 0 ] && [ \"\${EXIT_CODE:-0}\" -ne 124 ]; then \
+                     echo 'ERROR: QEMU exited with unexpected code \$EXIT_CODE'; \
+                     cat qemu_output.log; \
+                     exit 1; \
+                   fi; \
+                   cat qemu_output.log"
         
         # Display output for debugging
         echo "=== QEMU Output ==="
@@ -87,31 +89,36 @@ jobs:
     
     - name: Build tests
       run: |
-        cd tests
-        make || echo "⚠ Test build skipped (optional)"
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace/tests \
+          thunderos-build:latest \
+          bash -c "make || echo '⚠ Test build skipped (optional)'"
     
     - name: Run unit tests
       continue-on-error: true
       run: |
-        cd tests
-        if [ -f test_paging ]; then
-          timeout 10s qemu-system-riscv64 -machine virt -m 128M -nographic -serial mon:stdio -bios default -kernel test_paging > test_output.log 2>&1 &
-          TEST_PID=$!
-          sleep 3
-          kill $TEST_PID 2>/dev/null || true
-          wait $TEST_PID 2>/dev/null || true
-          cat test_output.log
-        fi
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace/tests \
+          thunderos-build:latest \
+          bash -c "if [ -f test_paging ]; then \
+                     timeout 10s qemu-system-riscv64 -machine virt -m 128M -nographic -serial mon:stdio -bios default -kernel test_paging > test_output.log 2>&1 || true; \
+                     cat test_output.log; \
+                   fi"
     
     - name: Check for build warnings
       run: |
-        make clean
-        make 2>&1 | tee build_warnings.log
-        if grep -i "warning:" build_warnings.log; then
-          echo "⚠ Build produced warnings (non-fatal)"
-        else
-          echo "✓ Clean build with no warnings"
-        fi
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          thunderos-build:latest \
+          bash -c "make clean && make 2>&1 | tee build_warnings.log; \
+                   if grep -i 'warning:' build_warnings.log; then \
+                     echo '⚠ Build produced warnings (non-fatal)'; \
+                   else \
+                     echo '✓ Clean build with no warnings'; \
+                   fi"
     
     - name: Upload build artifacts
       if: always()
