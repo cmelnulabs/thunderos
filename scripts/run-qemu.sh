@@ -28,7 +28,7 @@ wait_for_qemu() {
 run_qemu() {
   rm -f "$QEMU_OUT"
   # Example qemu args; preserve any existing args passed to the script
-  qemu-system-riscv64 "$@" -serial file:$QEMU_OUT -display none -no-reboot &
+  qemu-system-riscv64 "$@" -serial file:"$QEMU_OUT" -display none -no-reboot &
   QEMU_PID=$!
   echo "Started qemu pid=$QEMU_PID"
   # Wait for boot string
