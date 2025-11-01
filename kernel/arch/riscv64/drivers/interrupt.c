@@ -74,7 +74,7 @@ void interrupt_init(void)
     configure_default_priorities();
     
     /* Initialize trap handling */
-    trap_init();
+    /* trap_init(); -- redundant, already called in kernel_main() */
 }
 
 /*
