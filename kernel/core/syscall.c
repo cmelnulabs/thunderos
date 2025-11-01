@@ -83,8 +83,10 @@ uint64_t sys_write(int file_descriptor, const char *buffer, size_t byte_count) {
         return SYSCALL_ERROR;
     }
     
-    for (size_t byte_index = 0; byte_index < byte_count; byte_index++) {
-        hal_uart_putc(buffer[byte_index]);
+    // Use batch write for efficiency
+    int bytes_written = hal_uart_write(buffer, byte_count);
+    if (bytes_written != (int)byte_count) {
+        return SYSCALL_ERROR;
     }
     
     return byte_count;

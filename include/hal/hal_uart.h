@@ -37,6 +37,17 @@ void hal_uart_putc(char c);
 void hal_uart_puts(const char *s);
 
 /**
+ * Write a buffer of bytes to UART
+ * 
+ * Writes multiple bytes efficiently without newline conversion.
+ * 
+ * @param buffer Buffer to transmit
+ * @param count Number of bytes to write
+ * @return Number of bytes written
+ */
+int hal_uart_write(const char *buffer, unsigned int count);
+
+/**
  * Read a single character from UART
  * 
  * Blocks until a character is available.
