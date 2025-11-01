@@ -17,10 +17,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install RISC-V GNU toolchain from pre-built binaries
-# Using the official riscv-collab builds that match GCC 10.2.0
-RUN wget -q https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2021.01.15/riscv64-unknown-elf-gcc-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz && \
-    tar -xzf riscv64-unknown-elf-gcc-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz -C /opt && \
-    rm riscv64-unknown-elf-gcc-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz
+# Using SiFive's pre-built toolchain (GCC 10.2.0)
+RUN wget -q https://static.dev.sifive.com/dev-tools/freedom-tools/v2020.12/riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz && \
+    tar -xzf riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz && \
+    mv riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14 /opt/riscv && \
+    rm riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz
 
 # Add RISC-V toolchain to PATH
 ENV PATH="/opt/riscv/bin:${PATH}"
