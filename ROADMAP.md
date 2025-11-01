@@ -2,9 +2,9 @@
 
 This document outlines the planned development milestones for ThunderOS, a RISC-V operating system focused on AI acceleration and educational use.
 
-## Version 0.1.0 - "First Boot" 🎯 CURRENT TARGET
+## Version 0.1.0 - "First Boot" ✅ RELEASED
 
-**Status:** Ready for release!
+**Status:** Released on November 1, 2025
 
 ### Completed Features
 - ✅ Bootloader and initialization
@@ -38,7 +38,9 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.2.0 - "User Space"
+## Version 0.2.0 - "User Space" 🎯 CURRENT TARGET
+
+**Status:** In Development
 
 **Focus:** Separation of kernel and user mode
 
@@ -277,12 +279,12 @@ See `CONTRIBUTING.md` for details on how to contribute to ThunderOS development.
 
 Interested in contributing? Here's where we need help:
 
-### For v0.1 (Current)
-- Testing on different QEMU configurations
-- Documentation review and improvements
-- Bug reports and fixes
+### For v0.2 (Current)
+- System call implementation and testing
+- User-mode support and privilege separation
+- Memory isolation improvements
 
-### For v0.2+ (Future)
+### For v0.3+ (Future)
 - Driver development (storage, network, graphics)
 - User-space utilities and programs
 - Documentation and tutorials
