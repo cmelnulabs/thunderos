@@ -41,11 +41,27 @@ void pmm_init(uintptr_t mem_start, size_t mem_size);
 uintptr_t pmm_alloc_page(void);
 
 /**
+ * Allocate multiple contiguous physical pages
+ * 
+ * @param num_pages Number of contiguous pages to allocate
+ * @return Physical address of first allocated page, or 0 if unable to allocate
+ */
+uintptr_t pmm_alloc_pages(size_t num_pages);
+
+/**
  * Free a previously allocated physical page
  * 
  * @param page_addr Physical address of page to free (must be page-aligned)
  */
 void pmm_free_page(uintptr_t page_addr);
+
+/**
+ * Free multiple contiguous physical pages
+ * 
+ * @param page_addr Physical address of first page to free (must be page-aligned)
+ * @param num_pages Number of contiguous pages to free
+ */
+void pmm_free_pages(uintptr_t page_addr, size_t num_pages);
 
 /**
  * Get memory statistics

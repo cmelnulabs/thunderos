@@ -27,6 +27,8 @@ typedef void (*interrupt_handler_t)(void);
 void interrupt_init(void);
 void interrupt_enable(void);
 void interrupt_disable(void);
+int interrupt_save_disable(void);
+void interrupt_restore(int state);
 bool interrupt_register_handler(uint32_t irq_number, interrupt_handler_t handler);
 void interrupt_unregister_handler(uint32_t irq_number);
 void interrupt_set_priority(uint32_t irq_number, uint32_t priority);

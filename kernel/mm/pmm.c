@@ -119,6 +119,58 @@ uintptr_t pmm_alloc_page(void) {
 }
 
 /**
+ * Allocate multiple contiguous physical pages
+ */
+uintptr_t pmm_alloc_pages(size_t num_pages) {
+    if (num_pages == 0) {
+        return 0;
+    }
+    
+    if (num_pages == 1) {
+        return pmm_alloc_page();
+    }
+    
+    // Search for contiguous free pages
+    for (size_t start_page = 0; start_page <= total_pages - num_pages; start_page++) {
+        // Check if we have num_pages contiguous free pages starting at start_page
+        int found = 1;
+        for (size_t i = 0; i < num_pages; i++) {
+            if (bitmap_test(start_page + i)) {
+                found = 0;
+                break;
+            }
+        }
+        
+        if (found) {
+            // Allocate all pages
+            for (size_t i = 0; i < num_pages; i++) {
+                bitmap_set(start_page + i);
+                free_pages--;
+            }
+            
+            // Return physical address of first page
+            return memory_start + (start_page * PAGE_SIZE);
+        }
+    }
+    
+    // Could not find contiguous pages
+    hal_uart_puts("PMM: Could not allocate ");
+    // Print num_pages
+    char buf[20];
+    int idx = 0;
+    size_t n = num_pages;
+    while (n > 0) {
+        buf[idx++] = '0' + (n % 10);
+        n /= 10;
+    }
+    while (idx > 0) {
+        hal_uart_putc(buf[--idx]);
+    }
+    hal_uart_puts(" contiguous pages\n");
+    return 0;
+}
+
+/**
  * Free a previously allocated page
  */
 void pmm_free_page(uintptr_t page_addr) {
@@ -151,6 +203,19 @@ void pmm_free_page(uintptr_t page_addr) {
     // Free the page
     bitmap_clear(page_num);
     free_pages++;
+}
+
+/**
+ * Free multiple contiguous physical pages
+ */
+void pmm_free_pages(uintptr_t page_addr, size_t num_pages) {
+    if (num_pages == 0) {
+        return;
+    }
+    
+    for (size_t i = 0; i < num_pages; i++) {
+        pmm_free_page(page_addr + (i * PAGE_SIZE));
+    }
 }
 
 /**

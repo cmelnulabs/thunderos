@@ -10,12 +10,65 @@
 #include "mm/kmalloc.h"
 #include "mm/paging.h"
 #include "kernel/kstring.h"
+#include "kernel/process.h"
+#include "kernel/scheduler.h"
+#include "kernel/time.h"
 
-// Timer interval: 1 second = 1,000,000 microseconds
-#define TIMER_INTERVAL_US 1000000
+// Timer interval: 100ms = 100,000 microseconds
+// Shorter interval for better responsiveness
+#define TIMER_INTERVAL_US 100000
 
 // Linker symbols (defined in kernel.ld)
 extern char _kernel_end[];
+
+// Demo process functions
+void process_a(void *arg) {
+    (void)arg;
+    int count = 0;
+    while (1) {
+        hal_uart_puts("[Process A] Running... iteration ");
+        kprint_dec(count++);
+        hal_uart_puts("\n");
+        
+        // Precise delay: 10ms for 100Hz update rate
+        udelay(10000);
+        
+        // Yield to other processes
+        process_yield();
+    }
+}
+
+void process_b(void *arg) {
+    (void)arg;
+    int count = 0;
+    while (1) {
+        hal_uart_puts("[Process B] Hello from B! count = ");
+        kprint_dec(count++);
+        hal_uart_puts("\n");
+        
+        // Precise delay: 10ms for 100Hz update rate
+        udelay(10000);
+        
+        // Yield to other processes
+        process_yield();
+    }
+}
+
+void process_c(void *arg) {
+    (void)arg;
+    int count = 0;
+    while (1) {
+        hal_uart_puts("[Process C] Task C executing... #");
+        kprint_dec(count++);
+        hal_uart_puts("\n");
+        
+        // Precise delay: 10ms for 100Hz update rate
+        udelay(10000);
+        
+        // Yield to other processes
+        process_yield();
+    }
+}
 
 void kernel_main(void) {
     // Initialize UART for serial output
@@ -119,10 +172,49 @@ void kernel_main(void) {
     kprint_dec(free);
     hal_uart_puts("\n");
     
-    hal_uart_puts("\n[  ] Process scheduler: TODO\n");
+    // Initialize process management
+    process_init();
+    
+    // Initialize scheduler
+    scheduler_init();
+    
+    // Create demo processes
+    hal_uart_puts("\nCreating demo processes...\n");
+    
+    struct process *proc_a = process_create("proc_a", process_a, NULL);
+    if (proc_a) {
+        hal_uart_puts("[OK] Created Process A (PID ");
+        kprint_dec(proc_a->pid);
+        hal_uart_puts(")\n");
+    } else {
+        hal_uart_puts("[FAIL] Failed to create Process A\n");
+    }
+    
+    struct process *proc_b = process_create("proc_b", process_b, NULL);
+    if (proc_b) {
+        hal_uart_puts("[OK] Created Process B (PID ");
+        kprint_dec(proc_b->pid);
+        hal_uart_puts(")\n");
+    } else {
+        hal_uart_puts("[FAIL] Failed to create Process B\n");
+    }
+    
+    struct process *proc_c = process_create("proc_c", process_c, NULL);
+    if (proc_c) {
+        hal_uart_puts("[OK] Created Process C (PID ");
+        kprint_dec(proc_c->pid);
+        hal_uart_puts(")\n");
+    } else {
+        hal_uart_puts("[FAIL] Failed to create Process C\n");
+    }
+    
+    // Dump process table
+    process_dump();
+    
     hal_uart_puts("[  ] AI accelerators: TODO\n");
     
-    hal_uart_puts("\nThunderOS kernel idle. Waiting for timer interrupts...\n");
+    hal_uart_puts("\nThunderOS: Multitasking enabled!\n");
+    hal_uart_puts("Processes will start running on next timer interrupt...\n\n");
     
     // Halt CPU (will wake on interrupts)
     while (1) {
