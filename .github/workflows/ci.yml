@@ -35,8 +35,13 @@ jobs:
       run: |
         timeout 30s make qemu > qemu_output.log 2>&1 || true
         # Check for successful boot messages
-        grep -q "ThunderOS" qemu_output.log || (echo "Boot failed" && cat qemu_output.log && exit 1)
-        grep -q "Created Process" qemu_output.log || (echo "Process creation not working" && cat qemu_output.log && exit 1)
+        check_qemu_log() {
+          local pattern="$1"
+          local errmsg="$2"
+          grep -q "$pattern" qemu_output.log || (echo "$errmsg" && cat qemu_output.log && exit 1)
+        }
+        check_qemu_log "ThunderOS" "Boot failed"
+        check_qemu_log "Created Process" "Process creation not working"
     
     - name: Build tests
       run: |
