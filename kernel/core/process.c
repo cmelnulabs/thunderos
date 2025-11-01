@@ -232,7 +232,6 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     // Setup initial trap frame
     setup_trap_frame(proc, entry_point, arg);
     if (!proc->trap_frame) {
-        process_free(proc);
         kernel_panic("process_create: Failed to allocate trap frame");
     }
     
