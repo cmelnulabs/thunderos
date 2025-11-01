@@ -271,3 +271,66 @@ void paging_init(uintptr_t kernel_start, uintptr_t kernel_end) {
     // Print stats
     hal_uart_puts("Virtual memory initialized (Sv39 mode)\n");
 }
+
+/**
+ * Recursively free all page tables
+ * 
+ * @param pt Page table to free
+ * @param level Current level (2 = root, 0 = leaf)
+ */
+static void free_page_table_recursive(page_table_t *pt, int level) {
+    if (!pt) return;
+    
+    // For non-leaf levels, recursively free child page tables
+    if (level > 0) {
+        for (int i = 0; i < PT_ENTRIES; i++) {
+            pte_t pte = pt->entries[i];
+            
+            // Skip invalid entries
+            if (!(pte & PTE_V)) {
+                continue;
+            }
+            
+            // Skip leaf entries (they shouldn't exist at non-leaf levels in Sv39,
+            // but check anyway to avoid corrupting memory)
+            if (PTE_IS_LEAF(pte)) {
+                continue;
+            }
+            
+            // Get physical address of child page table
+            uintptr_t child_pa = PTE_TO_PA(pte);
+            page_table_t *child_pt = (page_table_t *)child_pa;
+            
+            // Recursively free child
+            free_page_table_recursive(child_pt, level - 1);
+        }
+    }
+    
+    // Free this page table itself
+    pmm_free_page((uintptr_t)pt);
+}
+
+/**
+ * Free a page table and all its child page tables
+ * 
+ * This function walks the entire page table hierarchy and frees all
+ * allocated page table pages. It does NOT free the actual data pages
+ * mapped by the page table - those should be freed separately.
+ * 
+ * WARNING: Do not call this on the kernel page table!
+ * 
+ * @param page_table Root page table to free
+ */
+void free_page_table(page_table_t *page_table) {
+    if (!page_table) return;
+    
+    // Don't free kernel page table
+    if (page_table == &kernel_page_table) {
+        hal_uart_puts("WARNING: Attempt to free kernel page table ignored\n");
+        return;
+    }
+    
+    // Recursively free all levels (starting at level 2)
+    free_page_table_recursive(page_table, 2);
+}
+

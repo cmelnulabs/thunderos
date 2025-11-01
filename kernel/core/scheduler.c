@@ -7,6 +7,7 @@
 #include "kernel/scheduler.h"
 #include "kernel/process.h"
 #include "kernel/config.h"
+#include "kernel/panic.h"
 #include "hal/hal_uart.h"
 #include "arch/interrupt.h"
 
@@ -135,7 +136,9 @@ extern void process_set_current(struct process *proc);
  * to ensure atomic state updates and prevent race conditions.
  */
 void context_switch(struct process *old, struct process *new) {
-    if (!new) return;
+    if (!new) {
+        kernel_panic("context_switch: Attempting to switch to NULL process");
+    }
     
     // Update states (interrupts must be disabled by caller)
     if (old && old->state == PROC_RUNNING) {

@@ -6,6 +6,7 @@
  */
 
 #include "mm/pmm.h"
+#include "kernel/panic.h"
 #include "hal/hal_uart.h"
 
 // Bitmap allocation constants

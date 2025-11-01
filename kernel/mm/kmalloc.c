@@ -8,6 +8,7 @@
 
 #include "mm/kmalloc.h"
 #include "mm/pmm.h"
+#include "kernel/panic.h"
 #include "hal/hal_uart.h"
 
 // Allocation header (stored at start of each allocation)
@@ -69,8 +70,7 @@ void kfree(void *ptr) {
     
     // Validate magic number
     if (header->magic != KMALLOC_MAGIC) {
-        hal_uart_puts("kfree: Invalid pointer or corrupted header\n");
-        return;
+        kernel_panic("kfree: Invalid pointer or corrupted heap header");
     }
     
     // Free pages

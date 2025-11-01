@@ -5,8 +5,10 @@
 #include "kernel/process.h"
 #include "kernel/scheduler.h"
 #include "kernel/kstring.h"
+#include "kernel/panic.h"
 #include "mm/pmm.h"
 #include "mm/kmalloc.h"
+#include "mm/paging.h"
 #include "hal/hal_uart.h"
 #include <stddef.h>
 
@@ -141,8 +143,7 @@ void process_free(struct process *proc) {
     
     // Free page table (not kernel page table)
     if (proc->page_table && proc->page_table != get_kernel_page_table()) {
-        // TODO: Walk page table and free all pages
-        kfree(proc->page_table);
+        free_page_table(proc->page_table);
     }
     
     // Mark as unused
@@ -202,8 +203,7 @@ static void process_wrapper(void) {
 struct process *process_create(const char *name, void (*entry_point)(void *), void *arg) {
     struct process *proc = alloc_process();
     if (!proc) {
-        hal_uart_puts("Failed to allocate process\n");
-        return NULL;
+        kernel_panic("process_create: Process table full - cannot allocate process");
     }
     
     // Assign PID
@@ -216,9 +216,7 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     // Allocate kernel stack
     proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
     if (!proc->kernel_stack) {
-        hal_uart_puts("Failed to allocate kernel stack\n");
-        process_free(proc);
-        return NULL;
+        kernel_panic("process_create: Failed to allocate kernel stack");
     }
     
     // For now, create kernel-mode processes only (use kernel page table)
@@ -228,17 +226,15 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     // Allocate user stack (in kernel space for now)
     proc->user_stack = (uintptr_t)kmalloc(USER_STACK_SIZE);
     if (!proc->user_stack) {
-        hal_uart_puts("Failed to allocate user stack\n");
         process_free(proc);
-        return NULL;
+        kernel_panic("process_create: Failed to allocate user stack");
     }
     
     // Setup initial trap frame
     setup_trap_frame(proc, entry_point, arg);
     if (!proc->trap_frame) {
-        hal_uart_puts("Failed to allocate trap frame\n");
         process_free(proc);
-        return NULL;
+        kernel_panic("process_create: Failed to allocate trap frame");
     }
     
     // Initialize context (kernel context for context switching)

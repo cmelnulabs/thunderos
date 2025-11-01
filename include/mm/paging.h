@@ -127,6 +127,19 @@ void tlb_flush(uintptr_t vaddr);
 page_table_t *get_kernel_page_table(void);
 
 /**
+ * Free a page table and all its child page tables
+ * 
+ * This function walks the entire page table hierarchy and frees all
+ * allocated page table pages. It does NOT free the actual data pages
+ * mapped by the page table - those should be freed separately.
+ * 
+ * WARNING: Do not call this on the kernel page table!
+ * 
+ * @param page_table Root page table to free
+ */
+void free_page_table(page_table_t *page_table);
+
+/**
  * Convert kernel virtual address to physical address
  * (Assumes higher-half kernel mapping)
  * 
