@@ -44,7 +44,7 @@ jobs:
         make || echo "Test build skipped (optional)"
     
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: thunderos-build
         path: |
@@ -54,7 +54,7 @@ jobs:
     
     - name: Upload test logs
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: qemu-logs
         path: qemu_output.log
