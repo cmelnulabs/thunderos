@@ -3,7 +3,8 @@ set -euo pipefail
 
 QEMU_OUT="qemu_output.log"
 QEMU_PID_FILE="qemu.pid"
-TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-60}
+TIMEOUT_SECONDS=
+${TIMEOUT_SECONDS:-60}
 QEMU_FILE_WAIT_ATTEMPTS=5
 
 wait_for_qemu() {
