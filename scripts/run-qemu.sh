@@ -10,7 +10,7 @@ wait_for_qemu() {
   local interval=1
   local elapsed=0
   echo "Waiting up to ${timeout}s for pattern: ${pattern}"
-  while [ $elapsed -lt $timeout ]; do
+  while [ "$elapsed" -lt "$timeout" ]; do
     if grep -q "$pattern" "$QEMU_OUT"; then
       echo "Found pattern: $pattern"
       return 0
