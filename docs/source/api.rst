@@ -1,27 +1,32 @@
 API Reference
 =============
 
-UART Driver API
----------------
+This document describes the public APIs available in ThunderOS v0.1.0.
 
-.. c:function:: void uart_init(void)
+Hardware Abstraction Layer (HAL)
+---------------------------------
 
-   Initialize the UART controller.
+UART Driver
+~~~~~~~~~~~
+
+.. c:function:: void hal_uart_init(void)
+
+   Initialize the UART hardware.
    
-   Currently does nothing as OpenSBI pre-initializes the UART.
+   Architecture-specific implementation (RISC-V: NS16550A).
    
    :Example:
    
    .. code-block:: c
    
       void kernel_main(void) {
-          uart_init();
+          hal_uart_init();
           // UART ready to use
       }
 
-.. c:function:: void uart_putc(char c)
+.. c:function:: void hal_uart_putc(char c)
 
-   Write a single character to the UART.
+   Write a single character to UART.
    
    :param c: Character to transmit
    
@@ -31,18 +36,17 @@ UART Driver API
    
    .. code-block:: c
    
-      uart_putc('H');
-      uart_putc('i');
-      uart_putc('\\n');
+      hal_uart_putc('H');
+      hal_uart_putc('i');
+      hal_uart_putc('\n');
 
-.. c:function:: void uart_puts(const char *s)
+.. c:function:: void hal_uart_puts(const char *s)
 
-   Write a null-terminated string to the UART.
+   Write a null-terminated string to UART.
    
    :param s: Null-terminated string to transmit
    
-   **Note:** Automatically converts ``\\n`` to ``\\r\\n`` for proper
-   terminal display.
+   **Note:** Automatically converts ``\n`` to ``\r\n`` for proper terminal display.
    
    **Blocking:** Yes, waits for each character to transmit.
    
@@ -50,12 +54,30 @@ UART Driver API
    
    .. code-block:: c
    
-      uart_puts("Hello, world!\\n");
-      uart_puts("[OK] System initialized\\n");
+      hal_uart_puts("Hello, ThunderOS!\n");
+      hal_uart_puts("[OK] System initialized\n");
 
-.. c:function:: char uart_getc(void)
+.. c:function:: int hal_uart_write(const char *buffer, unsigned int count)
 
-   Read a single character from the UART.
+   Write a buffer of bytes to UART.
+   
+   :param buffer: Buffer to transmit
+   :param count: Number of bytes to write
+   :return: Number of bytes written
+   :rtype: int
+   
+   **Note:** No newline conversion.
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      char data[] = {0x01, 0x02, 0x03};
+      hal_uart_write(data, 3);
+
+.. c:function:: char hal_uart_getc(void)
+
+   Read a single character from UART.
    
    :return: Character received from UART
    :rtype: char
@@ -66,178 +88,152 @@ UART Driver API
    
    .. code-block:: c
    
-      uart_puts("Press any key: ");
-      char c = uart_getc();
-      uart_putc(c);
+      hal_uart_puts("Press any key: ");
+      char c = hal_uart_getc();
+      hal_uart_putc(c);
 
-System Functions
-----------------
+Timer Driver
+~~~~~~~~~~~~
 
-.. c:function:: void kernel_main(void)
+.. c:function:: void hal_timer_init(unsigned long interval_us)
 
-   Main entry point of the kernel.
+   Initialize timer hardware and start periodic interrupts.
    
-   Called by bootloader after initialization. This function should
-   never return.
-   
-   **Current implementation:**
-   
-   * Initialize UART
-   * Print boot messages
-   * Enter idle loop
+   :param interval_us: Timer interrupt interval in microseconds
    
    :Example:
    
    .. code-block:: c
    
-      void kernel_main(void) {
-          uart_init();
-          uart_puts("ThunderOS booting...\\n");
-          
-          // Initialize subsystems
-          // ...
-          
-          // Idle loop
-          while (1) {
-              asm volatile("wfi");
-          }
+      // 100ms timer interrupts
+      hal_timer_init(100000);
+
+.. c:function:: unsigned long hal_timer_get_ticks(void)
+
+   Get the current tick count.
+   
+   :return: Number of timer interrupts since initialization
+   :rtype: unsigned long
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      unsigned long start = hal_timer_get_ticks();
+      do_work();
+      unsigned long elapsed = hal_timer_get_ticks() - start;
+
+.. c:function:: void hal_timer_set_next(unsigned long interval_us)
+
+   Schedule the next timer interrupt.
+   
+   :param interval_us: Microseconds until next interrupt
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      hal_timer_set_next(50000);  // 50ms
+
+.. c:function:: void hal_timer_handle_interrupt(void)
+
+   Handle timer interrupt (called by trap handler).
+   
+   Increments tick counter and schedules next interrupt.
+
+Memory Management
+-----------------
+
+Physical Memory Manager (PMM)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:function:: void pmm_init(uintptr_t mem_start, size_t mem_size)
+
+   Initialize the physical memory manager.
+   
+   :param mem_start: Start of usable physical memory (after kernel)
+   :param mem_size: Total size of usable memory in bytes
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      extern char _kernel_end[];
+      pmm_init((uintptr_t)_kernel_end, 128 * 1024 * 1024);
+
+.. c:function:: uintptr_t pmm_alloc_page(void)
+
+   Allocate a single 4KB physical page.
+   
+   :return: Physical address of allocated page, or 0 if out of memory
+   :rtype: uintptr_t
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      uintptr_t page = pmm_alloc_page();
+      if (page == 0) {
+          kernel_panic("Out of memory");
       }
 
-Assembly Functions
-------------------
+.. c:function:: uintptr_t pmm_alloc_pages(size_t num_pages)
 
-.. asm:label:: _start
-
-   Kernel entry point from bootloader.
+   Allocate multiple contiguous physical pages.
    
-   **Location:** ``boot/boot.S``
+   :param num_pages: Number of contiguous pages to allocate
+   :return: Physical address of first page, or 0 on failure
+   :rtype: uintptr_t
    
-   **Responsibilities:**
-   
-   1. Disable interrupts
-   2. Setup stack pointer
-   3. Clear BSS section
-   4. Call ``kernel_main()``
-   
-   **Registers modified:**
-   
-   * ``sp`` - Set to ``_stack_top``
-   * ``t0``, ``t1`` - Temporary for BSS clearing
-   
-   **Jumps to:** ``kernel_main`` (never returns)
-
-Linker Symbols
---------------
-
-These symbols are defined by the linker script and accessible from C:
-
-.. c:var:: extern char _text_start[]
-
-   Start address of ``.text`` section (executable code).
-
-.. c:var:: extern char _text_end[]
-
-   End address of ``.text`` section.
-
-.. c:var:: extern char _rodata_start[]
-
-   Start address of ``.rodata`` section (read-only data).
-
-.. c:var:: extern char _rodata_end[]
-
-   End address of ``.rodata`` section.
-
-.. c:var:: extern char _data_start[]
-
-   Start address of ``.data`` section (initialized data).
-
-.. c:var:: extern char _data_end[]
-
-   End address of ``.data`` section.
-
-.. c:var:: extern char _bss_start[]
-
-   Start address of ``.bss`` section (uninitialized data).
-
-.. c:var:: extern char _bss_end[]
-
-   End address of ``.bss`` section.
-
-.. c:var:: extern char _kernel_end[]
-
-   End address of entire kernel (page-aligned).
-   
-   Free memory begins at this address.
-
-**Usage Example:**
-
-.. code-block:: c
-
-   extern char _bss_start[], _bss_end[], _kernel_end[];
-   
-   void print_memory_info(void) {
-       size_t bss_size = _bss_end - _bss_start;
-       uart_printf("BSS size: %zu bytes\\n", bss_size);
-       uart_printf("Kernel ends at: %p\\n", _kernel_end);
-   }
-
-CSR Access Macros (Future)
----------------------------
-
-.. c:macro:: read_csr(csr)
-
-   Read a Control and Status Register.
-   
-   :param csr: CSR name (e.g., ``sstatus``, ``sie``)
-   :return: Value of CSR
-   
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
-      uint64_t status = read_csr(sstatus);
+      // Allocate 16KB (4 pages)
+      uintptr_t pages = pmm_alloc_pages(4);
 
-.. c:macro:: write_csr(csr, value)
+.. c:function:: void pmm_free_page(uintptr_t page_addr)
 
-   Write to a Control and Status Register.
+   Free a previously allocated physical page.
    
-   :param csr: CSR name
-   :param value: Value to write
+   :param page_addr: Physical address of page (must be page-aligned)
    
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
-      write_csr(sie, 0x222);  // Enable interrupts
+      pmm_free_page(page);
 
-.. c:macro:: set_csr(csr, bits)
+.. c:function:: void pmm_free_pages(uintptr_t page_addr, size_t num_pages)
 
-   Set bits in a CSR (bitwise OR).
+   Free multiple contiguous physical pages.
    
-   :param csr: CSR name
-   :param bits: Bits to set
+   :param page_addr: Physical address of first page
+   :param num_pages: Number of pages to free
    
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
-      set_csr(sstatus, 0x2);  // Enable supervisor interrupts
+      pmm_free_pages(pages, 4);
 
-.. c:macro:: clear_csr(csr, bits)
+.. c:function:: void pmm_get_stats(size_t *total_pages, size_t *free_pages)
 
-   Clear bits in a CSR (bitwise AND NOT).
+   Get memory statistics.
    
-   :param csr: CSR name
-   :param bits: Bits to clear
+   :param total_pages: Output - total number of pages managed
+   :param free_pages: Output - number of free pages available
    
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
-      clear_csr(sstatus, 0x2);  // Disable supervisor interrupts
+      size_t total, free;
+      pmm_get_stats(&total, &free);
+      hal_uart_puts("Memory: %lu KB free\n", free * 4);
 
-Memory Management API (Future)
--------------------------------
+Kernel Heap (kmalloc)
+~~~~~~~~~~~~~~~~~~~~~~
 
 .. c:function:: void *kmalloc(size_t size)
 
@@ -247,7 +243,7 @@ Memory Management API (Future)
    :return: Pointer to allocated memory, or NULL on failure
    :rtype: void*
    
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
@@ -261,9 +257,9 @@ Memory Management API (Future)
 
    Free kernel memory.
    
-   :param ptr: Pointer to memory allocated by ``kmalloc()``
+   :param ptr: Pointer to memory allocated by kmalloc()
    
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
@@ -280,109 +276,309 @@ Memory Management API (Future)
    :return: Pointer to aligned memory, or NULL on failure
    :rtype: void*
    
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
       // Allocate page-aligned memory
       void *page = kmalloc_aligned(4096, 4096);
 
-Process API (Future)
----------------------
+Virtual Memory (Paging)
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. c:function:: int process_create(void (*entry)(void))
+.. c:function:: void paging_init(uintptr_t kernel_start, uintptr_t kernel_end)
 
-   Create a new process.
+   Initialize virtual memory system with Sv39 paging.
    
-   :param entry: Entry point function
-   :return: Process ID, or negative on error
-   :rtype: int
+   :param kernel_start: Physical address of kernel start
+   :param kernel_end: Physical address of kernel end
    
-   **Example:**
+   :Example:
    
    .. code-block:: c
    
-      void user_task(void) {
+      extern char _text_start[], _kernel_end[];
+      paging_init((uintptr_t)_text_start, (uintptr_t)_kernel_end);
+
+.. c:function:: int map_page(page_table_t *page_table, uintptr_t vaddr, uintptr_t paddr, uint64_t flags)
+
+   Map a virtual address to a physical address.
+   
+   :param page_table: Root page table (level 2)
+   :param vaddr: Virtual address (must be page-aligned)
+   :param paddr: Physical address (must be page-aligned)
+   :param flags: PTE flags (permissions)
+   :return: 0 on success, -1 on failure
+   :rtype: int
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      page_table_t *pt = get_kernel_page_table();
+      map_page(pt, 0x100000, 0x80000000, PTE_KERNEL_DATA);
+
+.. c:function:: int unmap_page(page_table_t *page_table, uintptr_t vaddr)
+
+   Unmap a virtual address.
+   
+   :param page_table: Root page table
+   :param vaddr: Virtual address (must be page-aligned)
+   :return: 0 on success, -1 on failure
+   :rtype: int
+
+.. c:function:: int virt_to_phys(page_table_t *page_table, uintptr_t vaddr, uintptr_t *paddr)
+
+   Translate virtual address to physical address.
+   
+   :param page_table: Root page table
+   :param vaddr: Virtual address
+   :param paddr: Output - physical address
+   :return: 0 on success, -1 if not mapped
+   :rtype: int
+
+.. c:function:: void tlb_flush(uintptr_t vaddr)
+
+   Flush TLB for a specific virtual address.
+   
+   :param vaddr: Virtual address to flush (0 = flush all)
+
+.. c:function:: page_table_t *get_kernel_page_table(void)
+
+   Get the kernel's root page table.
+   
+   :return: Pointer to kernel page table
+   :rtype: page_table_t*
+
+.. c:function:: void free_page_table(page_table_t *page_table)
+
+   Free a page table and all its child page tables.
+   
+   :param page_table: Root page table to free
+   
+   **WARNING:** Do not call on the kernel page table!
+
+Process Management
+------------------
+
+Process API
+~~~~~~~~~~~
+
+.. c:function:: void process_init(void)
+
+   Initialize the process management subsystem.
+   
+   Creates the initial kernel process.
+
+.. c:function:: struct process *process_create(const char *name, void (*entry_point)(void *), void *arg)
+
+   Create a new process.
+   
+   :param name: Process name
+   :param entry_point: Entry point function
+   :param arg: Argument to pass to entry point
+   :return: Pointer to new process, or NULL on failure
+   :rtype: struct process*
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      void user_task(void *arg) {
           while (1) {
-              uart_puts("Task running\\n");
-              yield();
+              hal_uart_puts("Task running\n");
+              process_yield();
           }
       }
       
-      int pid = process_create(user_task);
+      struct process *p = process_create("user_task", user_task, NULL);
 
-.. c:function:: void yield(void)
+.. c:function:: void process_exit(int exit_code)
 
-   Yield CPU to scheduler.
+   Exit the current process.
    
-   **Example:**
+   :param exit_code: Exit status code
+   
+   **Note:** This function never returns.
+
+.. c:function:: struct process *process_current(void)
+
+   Get the currently running process.
+   
+   :return: Pointer to current process
+   :rtype: struct process*
+
+.. c:function:: struct process *process_get(pid_t pid)
+
+   Get process by PID.
+   
+   :param pid: Process ID
+   :return: Pointer to process, or NULL if not found
+   :rtype: struct process*
+
+.. c:function:: void process_yield(void)
+
+   Voluntarily yield CPU to another process.
+   
+   :Example:
    
    .. code-block:: c
    
       while (1) {
           do_work();
-          yield();  // Let other processes run
+          process_yield();  // Let other processes run
       }
 
-.. c:function:: void sleep(uint64_t milliseconds)
+.. c:function:: void process_sleep(uint64_t ticks)
 
-   Sleep for specified time.
+   Sleep for a number of timer ticks.
    
-   :param milliseconds: Time to sleep in milliseconds
+   :param ticks: Number of ticks to sleep
+
+.. c:function:: void process_wakeup(struct process *proc)
+
+   Wake up a sleeping process.
    
-   **Example:**
+   :param proc: Process to wake up
+
+.. c:function:: pid_t alloc_pid(void)
+
+   Allocate a new process ID.
+   
+   :return: New PID, or -1 on failure
+   :rtype: pid_t
+
+.. c:function:: void process_free(struct process *proc)
+
+   Free a process structure.
+   
+   :param proc: Process to free
+
+.. c:function:: void process_dump(void)
+
+   Dump process table for debugging.
+
+Scheduler API
+~~~~~~~~~~~~~
+
+.. c:function:: void scheduler_init(void)
+
+   Initialize the round-robin scheduler.
+
+.. c:function:: void schedule(void)
+
+   Schedule next process to run.
+   
+   Called by timer interrupt for preemptive multitasking.
+
+.. c:function:: void scheduler_enqueue(struct process *proc)
+
+   Add a process to the ready queue.
+   
+   :param proc: Process to add
+
+.. c:function:: void scheduler_dequeue(struct process *proc)
+
+   Remove a process from the ready queue.
+   
+   :param proc: Process to remove
+
+.. c:function:: void context_switch(struct process *old, struct process *new)
+
+   Perform context switch between processes.
+   
+   :param old: Old process (can be NULL)
+   :param new: New process
+
+.. c:function:: struct process *scheduler_pick_next(void)
+
+   Get the next process to run.
+   
+   :return: Next process, or NULL if none available
+   :rtype: struct process*
+
+Interrupt Handling
+------------------
+
+Trap Handler
+~~~~~~~~~~~~
+
+.. c:function:: void trap_init(void)
+
+   Initialize trap/interrupt handling.
+   
+   Sets up the trap vector and enables interrupts.
+
+.. c:function:: void trap_handler(struct trap_frame *tf)
+
+   Main trap/interrupt handler.
+   
+   :param tf: Trap frame with saved registers
+   
+   **Note:** Called by assembly trap_vector routine.
+
+Error Handling
+--------------
+
+Panic
+~~~~~
+
+.. c:function:: void kernel_panic(const char *message)
+
+   Fatal error handler - halts the system.
+   
+   :param message: Error message to display
+   
+   **Note:** This function never returns.
+   
+   :Example:
    
    .. code-block:: c
    
-      uart_puts("Waiting...\\n");
-      sleep(1000);  // Sleep 1 second
-      uart_puts("Done!\\n");
-
-Interrupt API (Future)
------------------------
-
-.. c:function:: void register_interrupt_handler(int irq, void (*handler)(void))
-
-   Register interrupt handler.
-   
-   :param irq: Interrupt number
-   :param handler: Handler function
-   
-   **Example:**
-   
-   .. code-block:: c
-   
-      void timer_interrupt(void) {
-          uart_puts("Tick!\\n");
+      if (!critical_resource) {
+          kernel_panic("Failed to allocate critical resource");
       }
-      
-      register_interrupt_handler(IRQ_TIMER, timer_interrupt);
 
-.. c:function:: void enable_interrupts(void)
+.. c:macro:: KASSERT(condition, message)
 
-   Enable interrupts globally.
+   Kernel assertion macro.
    
-   **Example:**
+   :param condition: Condition to check
+   :param message: Message if assertion fails
+   
+   :Example:
    
    .. code-block:: c
    
-      setup_interrupt_handlers();
-      enable_interrupts();
+      KASSERT(ptr != NULL, "Pointer must not be NULL");
 
-.. c:function:: void disable_interrupts(void)
+.. c:macro:: BUG(message)
 
-   Disable interrupts globally.
+   Mark unreachable code paths.
    
-   **Example:**
+   :param message: Bug description
+   
+   :Example:
    
    .. code-block:: c
    
-      disable_interrupts();
-      critical_section();
-      enable_interrupts();
+      default:
+          BUG("Unexpected state");
 
-Constants
----------
+.. c:macro:: NOT_IMPLEMENTED()
+
+   Mark unimplemented features.
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      void future_feature(void) {
+          NOT_IMPLEMENTED();
+      }
+
+Constants and Macros
+--------------------
 
 Memory Addresses
 ~~~~~~~~~~~~~~~~
@@ -407,6 +603,64 @@ Memory Addresses
 
    Kernel load address: ``0x80200000``
 
+Page Flags (Sv39)
+~~~~~~~~~~~~~~~~~
+
+.. c:macro:: PTE_V
+
+   Page table entry valid flag
+
+.. c:macro:: PTE_R
+
+   Page table entry readable flag
+
+.. c:macro:: PTE_W
+
+   Page table entry writable flag
+
+.. c:macro:: PTE_X
+
+   Page table entry executable flag
+
+.. c:macro:: PTE_U
+
+   Page table entry user-accessible flag
+
+.. c:macro:: PTE_G
+
+   Page table entry global mapping flag
+
+.. c:macro:: PTE_A
+
+   Page table entry accessed flag
+
+.. c:macro:: PTE_D
+
+   Page table entry dirty flag
+
+Permission Combinations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:macro:: PTE_KERNEL_TEXT
+
+   Kernel code permissions: ``PTE_V | PTE_R | PTE_X``
+
+.. c:macro:: PTE_KERNEL_DATA
+
+   Kernel data permissions: ``PTE_V | PTE_R | PTE_W``
+
+.. c:macro:: PTE_KERNEL_RODATA
+
+   Kernel read-only data: ``PTE_V | PTE_R``
+
+.. c:macro:: PTE_USER_TEXT
+
+   User code permissions: ``PTE_V | PTE_R | PTE_X | PTE_U``
+
+.. c:macro:: PTE_USER_DATA
+
+   User data permissions: ``PTE_V | PTE_R | PTE_W | PTE_U``
+
 Sizes
 ~~~~~
 
@@ -414,63 +668,330 @@ Sizes
 
    Page size: ``4096`` bytes
 
-.. c:macro:: STACK_SIZE
+.. c:macro:: PAGE_SHIFT
 
-   Kernel stack size: ``16384`` bytes (16 KB)
+   Page shift: ``12`` bits
 
-Error Codes (Future)
-~~~~~~~~~~~~~~~~~~~~
+.. c:macro:: KERNEL_STACK_SIZE
 
-.. c:macro:: E_OK
+   Kernel stack size per process: ``16384`` bytes (16 KB)
 
-   Success: ``0``
+.. c:macro:: USER_STACK_SIZE
 
-.. c:macro:: E_NOMEM
+   User stack size per process: ``1048576`` bytes (1 MB)
 
-   Out of memory: ``-1``
+.. c:macro:: MAX_PROCS
 
-.. c:macro:: E_INVAL
+   Maximum number of processes: ``64``
 
-   Invalid argument: ``-2``
+.. c:macro:: PROC_NAME_LEN
 
-.. c:macro:: E_AGAIN
+   Process name maximum length: ``32`` characters
 
-   Try again: ``-3``
+Process States
+~~~~~~~~~~~~~~
 
-Data Structures (Future)
--------------------------
+.. c:macro:: PROC_UNUSED
 
-.. c:type:: struct process
+   Process slot is unused: ``0``
 
-   Process control block.
+.. c:macro:: PROC_EMBRYO
+
+   Process is being created
+
+.. c:macro:: PROC_READY
+
+   Process is ready to run
+
+.. c:macro:: PROC_RUNNING
+
+   Process is currently running
+
+.. c:macro:: PROC_SLEEPING
+
+   Process is waiting for event
+
+.. c:macro:: PROC_ZOMBIE
+
+   Process has exited but not yet cleaned up
+
+Trap/Exception Causes
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:macro:: CAUSE_MISALIGNED_FETCH
+
+   Instruction address misaligned: ``0``
+
+.. c:macro:: CAUSE_FETCH_ACCESS
+
+   Instruction access fault: ``1``
+
+.. c:macro:: CAUSE_ILLEGAL_INSTRUCTION
+
+   Illegal instruction: ``2``
+
+.. c:macro:: CAUSE_BREAKPOINT
+
+   Breakpoint: ``3``
+
+.. c:macro:: CAUSE_MISALIGNED_LOAD
+
+   Load address misaligned: ``4``
+
+.. c:macro:: CAUSE_LOAD_ACCESS
+
+   Load access fault: ``5``
+
+.. c:macro:: CAUSE_MISALIGNED_STORE
+
+   Store address misaligned: ``6``
+
+.. c:macro:: CAUSE_STORE_ACCESS
+
+   Store access fault: ``7``
+
+.. c:macro:: CAUSE_USER_ECALL
+
+   Environment call from U-mode: ``8``
+
+.. c:macro:: CAUSE_SUPERVISOR_ECALL
+
+   Environment call from S-mode: ``9``
+
+.. c:macro:: CAUSE_MACHINE_ECALL
+
+   Environment call from M-mode: ``11``
+
+.. c:macro:: CAUSE_FETCH_PAGE_FAULT
+
+   Instruction page fault: ``12``
+
+.. c:macro:: CAUSE_LOAD_PAGE_FAULT
+
+   Load page fault: ``13``
+
+.. c:macro:: CAUSE_STORE_PAGE_FAULT
+
+   Store page fault: ``15``
+
+Interrupt Causes
+~~~~~~~~~~~~~~~~
+
+.. c:macro:: IRQ_S_SOFT
+
+   Supervisor software interrupt: ``1``
+
+.. c:macro:: IRQ_S_TIMER
+
+   Supervisor timer interrupt: ``5``
+
+.. c:macro:: IRQ_S_EXTERNAL
+
+   Supervisor external interrupt: ``9``
+
+Data Structures
+---------------
+
+Trap Frame
+~~~~~~~~~~
+
+.. c:type:: struct trap_frame
+
+   Saved register state during trap/interrupt.
    
-   .. c:member:: int pid
+   .. c:member:: unsigned long ra
    
-      Process ID
+      Return address (x1)
    
-   .. c:member:: void *stack
+   .. c:member:: unsigned long sp
+   
+      Stack pointer (x2)
+   
+   .. c:member:: unsigned long gp
+   
+      Global pointer (x3)
+   
+   .. c:member:: unsigned long tp
+   
+      Thread pointer (x4)
+   
+   .. c:member:: unsigned long t0-t6
+   
+      Temporary registers (x5-x7, x28-x31)
+   
+   .. c:member:: unsigned long s0-s11
+   
+      Saved registers (x8-x9, x18-x27)
+   
+   .. c:member:: unsigned long a0-a7
+   
+      Argument/return registers (x10-x17)
+   
+   .. c:member:: unsigned long sepc
+   
+      Supervisor exception program counter
+   
+   .. c:member:: unsigned long sstatus
+   
+      Supervisor status register
+
+Process Context
+~~~~~~~~~~~~~~~
+
+.. c:type:: struct context
+
+   Process context for context switching.
+   
+   .. c:member:: unsigned long ra
+   
+      Return address
+   
+   .. c:member:: unsigned long sp
    
       Stack pointer
    
-   .. c:member:: int state
+   .. c:member:: unsigned long s0-s11
    
-      Process state (RUNNING, READY, BLOCKED, etc.)
+      Callee-saved registers
 
-.. c:type:: struct page
+Process Control Block
+~~~~~~~~~~~~~~~~~~~~~~
 
-   Physical page descriptor.
+.. c:type:: struct process
+
+   Process control block (PCB).
    
-   .. c:member:: uint64_t flags
+   .. c:member:: pid_t pid
    
-      Page flags (USED, DIRTY, etc.)
+      Process ID
    
-   .. c:member:: int ref_count
+   .. c:member:: proc_state_t state
    
-      Reference count
+      Process state
+   
+   .. c:member:: char name[PROC_NAME_LEN]
+   
+      Process name
+   
+   .. c:member:: page_table_t *page_table
+   
+      Virtual memory page table
+   
+   .. c:member:: uintptr_t kernel_stack
+   
+      Kernel stack base address
+   
+   .. c:member:: uintptr_t user_stack
+   
+      User stack base address
+   
+   .. c:member:: struct context context
+   
+      Saved kernel context
+   
+   .. c:member:: struct trap_frame *trap_frame
+   
+      Saved user context
+   
+   .. c:member:: uint64_t cpu_time
+   
+      Total CPU time used (in ticks)
+   
+   .. c:member:: uint64_t priority
+   
+      Scheduling priority
+   
+   .. c:member:: struct process *parent
+   
+      Parent process
+   
+   .. c:member:: int exit_code
+   
+      Exit status code
+
+Page Table
+~~~~~~~~~~
+
+.. c:type:: page_table_t
+
+   Sv39 page table (512 entries).
+   
+   .. c:member:: pte_t entries[512]
+   
+      Page table entries
+
+.. c:type:: pte_t
+
+   Page table entry (64-bit).
+
+Linker Symbols
+--------------
+
+These symbols are defined by the linker script:
+
+.. c:var:: extern char _text_start[]
+
+   Start of ``.text`` section (code)
+
+.. c:var:: extern char _text_end[]
+
+   End of ``.text`` section
+
+.. c:var:: extern char _rodata_start[]
+
+   Start of ``.rodata`` section (read-only data)
+
+.. c:var:: extern char _rodata_end[]
+
+   End of ``.rodata`` section
+
+.. c:var:: extern char _data_start[]
+
+   Start of ``.data`` section (initialized data)
+
+.. c:var:: extern char _data_end[]
+
+   End of ``.data`` section
+
+.. c:var:: extern char _bss_start[]
+
+   Start of ``.bss`` section (uninitialized data)
+
+.. c:var:: extern char _bss_end[]
+
+   End of ``.bss`` section
+
+.. c:var:: extern char _kernel_end[]
+
+   End of entire kernel (page-aligned)
+
+Assembly Entry Points
+---------------------
+
+.. asm:label:: _start
+
+   Kernel entry point from bootloader.
+   
+   **Location:** ``boot/boot.S``
+   
+   **Responsibilities:**
+   
+   1. Disable interrupts (``csrw sie, zero``)
+   2. Setup stack pointer (``la sp, _stack_top``)
+   3. Clear BSS section
+   4. Call ``kernel_main()``
+   
+   **Registers modified:**
+   
+   * ``sp`` - Set to ``_stack_top``
+   * ``t0``, ``t1`` - Used for BSS clearing
+   
+   **Never returns**
 
 See Also
 --------
 
-* :doc:`internals/uart_driver` - UART implementation details
-* :doc:`internals/bootloader` - Bootloader internals
+* :doc:`architecture` - System architecture overview
+* :doc:`internals/index` - Implementation details
 * :doc:`development` - Development guide
+* `CHANGELOG.md <../../CHANGELOG.md>`_ - Detailed feature list

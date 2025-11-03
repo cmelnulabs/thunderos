@@ -83,20 +83,45 @@ Prerequisites
 Building
 ~~~~~~~~
 
+Using the build script (recommended):
+
 .. code-block:: bash
 
    git clone <repository>
    cd thunderos
+   ./build_os.sh
+
+Or manually with Make:
+
+.. code-block:: bash
+
    make all
 
 Running
 ~~~~~~~
 
+Build and test in QEMU:
+
+.. code-block:: bash
+
+   ./test_qemu.sh
+
+Or run manually:
+
 .. code-block:: bash
 
    make qemu
 
-You should see the boot messages and kernel initialization.
+Building Documentation
+~~~~~~~~~~~~~~~~~~~~~~
+
+Generate HTML documentation:
+
+.. code-block:: bash
+
+   ./build_docs.sh
+
+Documentation will be available at ``docs/build/html/index.html``
 
 Project Structure
 -----------------
@@ -108,12 +133,18 @@ Project Structure
    ├── kernel/            # Kernel code
    │   ├── arch/riscv64/  # Architecture-specific code
    │   ├── core/          # Core kernel (scheduler, etc.)
-   │   ├── drivers/       # Device drivers
    │   └── mm/            # Memory management
    ├── include/           # Header files
-   ├── lib/               # Utility libraries
-   ├── build/             # Build artifacts
-   └── docs/              # This documentation
+   │   ├── arch/          # Architecture headers
+   │   ├── hal/           # Hardware Abstraction Layer
+   │   ├── kernel/        # Kernel subsystem headers
+   │   └── mm/            # Memory management headers
+   ├── tests/             # Test framework and cases
+   ├── docs/              # Sphinx documentation
+   ├── build/             # Build artifacts (generated)
+   ├── build_os.sh        # Build kernel script
+   ├── build_docs.sh      # Build documentation script
+   └── test_qemu.sh       # Build and test in QEMU script
 
 Next Steps
 ----------

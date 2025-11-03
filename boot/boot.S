@@ -1,39 +1,77 @@
 /* 
  * ThunderOS - Boot entry point
  * RISC-V 64-bit assembly
+ *
+ * This is the first code that runs after the OpenSBI firmware transfers
+ * control to the kernel. It sets up the minimal environment needed to
+ * run C code, then jumps to kernel_main().
+ *
+ * Execution flow:
+ *   1. OpenSBI (M-mode) loads this code at 0x80200000
+ *   2. OpenSBI jumps to _start (this file, S-mode)
+ *   3. We setup stack, clear BSS, jump to kernel_main()
  */
 
-.section .text.boot
-.global _start
+.section .text.boot          # Place code in the .text.boot section (linked first)
+.global _start               # Make _start visible to linker (entry point)
 
 _start:
-    # Disable interrupts
-    csrw sie, zero
+    # ========================================================================
+    # Step 1: Disable interrupts during initialization
+    # ========================================================================
+    # We don't want interrupts firing while we're setting up the environment.
+    # The SIE (Supervisor Interrupt Enable) register controls which interrupts
+    # are enabled. Writing zero disables all interrupts.
+    csrw sie, zero           # CSR Write: sie = 0 (disable all S-mode interrupts)
     
-    # Setup stack pointer
-    # We'll use 0x80200000 as the base, stack grows downward
-    la sp, _stack_top
+    # ========================================================================
+    # Step 2: Setup the stack pointer
+    # ========================================================================
+    # C code needs a valid stack to work. The stack grows downward in memory,
+    # so we point SP to the TOP of our reserved stack space.
+    # _stack_top is defined at the bottom of this file.
+    la sp, _stack_top        # Load Address: sp = address of _stack_top
     
-    # Clear BSS section
-    la t0, _bss_start
-    la t1, _bss_end
+    # ========================================================================
+    # Step 3: Clear the BSS section
+    # ========================================================================
+    # BSS (Block Started by Symbol) contains uninitialized global/static variables.
+    # The C standard requires these to be zero-initialized before main() runs.
+    # _bss_start and _bss_end are defined by the linker script.
+    la t0, _bss_start        # t0 = start address of BSS
+    la t1, _bss_end          # t1 = end address of BSS
 clear_bss:
-    beq t0, t1, clear_bss_done
-    sd zero, 0(t0)
-    addi t0, t0, 8
-    j clear_bss
+    beq t0, t1, clear_bss_done   # If t0 == t1, we're done (empty or finished)
+    sd zero, 0(t0)               # Store Doubleword: write 8 bytes of zero at *t0
+    addi t0, t0, 8               # Add Immediate: t0 += 8 (move to next 8-byte slot)
+    j clear_bss                  # Jump: repeat the loop
 clear_bss_done:
     
-    # Jump to kernel main
-    call kernel_main
+    # ========================================================================
+    # Step 4: Jump to C kernel entry point
+    # ========================================================================
+    # Environment is ready! Transfer control to kernel_main() in kernel/main.c
+    # The 'call' instruction saves return address in ra register, but
+    # kernel_main() should never return.
+    call kernel_main         # Call function (ra = PC+4, PC = kernel_main)
     
-    # If kernel_main returns, halt
+    # ========================================================================
+    # Step 5: Halt if kernel_main returns (should never happen)
+    # ========================================================================
+    # If we reach here, something went wrong. Enter an infinite low-power loop.
 halt:
-    wfi
-    j halt
+    wfi                      # Wait For Interrupt (low-power idle state)
+    j halt                   # Jump: infinite loop (in case interrupt wakes us)
 
-.section .bss
-.align 12
-_stack_bottom:
-    .space 4096 * 4  # 16KB stack
-_stack_top:
+# ============================================================================
+# Stack definition
+# ============================================================================
+# The stack is placed in the BSS section (uninitialized data).
+# We reserve 16KB (4 pages) for the boot stack.
+# Note: stack grows DOWNWARD, so _stack_top is at the END of the reserved space.
+
+.section .bss                # Uninitialized data section
+.align 12                    # Align to 2^12 = 4096 bytes (page boundary)
+_stack_bottom:               # Label: beginning of stack space (highest addresses used first)
+    .space 4096 * 4          # Reserve 16KB (16384 bytes) for stack
+_stack_top:                  # Label: end of stack space (this is where SP starts)
