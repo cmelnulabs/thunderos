@@ -14,6 +14,7 @@
 #include "kernel/scheduler.h"
 #include "kernel/time.h"
 #include "kernel/config.h"
+#include "kernel/syscall.h"
 
 // Test allocation size
 #define TEST_ALLOC_SIZE 256             // Bytes for kmalloc test
@@ -202,6 +203,24 @@ void kernel_main(void) {
     
     // Dump process table
     process_dump();
+    
+    // Test new syscalls
+    hal_uart_puts("\nTesting new syscalls:\n");
+    
+    hal_uart_puts("  sys_gettime(): ");
+    uint64_t time_ms = sys_gettime();
+    kprint_dec(time_ms);
+    hal_uart_puts(" ms since boot\n");
+    
+    hal_uart_puts("  sys_getpid(): ");
+    int pid = sys_getpid();
+    kprint_dec(pid);
+    hal_uart_puts("\n");
+    
+    hal_uart_puts("  sys_getppid(): ");
+    int ppid = sys_getppid();
+    kprint_dec(ppid);
+    hal_uart_puts(" (expected: 0 - not implemented yet)\n");
     
     hal_uart_puts("[  ] AI accelerators: TODO\n");
     

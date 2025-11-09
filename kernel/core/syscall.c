@@ -168,6 +168,59 @@ uint64_t sys_yield(void) {
 }
 
 /**
+ * sys_getppid - Get parent process ID
+ * 
+ * @return Parent process ID, or 0 if no parent
+ */
+uint64_t sys_getppid(void) {
+    struct process *current_process = process_current();
+    
+    if (current_process == NULL) {
+        return 0;
+    }
+    
+    // Return ppid if available (currently PCB doesn't have ppid field)
+    // For now, return 0 (init process has no parent)
+    // TODO: Add ppid field to PCB structure
+    return 0;
+}
+
+/**
+ * sys_kill - Send signal to process
+ * 
+ * @param pid Target process ID
+ * @param signal Signal number (ignored for now)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_kill(int pid, int signal) {
+    (void)signal;  // Signals not implemented yet
+    
+    if (pid <= 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Find process by PID and terminate it
+    // TODO: Implement process_find_by_pid() and proper signal handling
+    // For now, just return error
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_gettime - Get system time
+ * 
+ * @return Milliseconds since boot
+ */
+uint64_t sys_gettime(void) {
+    // Get time from hardware timer
+    extern uint64_t hal_timer_get_ticks(void);
+    uint64_t ticks = hal_timer_get_ticks();
+    
+    // Convert ticks to milliseconds
+    // Assuming 10MHz clock (QEMU default): 10,000 ticks = 1ms
+    return ticks / 10000;
+}
+
+/**
  * syscall_handler - Main system call dispatcher
  * 
  * Called from trap handler when ECALL is executed from user mode.
@@ -218,6 +271,18 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_YIELD:
             return_value = sys_yield();
+            break;
+            
+        case SYS_GETPPID:
+            return_value = sys_getppid();
+            break;
+            
+        case SYS_KILL:
+            return_value = sys_kill((int)argument0, (int)argument1);
+            break;
+            
+        case SYS_GETTIME:
+            return_value = sys_gettime();
             break;
             
         case SYS_FORK:

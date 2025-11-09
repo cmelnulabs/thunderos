@@ -11,6 +11,7 @@ This section documents the internal implementation details of ThunderOS.
    uart_driver
    trap_handler
    interrupt_handling
+   syscalls
    hal_timer
    pmm
    kmalloc

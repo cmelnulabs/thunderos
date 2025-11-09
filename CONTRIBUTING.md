@@ -45,16 +45,24 @@ Thank you for your interest in contributing to ThunderOS! This guide will help y
    - Use `-O0` optimization (for debugging)
    - Run `make` to check for compiler warnings
 
-3. **Write tests**
+3. **Write meaningful commit messages**
+   - Keep messages short and concise
+   - Use past participle form ("Added", "Fixed", "Updated", not "Add", "Fix", "Update")
+   - Example: `Added syscalls: getppid, kill, gettime and comprehensive documentation`
+   - Example: `Enhanced PMM and kmalloc documentation`
+   - Example: `Fixed memory leak in kmalloc`
+   - Be specific about what changed, not why (details go in PR description)
+
+4. **Write tests**
    - Add tests in `tests/` directory
    - Follow the KUnit-inspired framework in [docs/source/internals/testing_framework.rst](docs/source/internals/testing_framework.rst)
 
-4. **Document your changes**
+5. **Document your changes**
    - Update relevant `.rst` files in `docs/source/`
    - Add entry to [CHANGELOG.md](CHANGELOG.md) under "Unreleased"
    - Comment your code clearly
 
-5. **Submit a pull request**
+6. **Submit a pull request**
    - Target the current `dev/vX.Y.Z` branch
    - Write a clear PR description
    - Reference related issues
