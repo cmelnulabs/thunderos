@@ -18,6 +18,7 @@ This section documents the internal implementation details of ThunderOS.
    paging
    kstring
    process_management
+   user_mode
    testing_framework
    linker_script
    memory_layout
@@ -75,6 +76,9 @@ Component Status
    * - :doc:`process_management`
      - ✓ Done
      - Process control blocks, scheduler, context switching
+   * - :doc:`user_mode`
+     - ✓ Done
+     - User mode support with privilege transitions and memory isolation
    * - :doc:`testing_framework`
      - ✓ Done
      - KUnit-inspired testing framework for kernel
@@ -87,9 +91,6 @@ Component Status
    * - Higher-Half Kernel
      - Planned
      - Move kernel to 0xFFFFFFFF80000000 (v0.2.0+)
-   * - User Mode Processes
-     - Planned
-     - Separate page tables, privilege switching (v0.2.0)
    * - Fork/Exec
      - Planned
      - Process cloning and program loading (v0.6.0)

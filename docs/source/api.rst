@@ -926,6 +926,233 @@ Page Table
 
    Page table entry (64-bit).
 
+User Mode API
+~~~~~~~~~~~~~
+
+.. c:function:: page_table_t *create_user_page_table(void)
+
+   Create a new page table for a user process.
+   
+   Creates a page table with kernel mappings but empty user space. 
+   Each user process must have its own page table for memory isolation.
+   
+   :return: Pointer to new page table, or NULL on failure
+   :rtype: page_table_t*
+   
+   **Details:**
+   
+   * Copies kernel entries (2-511) from kernel page table
+   * Leaves user space (entries 0-1) unmapped
+   * Newly allocated page tables are used for memory isolation
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      page_table_t *user_pt = create_user_page_table();
+      if (!user_pt) {
+          hal_uart_puts("Failed to create page table\n");
+          return NULL;
+      }
+
+.. c:function:: int map_user_code(page_table_t *page_table, uintptr_t user_vaddr, void *kernel_code, size_t size)
+
+   Map user code into user address space.
+   
+   Allocates physical pages, copies code from kernel space, and maps 
+   with user-executable permissions.
+   
+   :param page_table: User process page table
+   :param user_vaddr: Virtual address in user space (typically USER_CODE_BASE)
+   :param kernel_code: Pointer to code in kernel memory
+   :param size: Size of code in bytes
+   :return: 0 on success, -1 on failure
+   :rtype: int
+   
+   **Permissions:** R, X, U (executable but not writable)
+   
+   **Typical Usage:**
+   
+   .. code-block:: c
+   
+      if (map_user_code(proc->page_table, USER_CODE_BASE, 
+                       user_code, code_size) != 0) {
+          hal_uart_puts("Failed to map user code\n");
+          return NULL;
+      }
+
+.. c:function:: int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr, uintptr_t phys_addr, size_t size, int writable)
+
+   Map user memory (stack, heap, data) into user address space.
+   
+   Can allocate new physical pages or map existing pages.
+   
+   :param page_table: User process page table
+   :param user_vaddr: Virtual address in user space
+   :param phys_addr: Physical address (0 = allocate new pages)
+   :param size: Size in bytes
+   :param writable: 1 if writable, 0 if read-only
+   :return: 0 on success, -1 on failure
+   :rtype: int
+   
+   **Permissions:** 
+   
+   * If writable: R, W, U (readable and writable)
+   * If read-only: R, U (readable only)
+   
+   **Typical Usage - Stack:**
+   
+   .. code-block:: c
+   
+      uintptr_t stack_base = USER_STACK_TOP - USER_STACK_SIZE;
+      if (map_user_memory(proc->page_table, stack_base, 0, 
+                         USER_STACK_SIZE, 1) != 0) {
+          hal_uart_puts("Failed to map user stack\n");
+          return NULL;
+      }
+
+.. c:function:: void switch_page_table(page_table_t *page_table)
+
+   Switch to a different page table.
+   
+   Updates the ``satp`` register and flushes the TLB. This is called
+   when switching between processes.
+   
+   :param page_table: New page table to switch to
+   
+   **Details:**
+   
+   * Writes to ``satp`` CSR (Supervisor Address Translation and Protection)
+   * Flushes entire TLB to ensure coherency
+   * Used in scheduler and user mode entry wrapper
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      struct process *proc = get_next_process();
+      switch_page_table(proc->page_table);
+      // CPU now uses proc's page table
+
+.. c:function:: struct process *process_create_user(const char *name, void *user_code, size_t code_size)
+
+   Create a new user-mode process.
+   
+   Creates a process with its own page table and user address space.
+   The user code is mapped at USER_CODE_BASE, and the stack is allocated
+   at USER_STACK_TOP.
+   
+   :param name: Process name (max PROC_NAME_LEN - 1 characters)
+   :param user_code: Pointer to user code to execute (in kernel memory)
+   :param code_size: Size of user code in bytes
+   :return: Pointer to new process, or NULL on failure
+   :rtype: struct process*
+   
+   **Details:**
+   
+   * Creates separate page table with memory isolation
+   * Maps code with executable permissions at USER_CODE_BASE (0x10000)
+   * Allocates user stack (1MB) at USER_STACK_TOP (0x80000000)
+   * Sets SPP=0 and SPIE=1 in sstatus for user mode entry
+   * Adds process to scheduler queue
+   
+   **Process Layout:**
+   
+   .. code-block:: text
+   
+      0x10000      ┌────────────────────┐
+                   │   User Code        │  (mapped from user_code)
+                   └────────────────────┘
+      0x80000000-1MB ┌────────────────────┐
+                   │   User Stack       │  (grows downward)
+                   │                    │
+      0x80000000   └────────────────────┘
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      uint8_t user_code[] = { /* ... */ };
+      struct process *proc = process_create_user("myapp", 
+                                                 user_code, 
+                                                 sizeof(user_code));
+      if (!proc) {
+          hal_uart_puts("Failed to create user process\n");
+          return -1;
+      }
+
+.. c:function:: void user_return(struct trap_frame *trap_frame)
+
+   Return to user mode.
+   
+   Restores all registers from the trap frame and executes ``sret`` to 
+   enter user mode. This is a pure assembly function that should never
+   return (it enters user mode directly).
+   
+   :param trap_frame: Pointer to trap frame with register state
+   :type trap_frame: struct trap_frame*
+   
+   **Attributes:** noreturn
+   
+   **Details:**
+   
+   * Pure assembly (no C compiler interference)
+   * Restores all 32 RISC-V registers from trap frame
+   * Sets ``sepc`` to user code entry point
+   * Sets ``sstatus`` with SPP=0 for user mode
+   * Executes ``sret`` to enter user mode
+   
+   **Warning:** Must only be called from ``user_mode_entry_wrapper()``
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // This is called automatically by user_mode_entry_wrapper
+      // User code should not call this directly!
+
+Memory Layout Constants
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:macro:: USER_CODE_BASE
+
+   User code entry point: ``0x10000`` (64 KB)
+
+.. c:macro:: USER_HEAP_START
+
+   User heap start: ``0x20000`` (128 KB)
+
+.. c:macro:: USER_MMAP_START
+
+   User memory-mapped region: ``0x40000000`` (1 GB)
+
+.. c:macro:: USER_STACK_TOP
+
+   User stack top: ``0x80000000`` (2 GB)
+
+.. c:macro:: USER_STACK_SIZE
+
+   User stack size: ``1048576`` (1 MB, grows downward)
+
+Page Table Entry Permissions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:macro:: PTE_USER_TEXT
+
+   User code permissions: R, X, U (readable and executable)
+
+.. c:macro:: PTE_USER_DATA
+
+   User data permissions: R, W, U (readable and writable)
+
+.. c:macro:: PTE_USER_RO
+
+   User read-only permissions: R, U (readable only)
+
+.. c:macro:: PTE_KERNEL_DATA
+
+   Kernel data permissions: R, W, X (all access)
+
 Linker Symbols
 --------------
 
