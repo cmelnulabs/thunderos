@@ -15,8 +15,11 @@
 #define SYS_FORK        7   // Fork process (future)
 #define SYS_EXEC        8   // Execute program (future)
 #define SYS_WAIT        9   // Wait for child (future)
+#define SYS_GETPPID     10  // Get parent process ID
+#define SYS_KILL        11  // Send signal to process
+#define SYS_GETTIME     12  // Get system time (milliseconds since boot)
 
-#define SYSCALL_COUNT   10
+#define SYSCALL_COUNT   13
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -44,5 +47,8 @@ uint64_t sys_getpid(void);
 uint64_t sys_sbrk(int increment);
 uint64_t sys_sleep(uint64_t ms);
 uint64_t sys_yield(void);
+uint64_t sys_getppid(void);
+uint64_t sys_kill(int pid, int signal);
+uint64_t sys_gettime(void);
 
 #endif // SYSCALL_H
