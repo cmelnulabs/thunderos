@@ -1,8 +1,5 @@
 # ThunderOS
 
-> ⚠️ **CODE FREEZE ACTIVE**: ThunderOS is currently in code freeze for v0.2.0 release.  
-> **Do not merge to `main`** - all contributions should target `dev/v0.2.0`.  
-> See [FREEZE.md](FREEZE.md) for details.
 
 A RISC-V operating system focused on AI acceleration and educational use.
 
