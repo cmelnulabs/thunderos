@@ -229,7 +229,7 @@ Constants and Macros
 .. code-block:: c
 
    #define PAGE_SIZE 4096                                  // 4KB pages
-   #define PAGE_SHIFT 12                                   // log₂(PAGE_SIZE) = log₂(4096) = 12
+   #define PAGE_SHIFT 12                                   // log\ :sub:`2`\ (PAGE_SIZE) = log\ :sub:`2`\ (4096) = 12
    
    #define PAGE_ALIGN_DOWN(addr) ((addr) & ~(PAGE_SIZE - 1))
    #define PAGE_ALIGN_UP(addr) (((addr) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
