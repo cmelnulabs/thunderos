@@ -80,6 +80,7 @@ void process_set_current(struct process *proc) {
 
 /**
  * Allocate a new PID
+ * Uses atomic increment to ensure no PID conflicts in multi-threaded context
  */
 pid_t alloc_pid(void) {
     lock_acquire(&process_lock);
@@ -89,14 +90,18 @@ pid_t alloc_pid(void) {
 }
 
 /**
- * Find a free process slot
+ * Find a free process slot in the process table
+ * 
+ * Scans the process table for an unused slot and returns it.
+ * The process state must be PROC_UNUSED.
+ * 
+ * @return Pointer to unused process structure, or NULL if table full
  */
 static struct process *alloc_process(void) {
     lock_acquire(&process_lock);
     
     for (int i = 0; i < MAX_PROCS; i++) {
         if (process_table[i].state == PROC_UNUSED) {
-            process_table[i].state = PROC_EMBRYO;
             lock_release(&process_lock);
             return &process_table[i];
         }
@@ -119,34 +124,38 @@ struct process *process_get(pid_t pid) {
 }
 
 /**
- * Free a process structure
+ * Free a process structure and all its resources
+ * 
+ * Frees kernel stack, user stack, trap frame, and user page table.
+ * Does NOT free the kernel page table (shared by all processes).
+ * Caller must ensure process is not currently running.
+ * 
+ * @param proc Process to free (NULL is safe)
  */
 void process_free(struct process *proc) {
     if (!proc) return;
     
     lock_acquire(&process_lock);
     
-    // Free kernel stack
+    // Free allocated memory regions
     if (proc->kernel_stack) {
         kfree((void *)proc->kernel_stack);
     }
     
-    // Free user stack
     if (proc->user_stack) {
         kfree((void *)proc->user_stack);
     }
     
-    // Free trap frame
     if (proc->trap_frame) {
         kfree(proc->trap_frame);
     }
     
-    // Free page table (not kernel page table)
+    // Free user page table (but NOT the shared kernel page table)
     if (proc->page_table && proc->page_table != get_kernel_page_table()) {
         free_page_table(proc->page_table);
     }
     
-    // Mark as unused
+    // Mark process slot as unused
     proc->state = PROC_UNUSED;
     proc->pid = -1;
     
@@ -154,30 +163,45 @@ void process_free(struct process *proc) {
 }
 
 /**
- * Helper to setup initial trap frame for new process
+ * Setup initial trap frame for new kernel process
+ * 
+ * Initializes a trap frame with the entry point and first argument.
+ * For kernel processes, sets SPP=1 (supervisor mode) and SPIE=1.
+ * 
+ * @param proc Process to setup
+ * @param entry_point Entry point function pointer
+ * @param arg First argument to entry point
  */
 static void setup_trap_frame(struct process *proc, void (*entry_point)(void *), void *arg) {
-    // Allocate trap frame separately (not on the stack to avoid corruption)
+    // Allocate trap frame separately (stack allocation would cause corruption)
     proc->trap_frame = (struct trap_frame *)kmalloc(sizeof(struct trap_frame));
     if (!proc->trap_frame) {
-        return;  // Caller will check and handle
+        kernel_panic("setup_trap_frame: failed to allocate trap frame");
     }
     
-    // Zero out trap frame
+    // Zero out trap frame structure
     kmemset(proc->trap_frame, 0, sizeof(struct trap_frame));
     
-    // Set up initial register values
-    proc->trap_frame->sepc = (unsigned long)entry_point;  // Entry point
-    proc->trap_frame->sp = proc->user_stack + USER_STACK_SIZE;  // User stack pointer
-    proc->trap_frame->a0 = (unsigned long)arg;  // First argument
+    // Set entry point (execution will start here after context switch)
+    proc->trap_frame->sepc = (unsigned long)entry_point;
     
-    // Set sstatus: SPP=1 (supervisor mode), SPIE=1 (enable interrupts on sret)
-    // For kernel processes, we run in supervisor mode
-    proc->trap_frame->sstatus = (1 << 8) | (1 << 5);  // SPP=1, SPIE=1
+    // Set stack pointer to top of user stack (grows downward)
+    proc->trap_frame->sp = proc->user_stack + USER_STACK_SIZE;
+    
+    // Set first argument for entry point function
+    proc->trap_frame->a0 = (unsigned long)arg;
+    
+    // Set sstatus for supervisor mode with interrupts enabled
+    // SPP=1 (supervisor mode), SPIE=1 (enable interrupts after sret)
+    proc->trap_frame->sstatus = (1 << 8) | (1 << 5);
 }
 
 /**
- * Wrapper function that calls the process entry point and handles exit
+ * Process wrapper function called on first context switch
+ * 
+ * Called when a new kernel process is scheduled for the first time.
+ * Extracts the entry point and argument from the trap frame, calls the
+ * actual process function, and calls process_exit if the function returns.
  */
 static void process_wrapper(void) {
     struct process *proc = process_current();
@@ -186,73 +210,77 @@ static void process_wrapper(void) {
         while (1) __asm__ volatile("wfi");
     }
     
-    // Get entry point and argument from trap frame
+    // Extract entry point and argument from trap frame
     void (*entry_point)(void *) = (void (*)(void *))proc->trap_frame->sepc;
     void *arg = (void *)proc->trap_frame->a0;
     
     // Call the actual process function
     entry_point(arg);
     
-    // If process returns, exit
+    // If process returns, exit gracefully
     process_exit(0);
 }
 
 /**
- * Create a new process
+ * Create a new kernel mode process
+ * 
+ * Allocates and initializes a process structure, allocates kernel and user
+ * stacks, creates a trap frame, and adds to the scheduler ready queue.
+ * 
+ * @param name Process name (max PROC_NAME_LEN-1 characters)
+ * @param entry_point Function to execute as process entry point
+ * @param arg First argument passed to entry point
+ * @return Pointer to new process, NULL on failure (panics on critical errors)
  */
 struct process *process_create(const char *name, void (*entry_point)(void *), void *arg) {
     struct process *proc = alloc_process();
     if (!proc) {
-        kernel_panic("process_create: Process table full - cannot allocate process");
+        kernel_panic("process_create: Process table full");
     }
     
-    // Assign PID
+    // Assign unique PID
     proc->pid = alloc_pid();
     
-    // Copy name
+    // Copy process name (with null terminator)
     kstrncpy(proc->name, name, PROC_NAME_LEN - 1);
     proc->name[PROC_NAME_LEN - 1] = '\0';
     
-    // Allocate kernel stack
+    // Allocate kernel stack for trap handling and context switching
     proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
     if (!proc->kernel_stack) {
         kernel_panic("process_create: Failed to allocate kernel stack");
     }
     
-    // For now, create kernel-mode processes only (use kernel page table)
-    // TODO: Create user-mode processes with separate page tables
+    // Use kernel page table (kernel mode process)
     proc->page_table = get_kernel_page_table();
     
-    // Allocate user stack (in kernel space for now)
+    // Allocate user stack (in kernel space for kernel mode processes)
     proc->user_stack = (uintptr_t)kmalloc(USER_STACK_SIZE);
     if (!proc->user_stack) {
         kernel_panic("process_create: Failed to allocate user stack");
     }
     
-    // Setup initial trap frame
+    // Setup initial trap frame with entry point and argument
     setup_trap_frame(proc, entry_point, arg);
     if (!proc->trap_frame) {
         kernel_panic("process_create: Failed to allocate trap frame");
     }
     
-    // Initialize context (kernel context for context switching)
+    // Setup kernel context for initial context switch
     kmemset(&proc->context, 0, sizeof(struct context));
-    // Set return address to wrapper function
+    // Set return address to wrapper function that calls entry_point
     proc->context.ra = (unsigned long)process_wrapper;
-    // Set stack pointer to top of kernel stack (grows downward)
-    // Subtract STACK_ALIGNMENT to ensure 16-byte alignment per RISC-V ABI
+    // Set stack pointer to top of kernel stack (16-byte aligned for RISC-V ABI)
     proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
     
-    // Initialize other fields
+    // Initialize other process fields
     proc->cpu_time = 0;
     proc->priority = 10;  // Default priority
     proc->parent = current_process;
     proc->exit_code = 0;
     
-    // Mark as ready
+    // Mark as ready and add to scheduler
     proc->state = PROC_READY;
-    
-    // Add to scheduler queue
     scheduler_enqueue(proc);
     
     return proc;
@@ -260,12 +288,16 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
 
 /**
  * Exit the current process
+ * 
+ * Marks process as zombie, removes from scheduler, and yields to another process.
+ * Cannot be called on PID 0 (init process).
+ * 
+ * @param exit_code Exit status code (currently unused)
  */
 void process_exit(int exit_code) {
     struct process *proc = current_process;
     
     if (!proc || proc->pid == 0) {
-        // Can't exit init process
         hal_uart_puts("Cannot exit init process\n");
         while (1) {
             __asm__ volatile("wfi");
@@ -274,12 +306,17 @@ void process_exit(int exit_code) {
     
     lock_acquire(&process_lock);
     
+    // Mark as zombie and record exit code
     proc->state = PROC_ZOMBIE;
     proc->exit_code = exit_code;
     
+    // Remove from scheduler to prevent re-execution
+    extern void scheduler_dequeue(struct process *proc);
+    scheduler_dequeue(proc);
+    
     lock_release(&process_lock);
     
-    // Schedule another process
+    // Yield to another process (never returns)
     process_yield();
     
     // Should never reach here
@@ -297,24 +334,32 @@ void process_yield(void) {
 }
 
 /**
- * Sleep for a number of ticks
+ * User process sleep
+ * 
+ * Marks process as sleeping and yields to scheduler.
+ * TODO: Implement timer-based wakeup queue for actual sleep functionality.
+ * 
+ * @param ticks Number of ticks to sleep (currently unused)
  */
 void process_sleep(uint64_t ticks) {
     struct process *proc = current_process;
-    
     if (!proc) return;
     
     lock_acquire(&process_lock);
     proc->state = PROC_SLEEPING;
     // TODO: Add to sleep queue with wakeup time
-    (void)ticks;  // Unused until timer queue is implemented
+    (void)ticks;  // Mark unused parameter
     lock_release(&process_lock);
     
     process_yield();
 }
 
 /**
- * Wake up a process
+ * Wake up a sleeping process
+ * 
+ * Moves process from SLEEPING state back to READY and enqueues in scheduler.
+ * 
+ * @param proc Process to wake up (NULL is safe)
  */
 void process_wakeup(struct process *proc) {
     if (!proc) return;
@@ -384,180 +429,131 @@ int process_exec(void (*entry_point)(void *), void *arg) {
 }
 
 /**
- * Create a new user-mode process
+ * Create a new user mode process
  * 
- * Creates a process with its own page table and user address space.
- * The user code is mapped at USER_CODE_BASE with executable permissions.
- * The user stack is allocated at USER_STACK_TOP.
+ * Creates a process with isolated page table and unprivileged execution context.
+ * User code is mapped at USER_CODE_BASE (read-execute only).
+ * User stack is allocated at USER_STACK_TOP and grows downward.
+ * The process inherits kernel memory mappings for trap handling and I/O.
  * 
- * @param name Process name
- * @param user_code Pointer to user code to execute (in kernel memory)
+ * @param name Process name (for debugging, max PROC_NAME_LEN-1 chars)
+ * @param user_code Pointer to user code in kernel memory to copy
  * @param code_size Size of user code in bytes
  * @return Pointer to new process, or NULL on failure
  */
 struct process *process_create_user(const char *name, void *user_code, size_t code_size) {
-    hal_uart_puts("Creating user process: ");
-    hal_uart_puts(name);
-    hal_uart_puts("\n");
-    
-    // Allocate process structure
+    // Allocate process structure from process table
     struct process *proc = alloc_process();
     if (!proc) {
-        hal_uart_puts("process_create_user: Failed to allocate process\n");
         return NULL;
     }
     
-    // Assign PID
+    // Assign unique PID
     proc->pid = alloc_pid();
     
-    // Copy name
+    // Copy process name with null termination
     kstrncpy(proc->name, name, PROC_NAME_LEN - 1);
     proc->name[PROC_NAME_LEN - 1] = '\0';
     
-    // Create user page table (with kernel mappings)
+    // Create isolated user page table with kernel memory mappings
     proc->page_table = create_user_page_table();
     if (!proc->page_table) {
-        hal_uart_puts("process_create_user: Failed to create page table\n");
         process_free(proc);
         return NULL;
     }
     
-    // Map user code at USER_CODE_BASE
-    hal_uart_puts("Mapping user code (");
-    kprint_dec(code_size);
-    hal_uart_puts(" bytes) at 0x");
-    kprint_hex(USER_CODE_BASE);
-    hal_uart_puts("\n");
-    
+    // Map user code at standard location with executable permissions
     if (map_user_code(proc->page_table, USER_CODE_BASE, user_code, code_size) != 0) {
-        hal_uart_puts("process_create_user: Failed to map user code\n");
         process_free(proc);
         return NULL;
     }
     
-    // Allocate and map user stack
-    hal_uart_puts("Mapping user stack at 0x");
-    kprint_hex(USER_STACK_TOP - USER_STACK_SIZE);
-    hal_uart_puts("\n");
-    
+    // Map user stack at standard location with read-write permissions
     uintptr_t user_stack_base = USER_STACK_TOP - USER_STACK_SIZE;
     if (map_user_memory(proc->page_table, user_stack_base, 0, USER_STACK_SIZE, 1) != 0) {
-        hal_uart_puts("process_create_user: Failed to map user stack\n");
         process_free(proc);
         return NULL;
     }
     
-    // Allocate kernel stack
+    // Allocate kernel stack for trap handling (separate from user stack)
     proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
     if (!proc->kernel_stack) {
-        hal_uart_puts("process_create_user: Failed to allocate kernel stack\n");
         process_free(proc);
         return NULL;
     }
     
-    // User stack is in user space (not allocated here)
+    // User stack is in user address space (already mapped above)
     proc->user_stack = user_stack_base;
     
-    // Allocate trap frame
+    // Allocate trap frame to save user state on traps
     proc->trap_frame = (struct trap_frame *)kmalloc(sizeof(struct trap_frame));
     if (!proc->trap_frame) {
-        hal_uart_puts("process_create_user: Failed to allocate trap frame\n");
         process_free(proc);
         return NULL;
     }
     
-    // Setup trap frame for user mode entry
+    // Initialize trap frame for user mode entry
     kmemset(proc->trap_frame, 0, sizeof(struct trap_frame));
     
-    // Set PC to user code entry point
+    // Set entry point to user code location
     proc->trap_frame->sepc = USER_CODE_BASE;
     
-    // Set user stack pointer (top of stack, grows downward)
+    // Set stack pointer to top of user stack (grows downward)
     proc->trap_frame->sp = USER_STACK_TOP;
     
-    // Clear all registers
-    proc->trap_frame->ra = 0;
-    proc->trap_frame->gp = 0;
-    proc->trap_frame->tp = 0;
-    proc->trap_frame->a0 = 0;
-    proc->trap_frame->a1 = 0;
-    proc->trap_frame->a2 = 0;
-    proc->trap_frame->a3 = 0;
-    proc->trap_frame->a4 = 0;
-    proc->trap_frame->a5 = 0;
-    proc->trap_frame->a6 = 0;
-    proc->trap_frame->a7 = 0;
-    
-    // Set sstatus for user mode:
-    // - SPP=0 (return to user mode)
-    // - SPIE=1 (enable interrupts after sret)
-    // - SIE=0 (interrupts disabled in supervisor mode, but we're going to user mode)
+    // Set sstatus for user mode return:
+    // SPIE=1 (enable interrupts after sret)
+    // SPP=0 (return to user mode, not supervisor)
     proc->trap_frame->sstatus = (1 << 5);  // SPIE=1, SPP=0
     
-    // Setup kernel context for initial switch
+    // Setup kernel context for initial context switch
     kmemset(&proc->context, 0, sizeof(struct context));
     
-    // When scheduler switches to this process for the first time,
-    // it will "return" to user_mode_entry_wrapper
+    // When scheduler first runs this process, it returns to user_mode_entry_wrapper
     extern void user_mode_entry_wrapper(void);
     proc->context.ra = (unsigned long)user_mode_entry_wrapper;
     
-    // Set kernel stack pointer
+    // Set kernel stack pointer (16-byte aligned per RISC-V ABI)
     proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
     
-    // Initialize other fields
+    // Initialize process metadata
     proc->cpu_time = 0;
-    proc->priority = 10;
+    proc->priority = 10;  // Default priority (lower number = higher priority)
     proc->parent = current_process;
     proc->exit_code = 0;
     
-    // Mark as ready
+    // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
-    
-    // Add to scheduler
     scheduler_enqueue(proc);
-    
-    hal_uart_puts("User process created with PID ");
-    kprint_dec(proc->pid);
-    hal_uart_puts("\n");
     
     return proc;
 }
 
 /**
- * Wrapper for user mode entry
+ * Wrapper for entering user mode from kernel context
  * 
- * When scheduler switches to a user process for the first time,
- * this function is called. It switches to the user page table
- * and enters user mode via user_return().
+ * Called when scheduler first switches to a user process. This function:
+ * 1. Switches to the user's isolated page table
+ * 2. Sets up sscratch for user-mode trap handling
+ * 3. Enters user mode via sret
+ * 
+ * Does not return - control goes to user code.
  */
 void user_mode_entry_wrapper(void) {
     struct process *proc = process_current();
     if (!proc || !proc->trap_frame || !proc->page_table) {
-        hal_uart_puts("Error: Invalid process state in user_mode_entry_wrapper\n");
-        kernel_panic("user_mode_entry_wrapper: invalid process");
+        kernel_panic("user_mode_entry_wrapper: invalid process state");
     }
     
-    hal_uart_puts("Switching to user process PID ");
-    kprint_dec(proc->pid);
-    hal_uart_puts("\n");
-    
-    // Switch to user page table
-    hal_uart_puts("Switching to user page table\n");
+    // Switch to user process page table for memory isolation
     switch_page_table(proc->page_table);
     
-    // Setup sscratch with kernel stack pointer for trap handling
-    // When we enter user mode, traps will swap sp with sscratch
+    // Setup sscratch with kernel stack pointer for trap entry
+    // When trap occurs in user mode, sscratch will swap with sp
     uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
     __asm__ volatile("csrw sscratch, %0" :: "r"(kernel_sp));
     
-    hal_uart_puts("Entering user mode at PC=0x");
-    kprint_hex(proc->trap_frame->sepc);
-    hal_uart_puts(" SP=0x");
-    kprint_hex(proc->trap_frame->sp);
-    hal_uart_puts("\n");
-    
-    // Enter user mode (never returns)
+    // Enter user mode - never returns (continues in user code or via trap)
     user_return(proc->trap_frame);
     
     // Should never reach here

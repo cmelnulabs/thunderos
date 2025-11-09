@@ -15,52 +15,50 @@
 .align 4
 
 trap_vector:
-    # Swap sp and sscratch
-    # If coming from user mode: sscratch has kernel stack, sp has user stack
-    # If coming from kernel mode: sscratch is 0, sp stays the same
+    # Atomically swap sp with sscratch
+    # User mode: sscratch=kernel_sp, sp=user_sp → after: sp=kernel_sp, sscratch=user_sp
+    # Kernel mode: sscratch=0, sp=kernel_sp → after: sp=0, sscratch=kernel_sp
     csrrw sp, sscratch, sp
     
-    # Check if we came from user mode or kernel mode
-    # If sscratch (now containing old sp) is 0, we came from kernel
+    # Detect trap source by checking if sp is zero
+    # Zero indicates we came from kernel mode (sscratch was 0)
     beqz sp, trap_from_kernel
     
 trap_from_user:
-    # Coming from user mode
-    # sp now points to kernel stack
-    # sscratch contains user stack pointer
+    # Save user stack pointer (now in sscratch)
+    # Kernel stack is in sp, user stack is in sscratch
+    csrr t0, sscratch
     
-    # Make room on kernel stack for trap frame
+    # Allocate trap frame on kernel stack
     addi sp, sp, -272
     
-    # Save user stack pointer (now in sscratch)
-    csrr t0, sscratch
-    sd t0, 16(sp)     # Save user sp at offset 16 (sp field in trap_frame)
+    # Save user sp at trap_frame offset 8
+    sd t0, 8(sp)
     
     # Continue with saving registers
     j save_registers
     
 trap_from_kernel:
-    # Coming from kernel mode
-    # sscratch was 0, so we swapped sp with 0
-    # Restore sp from sscratch
+    # sscratch was 0, so stack swap left sp=0
+    # Restore sp from sscratch and continue
     csrrw sp, sscratch, sp
     
-    # Make room on kernel stack for trap frame
+    # Allocate trap frame on kernel stack
     addi sp, sp, -272
     
-    # Save kernel stack pointer (before we decremented it)
+    # Save kernel sp (before we decremented it)
     addi t0, sp, 272
-    sd t0, 16(sp)     # Save kernel sp at offset 16
+    sd t0, 8(sp)
     
 save_registers:
-    # Save sepc first (pc field at offset 248)
+    # Save sepc (exception program counter)
     csrr t0, sepc
     sd t0, 248(sp)
     
     # Save all general-purpose registers
-    # Note: sp already saved above (offset 8)
+    # Trap frame layout: 8 bytes per register at offsets 0, 8, 16, ..., 256
     sd ra, 0(sp)
-    # sp at 8 - already saved
+    # sp at offset 8 - already saved above
     sd gp, 16(sp)
     sd tp, 24(sp)
     sd t0, 32(sp)
@@ -91,25 +89,24 @@ save_registers:
     sd t5, 232(sp)
     sd t6, 240(sp)
     
-    # Save sstatus
+    # Save sstatus (supervisor status register)
     csrr t0, sstatus
     sd t0, 256(sp)
     
-    # Call C trap handler with trap frame pointer as argument
+    # Call C trap handler with trap_frame pointer as argument
     mv a0, sp
     call trap_handler
     
-    # Check if we need to switch to user mode
-    # If trap frame's sstatus has SPP=0, we're returning to user mode
+    # Load sstatus to check return privilege level (SPP bit at position 8)
+    # SPP=1 means return to supervisor mode
+    # SPP=0 means return to user mode
     ld t0, 256(sp)
-    andi t1, t0, (1 << 8)  # Check SPP bit (bit 8)
+    andi t1, t0, (1 << 8)
     beqz t1, restore_to_user
     
 restore_to_kernel:
-    # Returning to kernel mode
-    # Restore all registers
-    
-    # Restore sepc and sstatus
+    # Returning to supervisor mode - restore all state from trap frame
+    # Restore exception program counter and status
     ld t0, 248(sp)
     csrw sepc, t0
     ld t0, 256(sp)
@@ -133,44 +130,43 @@ restore_to_kernel:
     ld a6, 120(sp)
     ld a7, 128(sp)
     ld s2, 136(sp)
-    ld s3, 152(sp)
-    ld s4, 160(sp)
-    ld s5, 168(sp)
-    ld s6, 176(sp)
-    ld s7, 184(sp)
-    ld s8, 192(sp)
-    ld s9, 200(sp)
-    ld s10, 208(sp)
-    ld s11, 216(sp)
-    ld t3, 224(sp)
-    ld t4, 232(sp)
-    ld t5, 240(sp)
+    ld s3, 144(sp)
+    ld s4, 152(sp)
+    ld s5, 160(sp)
+    ld s6, 168(sp)
+    ld s7, 176(sp)
+    ld s8, 184(sp)
+    ld s9, 192(sp)
+    ld s10, 200(sp)
+    ld s11, 208(sp)
+    ld t3, 216(sp)
+    ld t4, 224(sp)
+    ld t5, 232(sp)
     ld t6, 240(sp)
     
-    # Restore sp last
+    # Restore sp last to avoid losing stack pointer during restores
     ld sp, 8(sp)
     
-    # Ensure sscratch is 0 (we're in kernel mode)
+    # Ensure sscratch is zero (kernel mode indicator for next trap)
     csrw sscratch, zero
     
-    # Return from trap
+    # Return from exception to supervisor mode
     sret
 
 restore_to_user:
-    # Returning to user mode
-    # Put kernel stack pointer in sscratch for next trap
-    addi t0, sp, 272   # Kernel stack pointer (before trap frame)
+    # Returning to user mode - setup stack swap and restore state
+    # Put kernel stack pointer in sscratch for next trap entry
+    addi t0, sp, 272
     csrw sscratch, t0
     
-    # Restore sepc and sstatus
+    # Restore exception program counter and status for user mode
     ld t0, 248(sp)
     csrw sepc, t0
     ld t0, 256(sp)
     csrw sstatus, t0
     
-    # Restore all general-purpose registers except sp
+    # Restore general-purpose registers
     ld ra, 0(sp)
-    # sp at 8 - restore last
     ld gp, 16(sp)
     ld tp, 24(sp)
     ld t0, 32(sp)
@@ -187,22 +183,22 @@ restore_to_user:
     ld a6, 120(sp)
     ld a7, 128(sp)
     ld s2, 136(sp)
-    ld s3, 152(sp)
-    ld s4, 160(sp)
-    ld s5, 168(sp)
-    ld s6, 176(sp)
-    ld s7, 184(sp)
-    ld s8, 192(sp)
-    ld s9, 200(sp)
-    ld s10, 208(sp)
-    ld s11, 216(sp)
-    ld t3, 224(sp)
-    ld t4, 232(sp)
-    ld t5, 240(sp)
+    ld s3, 144(sp)
+    ld s4, 152(sp)
+    ld s5, 160(sp)
+    ld s6, 168(sp)
+    ld s7, 176(sp)
+    ld s8, 184(sp)
+    ld s9, 192(sp)
+    ld s10, 200(sp)
+    ld s11, 208(sp)
+    ld t3, 216(sp)
+    ld t4, 224(sp)
+    ld t5, 232(sp)
     ld t6, 240(sp)
     
-    # Restore user sp last
+    # Restore user stack pointer last
     ld sp, 8(sp)
     
-    # Return to user mode
+    # Return from exception to user mode (sret restores privilege from sstatus.SPP)
     sret
