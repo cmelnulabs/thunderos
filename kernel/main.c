@@ -204,28 +204,25 @@ void kernel_main(void) {
     // Dump process table
     process_dump();
     
-    // Test user mode
-    hal_uart_puts("\n=== Testing User Mode ===\n");
+    // ====================================================================
+    // Test User Mode Execution
+    // ====================================================================
     
-    // Create a simple user program to test
-    // For now, this will be a minimal program that just returns
-    // In a real system, this would be loaded from disk
+    // Create a minimal user program to test user mode syscall interface
+    // This program will:
+    // 1. Call SYS_EXIT (syscall #1) to terminate cleanly
+    // 2. If SYS_EXIT fails, loop back and retry
+    //
+    // Machine code (RISC-V compressed):
+    //   li a7, 1          (0x85 0x48)           - a7 = SYS_EXIT
+    //   ecall             (0x73 0x00 0x00 0x00) - Make syscall
+    //   j -6              (0xed 0xbf)           - Jump back to start
     uint8_t user_code[] = {
-        // Simple RISC-V code that just loops
-        // lui sp, 0x80000  # Load 0x80000000 into sp (user stack)
-        // addi sp, sp, 0
-        // addi x0, x0, 0   # nop - will be replaced with ecall for exit
-        // sret back to kernel
-        
-        // lui sp, 0x80000
-        0xb7, 0x02, 0x00, 0x08,
-        // addi sp, sp, 0  
-        0x13, 0x01, 0x00, 0x00,
-        // ecall (exit)
-        0x73, 0x00, 0x00, 0x00,
+        0x85, 0x48,               // li a7, 1 (load immediate into a7)
+        0x73, 0x00, 0x00, 0x00,  // ecall (system call)
+        0xed, 0xbf,               // j -6 (loop back to start)
     };
     
-    hal_uart_puts("Creating user process with minimal code...\n");
     struct process *user_proc = process_create_user("user_test", user_code, sizeof(user_code));
     if (user_proc) {
         hal_uart_puts("[OK] Created user process (PID ");
@@ -237,26 +234,6 @@ void kernel_main(void) {
     
     // Dump updated process table
     process_dump();
-    
-    // Test new syscalls
-    hal_uart_puts("\nTesting new syscalls:\n");
-    
-    hal_uart_puts("  sys_gettime(): ");
-    uint64_t time_ms = sys_gettime();
-    kprint_dec(time_ms);
-    hal_uart_puts(" ms since boot\n");
-    
-    hal_uart_puts("  sys_getpid(): ");
-    int pid = sys_getpid();
-    kprint_dec(pid);
-    hal_uart_puts("\n");
-    
-    hal_uart_puts("  sys_getppid(): ");
-    int ppid = sys_getppid();
-    kprint_dec(ppid);
-    hal_uart_puts(" (expected: 0 - not implemented yet)\n");
-    
-    hal_uart_puts("[  ] AI accelerators: TODO\n");
     
     hal_uart_puts("\nThunderOS: Multitasking enabled!\n");
     hal_uart_puts("Processes will start running on next timer interrupt...\n\n");

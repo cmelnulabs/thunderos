@@ -4,7 +4,13 @@ A RISC-V operating system focused on AI acceleration and educational use.
 
 ## Current Status
 
-**Version 0.1.0 - "First Boot"** 🎯
+**Version 0.2.0 - "User Space"** 🎯 In Development
+
+- ✅ Kernel infrastructure complete
+- ✅ User mode (U-mode) working
+- ✅ System calls implemented (13 syscalls)
+- ✅ Syscall testing framework ready
+- ✅ User-space hello world program
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.
 
@@ -12,12 +18,18 @@ See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROAD
 
 ### Building
 ```bash
-make all
+make clean && make
 ```
 
 ### Running in QEMU
 ```bash
 make qemu
+```
+
+### Automated Testing
+```bash
+# Run comprehensive syscall tests
+./test_syscalls.sh
 ```
 
 ### Debugging
@@ -61,6 +73,42 @@ build/               - Build output
 See [ROADMAP.md](ROADMAP.md) for the development roadmap from v0.1 through v2.0.
 
 See [docs/source/development/code_quality.rst](docs/source/development/code_quality.rst) for coding standards.
+
+## Testing
+
+### Test Framework
+The project includes an automated test suite:
+
+```bash
+./test_syscalls.sh
+```
+
+This script:
+- Compiles the kernel
+- Runs QEMU with 5-second timeout
+- Captures output to `/tmp/thunderos_test_output.txt`
+- Validates key system components:
+  - ✓ Kernel initialization
+  - ✓ Process creation
+  - ✓ Scheduler functionality
+  - ✓ User process creation
+  - ✓ Syscall output (sys_write)
+
+### User-Space Programs
+
+Located in `tests/`:
+- **user_hello.c** - Demonstrates user-space syscalls:
+  - Reads current process ID via SYS_GETPID
+  - Outputs to console via SYS_WRITE
+  - Gets system time via SYS_GETTIME
+  - Yields CPU via SYS_YIELD
+  - Exits cleanly via SYS_EXIT
+
+Compile with cross-compiler:
+```bash
+riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -nostdlib \
+    -Iinclude tests/user_hello.c -o tests/user_hello.o
+```
 
 ## Platform Support
 

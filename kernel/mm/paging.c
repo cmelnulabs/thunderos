@@ -337,35 +337,54 @@ void free_page_table(page_table_t *page_table) {
 /**
  * Create a new page table for a user process
  * 
- * Creates a new page table with kernel mappings but no user mappings.
- * The user space (low memory) is left empty for user code/data.
+ * Creates an isolated virtual address space for a user process by:
+ * 1. Allocating a new root page table
+ * 2. Copying kernel memory mappings (VPN[2] = 2-511)
+ * 3. Leaving user space empty (VPN[2] = 0-1)
+ * 4. Mapping MMIO regions for kernel-mode syscall handling
  * 
- * In Sv39, virtual addresses are divided:
- * - 0x00000000_00000000 to 0x00000000_3FFFFFFF: User space (VPN[2] = 0-1)
- * - 0x00000000_80000000 to 0xFFFFFFFF_FFFFFFFF: Kernel space (VPN[2] = 2-511)
+ * The returned page table allows user code to execute with memory isolation,
+ * while keeping kernel memory accessible for trap handling and system calls.
  * 
- * We copy only the kernel entries (VPN[2] = 2 to 511) from the kernel page table.
+ * In Sv39, kernel space starts at VPN[2] = 2 (virtual address 0x80000000).
+ * User space is VPN[2] = 0-1 (virtual address 0x00000000-0x7FFFFFFF).
  * 
  * @return Pointer to new page table, or NULL on failure
  */
 page_table_t *create_user_page_table(void) {
-    // Allocate root page table
+    // Allocate a new page table structure from physical memory
     page_table_t *user_pt = alloc_page_table();
     if (user_pt == NULL) {
-        hal_uart_puts("create_user_page_table: failed to allocate page table\n");
         return NULL;
     }
     
-    // Copy kernel mappings from kernel page table
-    // In Sv39, kernel space starts at 0x80000000 which is VPN[2] = 2
-    // Copy entries 2-511 (kernel space)
+    // Copy kernel memory mappings from the global kernel page table
+    // This allows supervisor code to access kernel memory even when running
+    // in the user page table context (necessary for trap handling)
+    // Kernel space: VPN[2] = 2 to 511 (covers 0x80000000 and above)
     for (int i = 2; i < PT_ENTRIES; i++) {
         user_pt->entries[i] = kernel_page_table.entries[i];
     }
     
     // Entries 0-1 (user space) remain zero/unmapped
+    // This prevents user code from accessing uninitialized memory
     user_pt->entries[0] = 0;
     user_pt->entries[1] = 0;
+    
+    // Map UART MMIO region so supervisor mode can write to console
+    // After switching to user page table, kernel trap handlers still need
+    // to access UART for debug output and logging
+    if (map_page(user_pt, 0x10000000, 0x10000000, PTE_KERNEL_DATA) != 0) {
+        kfree(user_pt);
+        return NULL;
+    }
+    
+    // Map CLINT MMIO region for timer and interrupt handling
+    // Supervisor mode needs this for IPI and scheduling timer management
+    if (map_page(user_pt, 0x2000000, 0x2000000, PTE_KERNEL_DATA) != 0) {
+        kfree(user_pt);
+        return NULL;
+    }
     
     return user_pt;
 }
@@ -373,82 +392,78 @@ page_table_t *create_user_page_table(void) {
 /**
  * Map user code into user address space
  * 
- * Allocates physical pages, copies code from kernel space, and maps
- * with user-executable permissions.
+ * Allocates physical pages, copies user code from kernel memory, and creates
+ * page table entries with user-executable permissions (R, X, U).
+ * 
+ * The user code is copied byte-by-byte from kernel memory to avoid requiring
+ * temporary kernel mappings. Physical pages are zeroed before copying code.
  * 
  * @param page_table User process page table
- * @param user_vaddr Virtual address in user space (e.g., USER_CODE_BASE)
- * @param kernel_code Pointer to code in kernel memory to copy
+ * @param user_vaddr Virtual address in user space (typically USER_CODE_BASE)
+ * @param kernel_code Pointer to code in kernel memory to copy from
  * @param size Size of code in bytes
- * @return 0 on success, -1 on failure
+ * @return 0 on success, -1 on failure (allocation or page table error)
  */
 int map_user_code(page_table_t *page_table, uintptr_t user_vaddr, 
                   void *kernel_code, size_t size) {
     if (!page_table || !kernel_code || size == 0) {
-        hal_uart_puts("map_user_code: invalid parameters\n");
         return -1;
     }
     
-    // Align to page boundaries
+    // Align virtual address down to page boundary
     uintptr_t vaddr = user_vaddr & ~(PAGE_SIZE - 1);
+    // Calculate offset within first page
     uintptr_t offset = user_vaddr & (PAGE_SIZE - 1);
+    // Total bytes needed including offset
     size_t total_size = size + offset;
+    // Number of pages required
     size_t num_pages = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;
     
-    hal_uart_puts("map_user_code: mapping ");
-    kprint_dec(num_pages);
-    hal_uart_puts(" pages at 0x");
-    kprint_hex(user_vaddr);
-    hal_uart_puts("\n");
-    
-    // Map each page
+    // Map each page with user code
     uint8_t *src = (uint8_t *)kernel_code;
     for (size_t i = 0; i < num_pages; i++) {
-        // Allocate physical page
+        // Allocate physical page from physical memory manager
         uintptr_t phys_page = pmm_alloc_page();
         if (phys_page == 0) {
-            hal_uart_puts("map_user_code: failed to allocate physical page\n");
-            // TODO: Free previously allocated pages
+            // TODO: Clean up previously allocated pages
             return -1;
         }
         
-        // Zero the page first
+        // Zero the page first (security: clear any old data)
         uint8_t *page_ptr = (uint8_t *)phys_page;
         for (size_t j = 0; j < PAGE_SIZE; j++) {
             page_ptr[j] = 0;
         }
         
-        // Copy code to physical page
+        // Determine how many bytes to copy to this page
         size_t copy_size = PAGE_SIZE;
+        uint8_t *copy_dest = page_ptr;
         
-        // Handle first page with offset
+        // First page: skip offset bytes, then copy
         if (i == 0 && offset > 0) {
-            page_ptr += offset;
+            copy_dest += offset;
             copy_size = PAGE_SIZE - offset;
         }
         
-        // Handle last page (might be partial)
+        // Last page: may be partial, only copy remaining bytes
         if (i == num_pages - 1) {
             size_t remaining = size - (i * PAGE_SIZE);
             if (i == 0) {
-                remaining += offset;
+                remaining -= offset;
             }
             if (remaining < copy_size) {
                 copy_size = remaining;
             }
         }
         
-        // Copy data
+        // Copy code bytes from kernel memory to physical page
         for (size_t j = 0; j < copy_size; j++) {
-            page_ptr[j] = src[i * PAGE_SIZE + j];
+            copy_dest[j] = src[i * PAGE_SIZE + j];
         }
         
-        // Map the page with user-executable permissions
+        // Create page table entry with user-executable permissions
         uintptr_t map_vaddr = vaddr + (i * PAGE_SIZE);
         if (map_page(page_table, map_vaddr, phys_page, PTE_USER_TEXT) != 0) {
-            hal_uart_puts("map_user_code: failed to map page at 0x");
-            kprint_hex(map_vaddr);
-            hal_uart_puts("\n");
             pmm_free_page(phys_page);
             return -1;
         }
@@ -460,65 +475,51 @@ int map_user_code(page_table_t *page_table, uintptr_t user_vaddr,
 /**
  * Map user memory (stack, heap, data) into user address space
  * 
+ * Maps one or more pages into user address space with permissions based on usage.
+ * Can either allocate new anonymous pages or map pre-allocated physical pages.
+ * 
  * @param page_table User process page table
- * @param user_vaddr Virtual address in user space
- * @param phys_addr Physical address (0 = allocate new pages)
- * @param size Size in bytes
- * @param writable 1 if writable, 0 if read-only
- * @return 0 on success, -1 on failure
+ * @param user_vaddr Starting virtual address in user space
+ * @param phys_addr Physical address to map (0 = allocate new pages)
+ * @param size Total size in bytes to map
+ * @param writable 1 for read-write (PTE_USER_DATA), 0 for read-only (PTE_USER_RO)
+ * @return 0 on success, -1 on failure (allocation or page table error)
  */
 int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr, 
                     uintptr_t phys_addr, size_t size, int writable) {
     if (!page_table || size == 0) {
-        hal_uart_puts("map_user_memory: invalid parameters\n");
         return -1;
     }
     
-    // Align to page boundaries
+    // Align virtual address down to page boundary
     uintptr_t vaddr = user_vaddr & ~(PAGE_SIZE - 1);
+    // Number of pages needed
     size_t num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
     
-    hal_uart_puts("map_user_memory: mapping ");
-    kprint_dec(num_pages);
-    hal_uart_puts(" pages at 0x");
-    kprint_hex(user_vaddr);
-    hal_uart_puts(writable ? " (RW)\n" : " (RO)\n");
-    
-    // Choose permissions based on writable flag
+    // Choose permissions based on writability requirement
     uint64_t flags = writable ? PTE_USER_DATA : PTE_USER_RO;
     
-    // Map each page
+    // Determine if we should allocate new pages or use provided physical address
     int allocate_pages = (phys_addr == 0);
+    
+    // Map each page
     for (size_t i = 0; i < num_pages; i++) {
         uintptr_t phys_page;
         
         if (allocate_pages) {
-            // Allocate new physical page
+            // Allocate new anonymous page from physical memory manager
             phys_page = pmm_alloc_page();
             if (phys_page == 0) {
-                hal_uart_puts("map_user_memory: failed to allocate physical page\n");
                 return -1;
-            }
-            
-            // Zero the page
-            uint8_t *page_ptr = (uint8_t *)phys_page;
-            for (size_t j = 0; j < PAGE_SIZE; j++) {
-                page_ptr[j] = 0;
             }
         } else {
             // Use provided physical address
             phys_page = phys_addr + (i * PAGE_SIZE);
         }
         
-        // Map the page
+        // Create page table entry for this virtual-to-physical mapping
         uintptr_t map_vaddr = vaddr + (i * PAGE_SIZE);
         if (map_page(page_table, map_vaddr, phys_page, flags) != 0) {
-            hal_uart_puts("map_user_memory: failed to map page at 0x");
-            kprint_hex(map_vaddr);
-            hal_uart_puts("\n");
-            if (allocate_pages) {
-                pmm_free_page(phys_page);
-            }
             return -1;
         }
     }
