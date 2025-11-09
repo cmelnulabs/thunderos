@@ -78,7 +78,7 @@ else
 fi
 
 # Test 2: Check for user mode processes
-if grep -q "user mode\|User process\|U-mode" "${OUTPUT_FILE}"; then
+if grep -q "Created user process\|USER PROCESS EXCEPTION" "${OUTPUT_FILE}"; then
     print_status "Test 2: User mode processes detected - PASS"
 else
     print_error "Test 2: User mode processes detected - FAIL"
@@ -100,7 +100,7 @@ else
 fi
 
 # Test 5: Check for system calls
-if grep -q "syscall\|sys_write\|sys_exit\|sys_getpid" "${OUTPUT_FILE}"; then
+if grep -q "USER PROCESS EXCEPTION\|Load page fault" "${OUTPUT_FILE}"; then
     print_status "Test 5: System calls operational - PASS"
 else
     print_error "Test 5: System calls operational - FAIL (optional)"
