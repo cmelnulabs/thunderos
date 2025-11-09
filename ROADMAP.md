@@ -45,13 +45,13 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 **Focus:** Separation of kernel and user mode
 
 ### Planned Features
-- [ ] User-mode process support (U-mode)
-- [ ] System call interface (minimum 10 syscalls)
-- [ ] Separate page tables per process
-- [ ] Privilege level switching (S-mode ↔ U-mode)
-- [ ] Memory isolation between processes
-- [ ] Basic user-space programs (hello world, calculator)
-- [ ] Exception handling for user programs
+- [x] User-mode process support (U-mode)
+- [x] System call interface (minimum 10 syscalls)
+- [x] Separate page tables per process
+- [x] Privilege level switching (S-mode ↔ U-mode)
+- [x] Memory isolation between processes
+- [x] Basic user-space programs (hello world, calculator)
+- [x] Exception handling for user programs
 
 **Release Criteria:**
 - User programs run in unprivileged mode
@@ -280,9 +280,10 @@ See `CONTRIBUTING.md` for details on how to contribute to ThunderOS development.
 Interested in contributing? Here's where we need help:
 
 ### For v0.2 (Current)
-- System call implementation and testing
-- User-mode support and privilege separation
-- Memory isolation improvements
+- [x] System call implementation and testing
+- [x] User-mode support and privilege separation
+- [x] Memory isolation improvements
+- [x] Exception handling for user programs
 
 ### For v0.3+ (Future)
 - Driver development (storage, network, graphics)

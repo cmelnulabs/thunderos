@@ -35,6 +35,10 @@ KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/drivers/*.c)
 KERNEL_ASM_SOURCES := $(wildcard $(KERNEL_DIR)/arch/riscv64/*.S)
 
+# Test programs
+TEST_ASM_SOURCES := tests/user_exception_test.S
+TEST_ASM_OBJS := $(patsubst tests/%.S,$(BUILD_DIR)/tests/%.o,$(TEST_ASM_SOURCES))
+
 KERNEL_ASM_SOURCES := $(sort $(KERNEL_ASM_SOURCES))
 
 # Object files
@@ -43,7 +47,7 @@ KERNEL_C_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C_SOURCES))
 KERNEL_ASM_OBJS := $(patsubst %.S,$(BUILD_DIR)/%.o,$(KERNEL_ASM_SOURCES))
 
 # Remove duplicates
-ALL_OBJS := $(sort $(BOOT_OBJS) $(KERNEL_C_OBJS) $(KERNEL_ASM_OBJS))
+ALL_OBJS := $(sort $(BOOT_OBJS) $(KERNEL_C_OBJS) $(KERNEL_ASM_OBJS) $(TEST_ASM_OBJS))
 
 # Target binary
 KERNEL_ELF := $(BUILD_DIR)/thunderos.elf
@@ -69,6 +73,11 @@ $(KERNEL_BIN): $(KERNEL_ELF)
 
 # Compile C sources
 $(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile test assembly programs
+$(BUILD_DIR)/tests/%.o: tests/%.S
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 

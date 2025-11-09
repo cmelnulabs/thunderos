@@ -102,6 +102,8 @@ static struct process *alloc_process(void) {
     
     for (int i = 0; i < MAX_PROCS; i++) {
         if (process_table[i].state == PROC_UNUSED) {
+            // Mark slot as being allocated to prevent race conditions
+            process_table[i].state = PROC_EMBRYO;
             lock_release(&process_lock);
             return &process_table[i];
         }

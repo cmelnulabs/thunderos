@@ -6,6 +6,8 @@
 #include "hal/hal_uart.h"
 #include "hal/hal_timer.h"
 #include "kernel/syscall.h"
+#include "kernel/process.h"
+#include "kernel/kstring.h"
 
 /* Forward declaration for external interrupt handler */
 void handle_external_interrupt(void);
@@ -23,10 +25,17 @@ static inline unsigned long read_stval(void) {
     return x;
 }
 
-static inline unsigned long read_sepc(void) {
+static inline unsigned long read_sstatus(void) {
     unsigned long x;
-    asm volatile("csrr %0, sepc" : "=r"(x));
+    asm volatile("csrr %0, sstatus" : "=r"(x));
     return x;
+}
+
+// Check if trap occurred from user mode
+static int trap_from_user_mode(void) {
+    // SPP bit (bit 8) indicates previous privilege level
+    // SPP=0 means we were in user mode, SPP=1 means supervisor mode
+    return (read_sstatus() & (1 << 8)) == 0;
 }
 
 // Exception names for debugging
@@ -82,8 +91,48 @@ static void handle_exception(struct trap_frame *tf, unsigned long cause) {
         return;
     }
     
-    // Not a syscall - handle as error
-    hal_uart_puts("\n!!! EXCEPTION !!!\n");
+    // Check if exception occurred in user mode
+    if (trap_from_user_mode()) {
+        // Exception in user process - terminate the process
+        hal_uart_puts("\n!!! USER PROCESS EXCEPTION !!!\n");
+        hal_uart_puts("Process: ");
+        
+        // Get current process info
+        extern struct process *process_current(void);
+        struct process *proc = process_current();
+        if (proc) {
+            kprint_dec(proc->pid);
+            hal_uart_puts(" (");
+            hal_uart_puts(proc->name);
+            hal_uart_puts(")");
+        } else {
+            hal_uart_puts("unknown");
+        }
+        hal_uart_puts("\n");
+        
+        hal_uart_puts("Exception: ");
+        if (cause < sizeof(exception_names) / sizeof(exception_names[0])) {
+            hal_uart_puts(exception_names[cause]);
+        } else {
+            hal_uart_puts("Unknown");
+        }
+        hal_uart_puts("\n");
+        
+        hal_uart_puts("sepc:   ");
+        print_hex(tf->sepc);
+        hal_uart_puts("\nstval:  ");
+        print_hex(read_stval());
+        hal_uart_puts("\n");
+        
+        // Terminate the user process
+        extern void process_exit(int) __attribute__((noreturn));
+        process_exit(-1);  // Exit with error code
+        
+        return;  // Should not reach here
+    }
+    
+    // Exception in kernel mode - print info and halt
+    hal_uart_puts("\n!!! KERNEL EXCEPTION !!!\n");
     hal_uart_puts("Cause: ");
     
     if (cause < sizeof(exception_names) / sizeof(exception_names[0])) {

@@ -421,6 +421,8 @@ int map_user_code(page_table_t *page_table, uintptr_t user_vaddr,
     
     // Map each page with user code
     uint8_t *src = (uint8_t *)kernel_code;
+    size_t src_offset = 0;  // Track total source bytes copied
+    
     for (size_t i = 0; i < num_pages; i++) {
         // Allocate physical page from physical memory manager
         uintptr_t phys_page = pmm_alloc_page();
@@ -447,10 +449,7 @@ int map_user_code(page_table_t *page_table, uintptr_t user_vaddr,
         
         // Last page: may be partial, only copy remaining bytes
         if (i == num_pages - 1) {
-            size_t remaining = size - (i * PAGE_SIZE);
-            if (i == 0) {
-                remaining -= offset;
-            }
+            size_t remaining = size + offset - src_offset;
             if (remaining < copy_size) {
                 copy_size = remaining;
             }
@@ -458,8 +457,11 @@ int map_user_code(page_table_t *page_table, uintptr_t user_vaddr,
         
         // Copy code bytes from kernel memory to physical page
         for (size_t j = 0; j < copy_size; j++) {
-            copy_dest[j] = src[i * PAGE_SIZE + j];
+            copy_dest[j] = src[src_offset + j];
         }
+        
+        // Update source offset for next page
+        src_offset += copy_size;
         
         // Create page table entry with user-executable permissions
         uintptr_t map_vaddr = vaddr + (i * PAGE_SIZE);
@@ -502,6 +504,18 @@ int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr,
     // Determine if we should allocate new pages or use provided physical address
     int allocate_pages = (phys_addr == 0);
     
+    // Track allocated pages for cleanup on failure
+    uintptr_t *allocated_pages = NULL;
+    size_t allocated_count = 0;
+    
+    if (allocate_pages) {
+        // Allocate array to track pages we allocate (for cleanup on failure)
+        allocated_pages = (uintptr_t *)kmalloc(num_pages * sizeof(uintptr_t));
+        if (!allocated_pages) {
+            return -1;
+        }
+    }
+    
     // Map each page
     for (size_t i = 0; i < num_pages; i++) {
         uintptr_t phys_page;
@@ -510,7 +524,21 @@ int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr,
             // Allocate new anonymous page from physical memory manager
             phys_page = pmm_alloc_page();
             if (phys_page == 0) {
+                // Free all previously allocated pages
+                for (size_t j = 0; j < allocated_count; j++) {
+                    pmm_free_page(allocated_pages[j]);
+                }
+                kfree(allocated_pages);
                 return -1;
+            }
+            
+            // Track this allocation for potential cleanup
+            allocated_pages[allocated_count++] = phys_page;
+            
+            // Zero the page for security (prevent information leakage)
+            uint8_t *page_ptr = (uint8_t *)phys_page;
+            for (size_t j = 0; j < PAGE_SIZE; j++) {
+                page_ptr[j] = 0;
             }
         } else {
             // Use provided physical address
@@ -520,8 +548,20 @@ int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr,
         // Create page table entry for this virtual-to-physical mapping
         uintptr_t map_vaddr = vaddr + (i * PAGE_SIZE);
         if (map_page(page_table, map_vaddr, phys_page, flags) != 0) {
+            // Free all allocated pages on failure
+            if (allocate_pages) {
+                for (size_t j = 0; j < allocated_count; j++) {
+                    pmm_free_page(allocated_pages[j]);
+                }
+                kfree(allocated_pages);
+            }
             return -1;
         }
+    }
+    
+    // Cleanup tracking array (pages are now mapped, so don't free them)
+    if (allocate_pages) {
+        kfree(allocated_pages);
     }
     
     return 0;

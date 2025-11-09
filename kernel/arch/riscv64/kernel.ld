@@ -40,6 +40,12 @@ SECTIONS
     . = ALIGN(4096);
     PROVIDE(_kernel_end = .);
     
+    /* Embedded test programs */
+    .user_exception_test : {
+        user_exception_start = .;
+        *(.user_exception_test)
+    }
+    
     /DISCARD/ : {
         *(.comment)
         *(.eh_frame)

@@ -99,10 +99,17 @@ else
 fi
 
 # Test 5: Check for sys_write output
-if grep -q "Hello\|Output\|message" "${OUTPUT_FILE}"; then
+if grep -q "Hello\|Output\|message\|Testing user exception" "${OUTPUT_FILE}"; then
     print_status "Test 5: sys_write working - PASS"
 else
     print_error "Test 5: sys_write working - FAIL (optional)"
+fi
+
+# Test 6: Check for user exception handling
+if grep -q "USER PROCESS EXCEPTION" "${OUTPUT_FILE}"; then
+    print_status "Test 6: User exception handling - PASS"
+else
+    print_error "Test 6: User exception handling - FAIL (optional)"
 fi
 
 # Summary

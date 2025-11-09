@@ -205,25 +205,17 @@ void kernel_main(void) {
     process_dump();
     
     // ====================================================================
-    // Test User Mode Execution
+    // Test User Mode Execution and Exception Handling
     // ====================================================================
     
-    // Create a minimal user program to test user mode syscall interface
-    // This program will:
-    // 1. Call SYS_EXIT (syscall #1) to terminate cleanly
-    // 2. If SYS_EXIT fails, loop back and retry
-    //
-    // Machine code (RISC-V compressed):
-    //   li a7, 1          (0x85 0x48)           - a7 = SYS_EXIT
-    //   ecall             (0x73 0x00 0x00 0x00) - Make syscall
-    //   j -6              (0xed 0xbf)           - Jump back to start
-    uint8_t user_code[] = {
-        0x85, 0x48,               // li a7, 1 (load immediate into a7)
-        0x73, 0x00, 0x00, 0x00,  // ecall (system call)
-        0xed, 0xbf,               // j -6 (loop back to start)
-    };
+    // Include the exception test program (assembly version)
+    extern uint8_t user_exception_start[];
     
-    struct process *user_proc = process_create_user("user_test", user_code, sizeof(user_code));
+    // Calculate the size (hardcoded for now - 24 bytes for the assembly code)
+    size_t code_size = 24;
+    void *user_code = user_exception_start;
+    
+    struct process *user_proc = process_create_user("user_exception_test", user_code, code_size);
     if (user_proc) {
         hal_uart_puts("[OK] Created user process (PID ");
         kprint_dec(user_proc->pid);
