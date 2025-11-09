@@ -43,7 +43,8 @@
 #define PTE_KERNEL_DATA  (PTE_V | PTE_R | PTE_W)           // Kernel data
 #define PTE_KERNEL_RODATA (PTE_V | PTE_R)                  // Kernel read-only
 #define PTE_USER_TEXT    (PTE_V | PTE_R | PTE_X | PTE_U)   // User code
-#define PTE_USER_DATA    (PTE_V | PTE_R | PTE_W | PTE_U)   // User data
+#define PTE_USER_DATA    (PTE_V | PTE_R | PTE_W | PTE_U)   // User data/stack
+#define PTE_USER_RO      (PTE_V | PTE_R | PTE_U)           // User read-only
 
 // SATP register mode (bits 60-63)
 #define SATP_MODE_SV39  (8UL << 60)
@@ -125,6 +126,53 @@ void tlb_flush(uintptr_t vaddr);
  * @return Pointer to kernel page table
  */
 page_table_t *get_kernel_page_table(void);
+
+/**
+ * Create a new page table for a user process
+ * 
+ * Creates a new page table with kernel mappings but no user mappings.
+ * The user space (low memory) is left empty for user code/data.
+ * 
+ * @return Pointer to new page table, or NULL on failure
+ */
+page_table_t *create_user_page_table(void);
+
+/**
+ * Map user code into user address space
+ * 
+ * Allocates physical pages, copies code from kernel space, and maps
+ * with user-executable permissions.
+ * 
+ * @param page_table User process page table
+ * @param user_vaddr Virtual address in user space (e.g., USER_CODE_BASE)
+ * @param kernel_code Pointer to code in kernel memory to copy
+ * @param size Size of code in bytes
+ * @return 0 on success, -1 on failure
+ */
+int map_user_code(page_table_t *page_table, uintptr_t user_vaddr, 
+                  void *kernel_code, size_t size);
+
+/**
+ * Map user memory (stack, heap, data) into user address space
+ * 
+ * @param page_table User process page table
+ * @param user_vaddr Virtual address in user space
+ * @param phys_addr Physical address (0 = allocate new pages)
+ * @param size Size in bytes
+ * @param writable 1 if writable, 0 if read-only
+ * @return 0 on success, -1 on failure
+ */
+int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr, 
+                    uintptr_t phys_addr, size_t size, int writable);
+
+/**
+ * Switch to a different page table
+ * 
+ * Updates the satp register and flushes the TLB.
+ * 
+ * @param page_table New page table to switch to
+ */
+void switch_page_table(page_table_t *page_table);
 
 /**
  * Free a page table and all its child page tables

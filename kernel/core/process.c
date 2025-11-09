@@ -382,3 +382,184 @@ int process_exec(void (*entry_point)(void *), void *arg) {
     (void)arg;
     return -1;
 }
+
+/**
+ * Create a new user-mode process
+ * 
+ * Creates a process with its own page table and user address space.
+ * The user code is mapped at USER_CODE_BASE with executable permissions.
+ * The user stack is allocated at USER_STACK_TOP.
+ * 
+ * @param name Process name
+ * @param user_code Pointer to user code to execute (in kernel memory)
+ * @param code_size Size of user code in bytes
+ * @return Pointer to new process, or NULL on failure
+ */
+struct process *process_create_user(const char *name, void *user_code, size_t code_size) {
+    hal_uart_puts("Creating user process: ");
+    hal_uart_puts(name);
+    hal_uart_puts("\n");
+    
+    // Allocate process structure
+    struct process *proc = alloc_process();
+    if (!proc) {
+        hal_uart_puts("process_create_user: Failed to allocate process\n");
+        return NULL;
+    }
+    
+    // Assign PID
+    proc->pid = alloc_pid();
+    
+    // Copy name
+    kstrncpy(proc->name, name, PROC_NAME_LEN - 1);
+    proc->name[PROC_NAME_LEN - 1] = '\0';
+    
+    // Create user page table (with kernel mappings)
+    proc->page_table = create_user_page_table();
+    if (!proc->page_table) {
+        hal_uart_puts("process_create_user: Failed to create page table\n");
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Map user code at USER_CODE_BASE
+    hal_uart_puts("Mapping user code (");
+    kprint_dec(code_size);
+    hal_uart_puts(" bytes) at 0x");
+    kprint_hex(USER_CODE_BASE);
+    hal_uart_puts("\n");
+    
+    if (map_user_code(proc->page_table, USER_CODE_BASE, user_code, code_size) != 0) {
+        hal_uart_puts("process_create_user: Failed to map user code\n");
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Allocate and map user stack
+    hal_uart_puts("Mapping user stack at 0x");
+    kprint_hex(USER_STACK_TOP - USER_STACK_SIZE);
+    hal_uart_puts("\n");
+    
+    uintptr_t user_stack_base = USER_STACK_TOP - USER_STACK_SIZE;
+    if (map_user_memory(proc->page_table, user_stack_base, 0, USER_STACK_SIZE, 1) != 0) {
+        hal_uart_puts("process_create_user: Failed to map user stack\n");
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Allocate kernel stack
+    proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
+    if (!proc->kernel_stack) {
+        hal_uart_puts("process_create_user: Failed to allocate kernel stack\n");
+        process_free(proc);
+        return NULL;
+    }
+    
+    // User stack is in user space (not allocated here)
+    proc->user_stack = user_stack_base;
+    
+    // Allocate trap frame
+    proc->trap_frame = (struct trap_frame *)kmalloc(sizeof(struct trap_frame));
+    if (!proc->trap_frame) {
+        hal_uart_puts("process_create_user: Failed to allocate trap frame\n");
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Setup trap frame for user mode entry
+    kmemset(proc->trap_frame, 0, sizeof(struct trap_frame));
+    
+    // Set PC to user code entry point
+    proc->trap_frame->sepc = USER_CODE_BASE;
+    
+    // Set user stack pointer (top of stack, grows downward)
+    proc->trap_frame->sp = USER_STACK_TOP;
+    
+    // Clear all registers
+    proc->trap_frame->ra = 0;
+    proc->trap_frame->gp = 0;
+    proc->trap_frame->tp = 0;
+    proc->trap_frame->a0 = 0;
+    proc->trap_frame->a1 = 0;
+    proc->trap_frame->a2 = 0;
+    proc->trap_frame->a3 = 0;
+    proc->trap_frame->a4 = 0;
+    proc->trap_frame->a5 = 0;
+    proc->trap_frame->a6 = 0;
+    proc->trap_frame->a7 = 0;
+    
+    // Set sstatus for user mode:
+    // - SPP=0 (return to user mode)
+    // - SPIE=1 (enable interrupts after sret)
+    // - SIE=0 (interrupts disabled in supervisor mode, but we're going to user mode)
+    proc->trap_frame->sstatus = (1 << 5);  // SPIE=1, SPP=0
+    
+    // Setup kernel context for initial switch
+    kmemset(&proc->context, 0, sizeof(struct context));
+    
+    // When scheduler switches to this process for the first time,
+    // it will "return" to user_mode_entry_wrapper
+    extern void user_mode_entry_wrapper(void);
+    proc->context.ra = (unsigned long)user_mode_entry_wrapper;
+    
+    // Set kernel stack pointer
+    proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    
+    // Initialize other fields
+    proc->cpu_time = 0;
+    proc->priority = 10;
+    proc->parent = current_process;
+    proc->exit_code = 0;
+    
+    // Mark as ready
+    proc->state = PROC_READY;
+    
+    // Add to scheduler
+    scheduler_enqueue(proc);
+    
+    hal_uart_puts("User process created with PID ");
+    kprint_dec(proc->pid);
+    hal_uart_puts("\n");
+    
+    return proc;
+}
+
+/**
+ * Wrapper for user mode entry
+ * 
+ * When scheduler switches to a user process for the first time,
+ * this function is called. It switches to the user page table
+ * and enters user mode via user_return().
+ */
+void user_mode_entry_wrapper(void) {
+    struct process *proc = process_current();
+    if (!proc || !proc->trap_frame || !proc->page_table) {
+        hal_uart_puts("Error: Invalid process state in user_mode_entry_wrapper\n");
+        kernel_panic("user_mode_entry_wrapper: invalid process");
+    }
+    
+    hal_uart_puts("Switching to user process PID ");
+    kprint_dec(proc->pid);
+    hal_uart_puts("\n");
+    
+    // Switch to user page table
+    hal_uart_puts("Switching to user page table\n");
+    switch_page_table(proc->page_table);
+    
+    // Setup sscratch with kernel stack pointer for trap handling
+    // When we enter user mode, traps will swap sp with sscratch
+    uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
+    __asm__ volatile("csrw sscratch, %0" :: "r"(kernel_sp));
+    
+    hal_uart_puts("Entering user mode at PC=0x");
+    kprint_hex(proc->trap_frame->sepc);
+    hal_uart_puts(" SP=0x");
+    kprint_hex(proc->trap_frame->sp);
+    hal_uart_puts("\n");
+    
+    // Enter user mode (never returns)
+    user_return(proc->trap_frame);
+    
+    // Should never reach here
+    kernel_panic("user_mode_entry_wrapper: user_return returned");
+}

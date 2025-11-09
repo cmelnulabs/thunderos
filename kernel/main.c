@@ -204,6 +204,40 @@ void kernel_main(void) {
     // Dump process table
     process_dump();
     
+    // Test user mode
+    hal_uart_puts("\n=== Testing User Mode ===\n");
+    
+    // Create a simple user program to test
+    // For now, this will be a minimal program that just returns
+    // In a real system, this would be loaded from disk
+    uint8_t user_code[] = {
+        // Simple RISC-V code that just loops
+        // lui sp, 0x80000  # Load 0x80000000 into sp (user stack)
+        // addi sp, sp, 0
+        // addi x0, x0, 0   # nop - will be replaced with ecall for exit
+        // sret back to kernel
+        
+        // lui sp, 0x80000
+        0xb7, 0x02, 0x00, 0x08,
+        // addi sp, sp, 0  
+        0x13, 0x01, 0x00, 0x00,
+        // ecall (exit)
+        0x73, 0x00, 0x00, 0x00,
+    };
+    
+    hal_uart_puts("Creating user process with minimal code...\n");
+    struct process *user_proc = process_create_user("user_test", user_code, sizeof(user_code));
+    if (user_proc) {
+        hal_uart_puts("[OK] Created user process (PID ");
+        kprint_dec(user_proc->pid);
+        hal_uart_puts(")\n");
+    } else {
+        hal_uart_puts("[FAIL] Failed to create user process\n");
+    }
+    
+    // Dump updated process table
+    process_dump();
+    
     // Test new syscalls
     hal_uart_puts("\nTesting new syscalls:\n");
     

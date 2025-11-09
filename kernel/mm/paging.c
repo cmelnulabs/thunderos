@@ -334,3 +334,221 @@ void free_page_table(page_table_t *page_table) {
     free_page_table_recursive(page_table, 2);
 }
 
+/**
+ * Create a new page table for a user process
+ * 
+ * Creates a new page table with kernel mappings but no user mappings.
+ * The user space (low memory) is left empty for user code/data.
+ * 
+ * In Sv39, virtual addresses are divided:
+ * - 0x00000000_00000000 to 0x00000000_3FFFFFFF: User space (VPN[2] = 0-1)
+ * - 0x00000000_80000000 to 0xFFFFFFFF_FFFFFFFF: Kernel space (VPN[2] = 2-511)
+ * 
+ * We copy only the kernel entries (VPN[2] = 2 to 511) from the kernel page table.
+ * 
+ * @return Pointer to new page table, or NULL on failure
+ */
+page_table_t *create_user_page_table(void) {
+    // Allocate root page table
+    page_table_t *user_pt = alloc_page_table();
+    if (user_pt == NULL) {
+        hal_uart_puts("create_user_page_table: failed to allocate page table\n");
+        return NULL;
+    }
+    
+    // Copy kernel mappings from kernel page table
+    // In Sv39, kernel space starts at 0x80000000 which is VPN[2] = 2
+    // Copy entries 2-511 (kernel space)
+    for (int i = 2; i < PT_ENTRIES; i++) {
+        user_pt->entries[i] = kernel_page_table.entries[i];
+    }
+    
+    // Entries 0-1 (user space) remain zero/unmapped
+    user_pt->entries[0] = 0;
+    user_pt->entries[1] = 0;
+    
+    return user_pt;
+}
+
+/**
+ * Map user code into user address space
+ * 
+ * Allocates physical pages, copies code from kernel space, and maps
+ * with user-executable permissions.
+ * 
+ * @param page_table User process page table
+ * @param user_vaddr Virtual address in user space (e.g., USER_CODE_BASE)
+ * @param kernel_code Pointer to code in kernel memory to copy
+ * @param size Size of code in bytes
+ * @return 0 on success, -1 on failure
+ */
+int map_user_code(page_table_t *page_table, uintptr_t user_vaddr, 
+                  void *kernel_code, size_t size) {
+    if (!page_table || !kernel_code || size == 0) {
+        hal_uart_puts("map_user_code: invalid parameters\n");
+        return -1;
+    }
+    
+    // Align to page boundaries
+    uintptr_t vaddr = user_vaddr & ~(PAGE_SIZE - 1);
+    uintptr_t offset = user_vaddr & (PAGE_SIZE - 1);
+    size_t total_size = size + offset;
+    size_t num_pages = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    
+    hal_uart_puts("map_user_code: mapping ");
+    kprint_dec(num_pages);
+    hal_uart_puts(" pages at 0x");
+    kprint_hex(user_vaddr);
+    hal_uart_puts("\n");
+    
+    // Map each page
+    uint8_t *src = (uint8_t *)kernel_code;
+    for (size_t i = 0; i < num_pages; i++) {
+        // Allocate physical page
+        uintptr_t phys_page = pmm_alloc_page();
+        if (phys_page == 0) {
+            hal_uart_puts("map_user_code: failed to allocate physical page\n");
+            // TODO: Free previously allocated pages
+            return -1;
+        }
+        
+        // Zero the page first
+        uint8_t *page_ptr = (uint8_t *)phys_page;
+        for (size_t j = 0; j < PAGE_SIZE; j++) {
+            page_ptr[j] = 0;
+        }
+        
+        // Copy code to physical page
+        size_t copy_size = PAGE_SIZE;
+        
+        // Handle first page with offset
+        if (i == 0 && offset > 0) {
+            page_ptr += offset;
+            copy_size = PAGE_SIZE - offset;
+        }
+        
+        // Handle last page (might be partial)
+        if (i == num_pages - 1) {
+            size_t remaining = size - (i * PAGE_SIZE);
+            if (i == 0) {
+                remaining += offset;
+            }
+            if (remaining < copy_size) {
+                copy_size = remaining;
+            }
+        }
+        
+        // Copy data
+        for (size_t j = 0; j < copy_size; j++) {
+            page_ptr[j] = src[i * PAGE_SIZE + j];
+        }
+        
+        // Map the page with user-executable permissions
+        uintptr_t map_vaddr = vaddr + (i * PAGE_SIZE);
+        if (map_page(page_table, map_vaddr, phys_page, PTE_USER_TEXT) != 0) {
+            hal_uart_puts("map_user_code: failed to map page at 0x");
+            kprint_hex(map_vaddr);
+            hal_uart_puts("\n");
+            pmm_free_page(phys_page);
+            return -1;
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * Map user memory (stack, heap, data) into user address space
+ * 
+ * @param page_table User process page table
+ * @param user_vaddr Virtual address in user space
+ * @param phys_addr Physical address (0 = allocate new pages)
+ * @param size Size in bytes
+ * @param writable 1 if writable, 0 if read-only
+ * @return 0 on success, -1 on failure
+ */
+int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr, 
+                    uintptr_t phys_addr, size_t size, int writable) {
+    if (!page_table || size == 0) {
+        hal_uart_puts("map_user_memory: invalid parameters\n");
+        return -1;
+    }
+    
+    // Align to page boundaries
+    uintptr_t vaddr = user_vaddr & ~(PAGE_SIZE - 1);
+    size_t num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+    
+    hal_uart_puts("map_user_memory: mapping ");
+    kprint_dec(num_pages);
+    hal_uart_puts(" pages at 0x");
+    kprint_hex(user_vaddr);
+    hal_uart_puts(writable ? " (RW)\n" : " (RO)\n");
+    
+    // Choose permissions based on writable flag
+    uint64_t flags = writable ? PTE_USER_DATA : PTE_USER_RO;
+    
+    // Map each page
+    int allocate_pages = (phys_addr == 0);
+    for (size_t i = 0; i < num_pages; i++) {
+        uintptr_t phys_page;
+        
+        if (allocate_pages) {
+            // Allocate new physical page
+            phys_page = pmm_alloc_page();
+            if (phys_page == 0) {
+                hal_uart_puts("map_user_memory: failed to allocate physical page\n");
+                return -1;
+            }
+            
+            // Zero the page
+            uint8_t *page_ptr = (uint8_t *)phys_page;
+            for (size_t j = 0; j < PAGE_SIZE; j++) {
+                page_ptr[j] = 0;
+            }
+        } else {
+            // Use provided physical address
+            phys_page = phys_addr + (i * PAGE_SIZE);
+        }
+        
+        // Map the page
+        uintptr_t map_vaddr = vaddr + (i * PAGE_SIZE);
+        if (map_page(page_table, map_vaddr, phys_page, flags) != 0) {
+            hal_uart_puts("map_user_memory: failed to map page at 0x");
+            kprint_hex(map_vaddr);
+            hal_uart_puts("\n");
+            if (allocate_pages) {
+                pmm_free_page(phys_page);
+            }
+            return -1;
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * Switch to a different page table
+ * 
+ * Updates the satp register and flushes the TLB.
+ * 
+ * @param page_table New page table to switch to
+ */
+void switch_page_table(page_table_t *page_table) {
+    if (!page_table) {
+        hal_uart_puts("switch_page_table: NULL page table\n");
+        return;
+    }
+    
+    // Get physical address of root page table
+    uintptr_t root_pa = (uintptr_t)page_table;
+    
+    // Build satp value: mode (Sv39) | ASID (0) | PPN
+    uint64_t satp = SATP_MODE_SV39 | (root_pa >> SATP_PPN_SHIFT);
+    
+    // Set satp register
+    asm volatile("csrw satp, %0" :: "r"(satp) : "memory");
+    
+    // Flush entire TLB
+    tlb_flush(0);
+}
+

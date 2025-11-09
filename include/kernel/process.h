@@ -41,6 +41,12 @@ typedef int32_t pid_t;
 // RISC-V ABI requires 16-byte stack alignment
 #define STACK_ALIGNMENT 16
 
+// User memory layout
+#define USER_CODE_BASE    0x10000        // User code starts at 64KB
+#define USER_STACK_TOP    0x80000000     // User stack top at 2GB
+#define USER_HEAP_START   0x20000        // User heap after code (128KB)
+#define USER_MMAP_START   0x40000000     // Memory mapped region (1GB)
+
 // Process context - saved during context switch
 struct context {
     unsigned long ra;   // Return address
@@ -181,5 +187,29 @@ pid_t process_fork(void);
  * @return -1 on error (never returns on success)
  */
 int process_exec(void (*entry_point)(void *), void *arg);
+
+/**
+ * Create a new user-mode process
+ * 
+ * Creates a process with its own page table and user address space.
+ * The user code is mapped at USER_CODE_BASE with executable permissions.
+ * The user stack is allocated at USER_STACK_TOP.
+ * 
+ * @param name Process name
+ * @param user_code Pointer to user code to execute (in kernel memory)
+ * @param code_size Size of user code in bytes
+ * @return Pointer to new process, or NULL on failure
+ */
+struct process *process_create_user(const char *name, void *user_code, size_t code_size);
+
+/**
+ * Return to user mode (assembly function)
+ * 
+ * This function restores all registers from the trap frame and executes
+ * sret to enter user mode. Must be called with interrupts disabled.
+ * 
+ * @param trap_frame Pointer to trap frame with register state
+ */
+void user_return(struct trap_frame *trap_frame) __attribute__((noreturn));
 
 #endif // PROCESS_H
