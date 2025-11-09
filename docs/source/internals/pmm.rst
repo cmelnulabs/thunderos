@@ -498,13 +498,13 @@ This is used for efficient **bit shifting** instead of slow division/multiplicat
      - Calculation
    * - 4 KB (4096)
      - 12
-     - 2¹² = 4,096
+     - 2\ :sup:`12` = 4,096
    * - 2 MB
      - 21
-     - 2²¹ = 2,097,152
+     - 2\ :sup:`21` = 2,097,152
    * - 1 GB
      - 30
-     - 2³⁰ = 1,073,741,824
+     - 2\ :sup:`30` = 1,073,741,824
 
 Functions
 ~~~~~~~~~
