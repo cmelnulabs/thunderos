@@ -1,6 +1,5 @@
 # ThunderOS
 
-
 A RISC-V operating system focused on AI acceleration and educational use.
 
 ## Current Status
