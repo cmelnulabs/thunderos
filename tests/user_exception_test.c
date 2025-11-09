@@ -37,7 +37,7 @@ void main(void) {
     // Test 1: NULL pointer dereference (should cause load page fault)
     write("Test 1: NULL pointer dereference\n");
     volatile int *ptr = (volatile int *)0;
-    *ptr = 42;  // This should cause an exception
+    int value = *ptr;  // This should cause an exception
 
     // If we reach here, the exception wasn't handled properly
     write("ERROR: Exception not handled!\n");
