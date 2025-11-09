@@ -55,7 +55,7 @@ Component Status
      - Exception and interrupt handling infrastructure
    * - :doc:`interrupt_handling`
      - ✓ Done
-     - PLIC, CLINT drivers and interrupt management API
+     - PLIC, CLINT drivers and interrupt management
    * - :doc:`hal_timer`
      - ✓ Done
      - Hardware abstraction layer for timer (portable interface)
@@ -64,31 +64,34 @@ Component Status
      - Physical memory manager with bitmap allocator
    * - :doc:`kmalloc`
      - ✓ Done
-     - Kernel heap allocator (single-page limitation)
+     - Kernel heap allocator with multi-page support
    * - :doc:`kstring`
      - ✓ Done
-     - Kernel string utilities (kprint_dec, kprint_hex)
+     - Kernel string utilities (kprint_dec, kprint_hex, kmemcpy, etc.)
    * - :doc:`paging`
      - ✓ Done
      - Virtual memory with Sv39 paging (identity mapping)
    * - :doc:`process_management`
      - ✓ Done
-     - Process control blocks, scheduling, context switching
+     - Process control blocks, scheduler, context switching
    * - :doc:`testing_framework`
      - ✓ Done
      - KUnit-inspired testing framework for kernel
    * - :doc:`linker_script`
      - ✓ Done
      - Memory layout and section placement
+   * - Syscall Interface
+     - In Progress
+     - Basic syscall infrastructure (v0.2.0)
    * - Higher-Half Kernel
-     - TODO
-     - Move kernel to 0xFFFFFFFF80000000
+     - Planned
+     - Move kernel to 0xFFFFFFFF80000000 (v0.2.0+)
    * - User Mode Processes
-     - TODO
-     - Separate page tables, privilege switching
+     - Planned
+     - Separate page tables, privilege switching (v0.2.0)
    * - Fork/Exec
-     - TODO
-     - Process cloning and program loading
+     - Planned
+     - Process cloning and program loading (v0.6.0)
 
 Code Organization
 -----------------
@@ -115,6 +118,12 @@ Source Files
    │   │   └── timer.c     # Timer HAL implementation
    │   └── interrupt/
    ├── core/
+   │   ├── panic.c         # Kernel panic handler
+   │   ├── process.c       # Process management
+   │   ├── scheduler.c     # Process scheduler
+   │   ├── syscall.c       # System call handler
+   │   └── time.c          # Time management
+   ├── utils/
    │   └── kstring.c       # String utilities
    └── mm/
        ├── pmm.c           # Physical memory manager
@@ -141,103 +150,79 @@ Source Files
    ├── test_timer.c        # Timer interrupt tests
    └── Makefile            # Test build system
 
-Coding Conventions
-~~~~~~~~~~~~~~~~~~
-
-**C Style**
-   * Use descriptive variable names
-   * Comment non-obvious code
-   * Keep functions small and focused
-   * No standard library (freestanding)
-
-**Assembly Style**
-   * Use comments for each logical block
-   * Label jump targets clearly
-   * Prefer pseudo-instructions when clear
-
-**Naming**
-   * Functions: ``lowercase_with_underscores()``
-   * Macros/Constants: ``UPPERCASE_WITH_UNDERSCORES``
-   * Types: ``PascalCase`` or ``lowercase_t``
 
 Build Process
 -------------
 
-The build follows these steps:
+ThunderOS uses a Makefile-based build system. The build follows these steps:
 
-1. **Compile Assembly**
+1. **Compile Assembly Sources**
    
    .. code-block:: bash
    
-      riscv64-unknown-elf-gcc -c boot/boot.S -o build/boot/boot.o
+      riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany \
+          -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -Wall -Wextra \
+          -Iinclude -c boot/boot.S -o build/boot/boot.o
 
 2. **Compile C Sources**
    
    .. code-block:: bash
    
-      riscv64-unknown-elf-gcc -c kernel/main.c -o build/kernel/main.o
+      riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany \
+          -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -Wall -Wextra \
+          -Iinclude -c kernel/main.c -o build/kernel/main.o
 
-3. **Link**
+3. **Link All Objects**
    
    .. code-block:: bash
    
-      riscv64-unknown-elf-ld -T kernel.ld -o thunderos.elf *.o
+      riscv64-unknown-elf-ld -nostdlib -T kernel/arch/riscv64/kernel.ld \
+          -o build/thunderos.elf build/boot/*.o build/kernel/**/*.o
 
 4. **Generate Binary**
    
    .. code-block:: bash
    
-      riscv64-unknown-elf-objcopy -O binary thunderos.elf thunderos.bin
+      riscv64-unknown-elf-objcopy -O binary build/thunderos.elf build/thunderos.bin
+
+**Quick Build:**
+
+.. code-block:: bash
+
+   make              # Build everything
+   make qemu         # Build and run in QEMU
+   make debug        # Build and run with GDB server
+   make dump         # Generate disassembly
+   make clean        # Clean build artifacts
 
 Compiler Flags
 ~~~~~~~~~~~~~~
 
 .. code-block:: make
 
-   CFLAGS = -march=rv64gc      # RISC-V 64-bit with common extensions
-            -mabi=lp64d        # LP64 ABI with double-precision float
-            -mcmodel=medany    # Medium any code model (position-independent)
-            -nostdlib          # No standard library
-            -nostartfiles      # No standard startup files
-            -ffreestanding     # Freestanding environment (no hosted features)
-            -fno-common        # No common blocks
-            -O2                # Optimization level 2
-            -Wall -Wextra      # All warnings
+   CFLAGS = -march=rv64gc      # RISC-V 64-bit with G (general) + C (compressed) extensions
+            -mabi=lp64d        # LP64 ABI with hardware double-precision float registers
+            -mcmodel=medany    # Position-independent code model for any address range
+            -nostdlib          # Don't link against standard C library
+            -nostartfiles      # Don't use standard system startup files
+            -ffreestanding     # Kernel runs without hosted environment (no OS beneath it)
+            -fno-common        # Place uninitialized globals in BSS (not common blocks)
+            -O0                # No optimization (for debugging, preserves code structure)
+            -Wall -Wextra      # Enable all common warnings and extra checks
+            -Iinclude          # Add include/ directory to header search path
 
-Debugging
----------
+**Flag Details:**
 
-QEMU with GDB
-~~~~~~~~~~~~~
+* **-march=rv64gc**: Target RISC-V 64-bit with standard extensions (Integer, Multiply, Atomic, Float, Double, Compressed)
+* **-mabi=lp64d**: Long and pointers are 64-bit, doubles in FP registers
+* **-mcmodel=medany**: Code can be loaded anywhere in memory (required for kernel)
+* **-nostdlib -nostartfiles**: We provide our own entry point and runtime (no libc)
+* **-ffreestanding**: Compiler knows we're writing a kernel (no standard library assumptions)
+* **-fno-common**: Ensures proper BSS section initialization
+* **-O0**: No optimization - keeps debugging easier and code predictable
+* **-Wall -Wextra**: Catch common bugs and code issues at compile time
 
-Start QEMU with GDB server:
 
-.. code-block:: bash
-
-   make debug
-   # Equivalent to:
-   qemu-system-riscv64 ... -s -S
-
-In another terminal:
-
-.. code-block:: bash
-
-   riscv64-unknown-elf-gdb build/thunderos.elf
-   (gdb) target remote :1234
-   (gdb) break kernel_main
-   (gdb) continue
-
-Useful GDB Commands
-~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: text
-
-   info registers          # Show all registers
-   x/10i $pc              # Disassemble 10 instructions at PC
-   x/20x 0x80200000       # Examine 20 words of memory
-   stepi                  # Step one instruction
-   layout asm             # Show assembly in TUI
-   layout regs            # Show registers in TUI
 
 Disassembly
 ~~~~~~~~~~~
@@ -258,19 +243,29 @@ View specific sections:
 Testing
 -------
 
-Current Testing
-~~~~~~~~~~~~~~~
+ThunderOS includes a built-in KUnit-inspired testing framework for kernel components:
 
-* Manual testing in QEMU
-* Visual verification of boot messages
-* Basic smoke tests (does it boot? does UART work?)
+**Test Framework:**
+   * Located in ``tests/framework/`` (kunit.h, kunit.c)
+   * Provides assertions, test registration, and execution
+   * See :doc:`testing_framework` for details
 
-Future Testing
-~~~~~~~~~~~~~~
+**Current Tests:**
+   * ``tests/test_trap.c`` - Trap handler tests
+   * ``tests/test_timer.c`` - Timer interrupt tests
+   * Separate test Makefile in ``tests/``
 
-* Unit tests for kernel functions
-* Integration tests for subsystems
-* Automated QEMU tests with expect scripts
-* Hardware testing on real RISC-V boards
+**Running Tests:**
+
+.. code-block:: bash
+
+   cd tests/
+   make              # Build test suite
+   make qemu         # Run tests in QEMU
+
+**Manual Testing:**
+   * QEMU execution with serial output verification
+   * Visual verification of boot messages
+   * Basic smoke tests (boot sequence, UART output, timer interrupts)
 
 See individual component pages for detailed technical documentation.

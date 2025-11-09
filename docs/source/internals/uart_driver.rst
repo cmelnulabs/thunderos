@@ -29,76 +29,128 @@ Hardware Details
 NS16550A UART
 ~~~~~~~~~~~~~
 
-The NS16550A is a classic UART controller, widely used and well-documented.
+The NS16550A is a classic UART controller, widely used and well-documented. In QEMU's virt machine, it is mapped at physical address **0x10000000**.
 
-**Register Map** (Base: 0x10000000)
+Register Layout
+^^^^^^^^^^^^^^^
+
+The UART has 8 registers, each **8 bits (1 byte)** wide, located consecutively in memory starting at the base address:
 
 .. list-table::
    :header-rows: 1
-   :widths: 15 15 15 55
+   :widths: 20 20 15 45
 
-   * - Offset
-     - Name
+   * - Physical Address
+     - Register Name
      - Access
      - Description
-   * - +0
-     - RBR
-     - R
-     - Receiver Buffer Register (read received byte)
-   * - +0
-     - THR
-     - W
-     - Transmitter Holding Register (write byte to send)
-   * - +1
+   * - 0x10000000
+     - RBR/THR
+     - R/W
+     - **Data Register**: Read to receive a byte, write to transmit a byte
+   * - 0x10000001
      - IER
      - R/W
-     - Interrupt Enable Register
-   * - +2
-     - IIR
-     - R
-     - Interrupt Identification Register
-   * - +2
-     - FCR
-     - W
-     - FIFO Control Register
-   * - +3
+     - Interrupt Enable Register (controls which events trigger interrupts)
+   * - 0x10000002
+     - IIR/FCR
+     - R/W
+     - Interrupt ID / FIFO Control
+   * - 0x10000003
      - LCR
      - R/W
-     - Line Control Register
-   * - +4
+     - Line Control Register (data bits, parity, stop bits)
+   * - 0x10000004
      - MCR
      - R/W
      - Modem Control Register
-   * - +5
+   * - 0x10000005
      - LSR
      - R
-     - Line Status Register
-   * - +6
+     - **Line Status Register** (tells you if UART is ready to send/receive)
+   * - 0x10000006
      - MSR
      - R
      - Modem Status Register
-   * - +7
+   * - 0x10000007
      - SCR
      - R/W
-     - Scratch Register
+     - Scratch Register (unused, for testing)
 
-**Key Registers for ThunderOS:**
+**Memory Layout Visualization:**
 
-* **LSR (Line Status Register)** at offset +5
+.. code-block:: text
+
+   Physical Memory:
+   
+   0x10000000: [ RBR/THR ]  ← Data register (1 byte)
+   0x10000001: [   IER   ]  ← Interrupt enable (1 byte)
+   0x10000002: [ IIR/FCR ]  ← Interrupt ID/FIFO (1 byte)
+   0x10000003: [   LCR   ]  ← Line control (1 byte)
+   0x10000004: [   MCR   ]  ← Modem control (1 byte)
+   0x10000005: [   LSR   ]  ← Line status (1 byte) ★ Most important!
+   0x10000006: [   MSR   ]  ← Modem status (1 byte)
+   0x10000007: [   SCR   ]  ← Scratch (1 byte)
+
+**How Offsets Work:**
+
+When documentation says "offset +5", it means:
+
+* **Base address**: 0x10000000 (where UART starts)
+* **Offset +5**: Add 5 bytes to the base
+* **Final address**: 0x10000000 + 5 = **0x10000005** (LSR register)
+
+Each register is exactly **1 byte apart** in memory.
+
+Critical Registers for ThunderOS
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We only use 3 registers in the current implementation:
+
+**1. LSR - Line Status Register (0x10000005)**
+
+This 8-bit register tells you the UART's current state:
+
+.. code-block:: text
+
+   Bit:    7    6    5    4    3    2    1    0
+         [  ][TX][TH][  ][  ][  ][  ][DR]
+   
+   Bit 0 (DR): Data Ready
+      • 1 = A byte has been received and is waiting in RBR
+      • 0 = No data available to read
+   
+   Bit 5 (THR): Transmitter Holding Register Empty
+      • 1 = UART is ready to accept a new byte for transmission
+      • 0 = UART is still processing the previous byte
+   
+   Bit 6 (TX): Transmitter Empty
+      • 1 = All data has been completely transmitted
+      • 0 = Transmission in progress
+
+**2. THR - Transmitter Holding Register (0x10000000)**
+
+* **Write-only** register (writing sends data)
+* To transmit the character 'A':
   
-  * Bit 0: Data Ready (1 = byte available to read)
-  * Bit 5: Transmitter Holding Register Empty (1 = ready to send)
-  * Bit 6: Transmitter Empty (1 = all data sent)
+  1. Wait until LSR bit 5 = 1 (ready to send)
+  2. Write 0x41 (ASCII 'A') to address 0x10000000
+  3. UART hardware sends the byte over the serial line
 
-* **THR (Transmitter Holding Register)** at offset +0
-  
-  * Write-only when DLAB=0
-  * Byte written here gets transmitted
+**3. RBR - Receiver Buffer Register (0x10000000)**
 
-* **RBR (Receiver Buffer Register)** at offset +0
+* **Read-only** register (same address as THR!)
+* To receive a character:
   
-  * Read-only when DLAB=0
-  * Reading returns received byte
+  1. Wait until LSR bit 0 = 1 (data ready)
+  2. Read 1 byte from address 0x10000000
+  3. That byte is what was received
+
+**Why do RBR and THR share the same address?**
+
+* Reading from 0x10000000 → gets received data (RBR)
+* Writing to 0x10000000 → sends data (THR)
+* The hardware knows which register to use based on whether you read or write
 
 Memory-Mapped I/O
 ~~~~~~~~~~~~~~~~~
@@ -246,11 +298,6 @@ uart_putc()
    uart_putc('H');
    uart_putc('i');
    uart_putc('\\n');
-
-**Performance:**
-   * ~115200 baud = ~11520 bytes/sec
-   * Each character: ~87 microseconds
-   * Busy-waiting wastes CPU cycles
 
 uart_puts()
 ~~~~~~~~~~~

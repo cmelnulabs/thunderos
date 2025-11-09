@@ -332,40 +332,6 @@ Missing Symbols
 
 **Solution:** Add ``PROVIDE(_bss_start = .);`` in linker script
 
-Performance Notes
------------------
-
-BSS Clear Optimization
-~~~~~~~~~~~~~~~~~~~~~~
-
-Current implementation clears 8 bytes per iteration. Could be optimized:
-
-**Option 1: Use vector instructions (RVV)**
-
-.. code-block:: asm
-
-   # Requires RISC-V Vector Extension
-   vsetvli t2, t1, e64, m1
-   vmv.v.i v0, 0
-   loop:
-     vse64.v v0, (t0)
-     add t0, t0, t2
-     blt t0, t1, loop
-
-**Option 2: Unroll loop**
-
-.. code-block:: asm
-
-   clear_bss:
-       beq t0, t1, clear_bss_done
-       sd zero, 0(t0)
-       sd zero, 8(t0)
-       sd zero, 16(t0)
-       sd zero, 24(t0)
-       addi t0, t0, 32
-       j clear_bss
-
-**Trade-off:** Code size vs. speed (minimal benefit for small BSS)
 
 Testing
 -------
@@ -401,10 +367,8 @@ To verify bootloader works:
       (gdb) stepi   # Step through bootloader
       (gdb) info registers sp
 
-Future Enhancements
+Potential improvements
 -------------------
-
-Potential improvements:
 
 * **Multi-core boot:** Wake up additional CPU cores
 * **Device tree parsing:** Read hardware configuration

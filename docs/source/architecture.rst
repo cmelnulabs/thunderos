@@ -9,28 +9,33 @@ High-Level Overview
 .. code-block:: text
 
                     ┌─────────────────────────────┐
-                    │    User Space (Future)      │
+                    │   User Space (v0.2.0+)      │
                     └─────────────────────────────┘
                                │ syscalls
                     ┌──────────▼──────────────────┐
                     │      Kernel Space           │
                     │  ┌──────────────────────┐   │
                     │  │   Process Scheduler  │   │
-                    │  │      (TODO)          │   │
+                    │  │  - Round-robin    ✓  │   │
+                    │  │  - Time slicing   ✓  │   │
+                    │  │  - Preemptive     ✓  │   │
                     │  └──────────────────────┘   │
                     │  ┌──────────────────────┐   │
                     │  │  Memory Management   │   │
-                    │  │      (TODO)          │   │
+                    │  │  - PMM (bitmap)   ✓  │   │
+                    │  │  - kmalloc        ✓  │   │
+                    │  │  - Sv39 paging    ✓  │   │
                     │  └──────────────────────┘   │
                     │  ┌──────────────────────┐   │
                     │  │   Interrupt System   │   │
                     │  │  - Trap Handler   ✓  │   │
                     │  │  - Timer (CLINT)  ✓  │   │
-                    │  │  - PLIC (TODO)       │   │
+                    │  │  - PLIC           ✓  │   │
                     │  └──────────────────────┘   │
                     │  ┌──────────────────────┐   │
                     │  │   Device Drivers     │   │
-                    │  │   - UART          ✓  │   │
+                    │  │   - UART (HAL)    ✓  │   │
+                    │  │   - Timer (HAL)   ✓  │   │
                     │  │   - AI Accel (TODO)  │   │
                     │  └──────────────────────┘   │
                     │  ┌──────────────────────┐   │
@@ -299,36 +304,9 @@ The ``virt`` machine provides:
 Future Architecture
 -------------------
 
-Planned components:
+ThunderOS is under active development. For detailed information about planned features and the development roadmap, see:
 
-**External Interrupts (PLIC)**
-   * Platform-Level Interrupt Controller driver
-   * External device interrupt routing
-   * Interrupt priority management
-   * Integration with UART and other devices
+* `ROADMAP.md <../../ROADMAP.md>`_ - Complete development roadmap from v0.1 to v2.0
+* `CHANGELOG.md <../../CHANGELOG.md>`_ - Detailed history of implemented features
 
-**Memory Management**
-   * Physical memory allocator (page-based)
-   * Virtual memory with SV39 paging
-   * Kernel heap allocator
-   * Memory protection
-
-**Process Management**
-   * Process/task structures
-   * Context switching
-   * Scheduler (AI-aware, time-slicing)
-   * Inter-process communication
-
-**System Calls**
-   * User/kernel mode boundary
-   * System call interface via ecall
-   * Argument passing and validation
-   * Error handling
-
-**AI Acceleration**
-   * Vector instruction support (RVV)
-   * Accelerator drivers
-   * DMA management
-   * Specialized scheduling for AI workloads
-
-See :doc:`internals/index` for detailed implementation documentation.
+See :doc:`internals/index` for detailed implementation documentation of current features.

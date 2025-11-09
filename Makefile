@@ -17,7 +17,7 @@ INCLUDE_DIR := include
 # Compiler flags
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany
 CFLAGS += -nostdlib -nostartfiles -ffreestanding -fno-common
-CFLAGS += -O2 -Wall -Wextra
+CFLAGS += -O0 -Wall -Wextra
 CFLAGS += -I$(INCLUDE_DIR)
 
 # Linker flags
@@ -27,6 +27,7 @@ LDFLAGS := -nostdlib -T kernel/arch/riscv64/kernel.ld
 BOOT_SOURCES := $(wildcard $(BOOT_DIR)/*.S)
 KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/core/*.c) \
+                    $(wildcard $(KERNEL_DIR)/utils/*.c) \
                     $(wildcard $(KERNEL_DIR)/drivers/*.c) \
                     $(wildcard $(KERNEL_DIR)/mm/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/*.c) \

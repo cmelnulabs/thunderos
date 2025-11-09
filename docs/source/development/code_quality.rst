@@ -73,13 +73,31 @@ Mandatory Rules
    - Add forward declarations for helper functions immediately after constants.
    - Implement helper functions before public API functions.
 
+Naming Conventions
+------------------
+
+**Functions:**
+   * ``lowercase_with_underscores()``
+   * Use suffixes like ``_handler``, ``_count``, ``_buffer`` where helpful
+
+**Macros/Constants:**
+   * ``UPPERCASE_WITH_UNDERSCORES``
+   * Replace numeric literals with named constants
+
+**Types:**
+   * ``PascalCase`` or ``lowercase_t``
+
+**Variables:**
+   * Prefer ``identifier_buffer``, ``index_expression``, ``field_index`` over single-letter names
+   * Use full, descriptive names
+
 Recommended Practices
 ---------------------
 
-- **Naming conventions**: use suffixes like `_handler`, `_count`, `_buffer` where helpful.
-- **Buffer and index names**: prefer `identifier_buffer`, `index_expression`, `field_index` over single-letter names.
+- **Buffer and index names**: prefer descriptive names over single-letter abbreviations.
 - **Error handling**: adopt consistent error codes and message formatting across modules.
 - **Comments**: prefer short explanatory comments for non-obvious behavior; rely on self-documenting names where possible. Comment each logical block in assembly.
+- **Assembly style**: label jump targets clearly and prefer pseudo-instructions when clear
 
 Refactoring Principles
 ----------------------

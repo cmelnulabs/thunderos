@@ -8,19 +8,64 @@ Building
 Prerequisites
 ~~~~~~~~~~~~~
 
+**Option 1: Using Docker (Recommended)**
+
+The easiest way to build ThunderOS is using Docker, which provides a consistent build environment:
+
 .. code-block:: bash
 
-   # RISC-V toolchain
-   apt-get install gcc-riscv64-unknown-elf
+   # Build the Docker image
+   docker build -t thunderos-build .
    
-   # QEMU
-   apt-get install qemu-system-riscv64
+   # Build ThunderOS in Docker
+   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build make all
+   
+   # Run in QEMU via Docker
+   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build make qemu
+
+**Option 2: Native Installation (Ubuntu/Debian)**
+
+.. code-block:: bash
+
+   # QEMU (for emulation)
+   sudo apt-get install qemu-system-misc
    
    # Build tools
-   apt-get install make
+   sudo apt-get install build-essential make wget
+   
+   # RISC-V toolchain (manual installation required)
+   # Download from SiFive or build from source
+   wget https://static.dev.sifive.com/dev-tools/freedom-tools/v2020.12/riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz
+   tar -xzf riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14.tar.gz
+   sudo mv riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-x86_64-linux-ubuntu14 /opt/riscv
+   export PATH="/opt/riscv/bin:$PATH"  # Add to ~/.bashrc
+   
+   # Verify installation
+   riscv64-unknown-elf-gcc --version
+   qemu-system-riscv64 --version
+
+**Option 3: Using Build Scripts (After Setup)**
+
+Once prerequisites are installed:
+
+.. code-block:: bash
+
+   ./build_os.sh       # Build the kernel
+   ./test_qemu.sh      # Build and test in QEMU
+   ./build_docs.sh     # Build documentation
 
 Compilation
 ~~~~~~~~~~~
+
+**Using Build Scripts (Recommended)**
+
+.. code-block:: bash
+
+   ./build_os.sh       # Clean build of the kernel
+   ./test_qemu.sh      # Build and run in QEMU
+   ./build_docs.sh     # Build Sphinx documentation
+
+**Using Make Directly**
 
 .. code-block:: bash
 
@@ -42,29 +87,42 @@ Testing
 Manual Testing
 ~~~~~~~~~~~~~~
 
-1. Build kernel: ``make all``
+**Quick Test with Script**
+
+.. code-block:: bash
+
+   ./test_qemu.sh      # Builds and runs kernel in QEMU
+
+**Manual Steps**
+
+1. Build kernel: ``./build_os.sh`` or ``make all``
 2. Run in QEMU: ``make qemu``
 3. Verify boot messages appear
 4. Test each feature manually
+5. Press ``Ctrl+A`` then ``X`` to exit QEMU
 
 Automated Testing
 ~~~~~~~~~~~~~~~~~
 
-Create test scripts:
+ThunderOS includes automated CI/CD testing via GitHub Actions. See ``.github/workflows/ci.yml`` for the complete test suite.
+
+The CI pipeline:
+
+1. Builds kernel in Docker
+2. Runs QEMU boot test
+3. Verifies boot messages and initialization
+4. Checks for build warnings
+5. Runs unit tests (if available)
+
+To run similar tests locally:
 
 .. code-block:: bash
 
-   #!/bin/bash
-   # tests/boot_test.sh
-   
-   timeout 5 make qemu > output.txt 2>&1
-   
-   if grep -q "ThunderOS" output.txt; then
-       echo "PASS: Kernel boots"
-   else
-       echo "FAIL: Kernel doesn't boot"
-       exit 1
-   fi
+   # Build and test (mimics CI)
+   docker build -t thunderos-build .
+   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build make clean && make
+   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build timeout 8s make qemu
+
 
 Debugging
 ---------
