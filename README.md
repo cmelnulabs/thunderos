@@ -29,7 +29,13 @@ make qemu
 ### Automated Testing
 ```bash
 # Run comprehensive syscall tests
-./test_syscalls.sh
+tests/test_syscalls.sh
+
+# Run quick user-mode validation
+tests/test_user_quick.sh
+
+# Run all tests (see tests/README.md)
+cd tests && ./test_*.sh
 ```
 
 ### Debugging

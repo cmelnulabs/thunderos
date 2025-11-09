@@ -7,9 +7,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="${SCRIPT_DIR}/build"
+BUILD_DIR="${SCRIPT_DIR}/../build"
 QEMU_TIMEOUT=5
-OUTPUT_FILE="/tmp/thunderos_test_output.txt"
+OUTPUT_FILE="${SCRIPT_DIR}/thunderos_test_output.txt"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -32,13 +32,14 @@ print_info() {
 
 # Build the kernel
 print_info "Building kernel..."
-cd "${SCRIPT_DIR}"
+cd "${SCRIPT_DIR}/.."
 if make clean >/dev/null 2>&1 && make >/dev/null 2>&1; then
     print_status "Build successful"
 else
     print_error "Build failed"
     exit 1
 fi
+cd "${SCRIPT_DIR}"
 
 # Check if executable exists
 if [ ! -f "${BUILD_DIR}/thunderos.elf" ]; then

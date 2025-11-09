@@ -41,6 +41,10 @@ Run in QEMU::
 Current Status
 --------------
 
+**Version 0.2.0 - "User Space"** ✅ RELEASED
+
+ThunderOS v0.2.0 "User Space" is now complete with full user-mode support!
+
 .. list-table::
    :header-rows: 1
 
@@ -54,14 +58,26 @@ Current Status
      - ✓ Implemented
    * - Timer Interrupts (CLINT)
      - ✓ Implemented
-   * - Testing Framework
+   * - Memory Management (PMM + kmalloc)
      - ✓ Implemented
-   * - Memory Management
-     - ⏳ TODO
+   * - Virtual Memory (Sv39 paging)
+     - ✓ Implemented
    * - Process Scheduler
-     - ⏳ TODO
+     - ✓ Implemented
+   * - User Mode (U-mode) Support
+     - ✓ Implemented
+   * - System Calls (13 syscalls)
+     - ✓ Implemented
+   * - Privilege Separation
+     - ✓ Implemented
+   * - Exception Handling
+     - ✓ Implemented
+   * - Automated Testing Framework
+     - ✓ Implemented
+   * - CI/CD Pipeline (GitHub Actions)
+     - ✓ Implemented
    * - AI Accelerators
-     - ⏳ TODO
+     - ⏳ TODO (v0.3.0)
 
 Indices and tables
 ==================

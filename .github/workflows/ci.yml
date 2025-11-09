@@ -95,17 +95,37 @@ jobs:
           thunderos-build:latest \
           bash -c "make || echo '⚠ Test build skipped (optional)'"
     
-    - name: Run unit tests
-      continue-on-error: true
+    - name: Run integration tests
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/workspace \
-          -w /workspace/tests \
+          -w /workspace \
           thunderos-build:latest \
-          bash -c "if [ -f test_paging ]; then \
-                     timeout 10s qemu-system-riscv64 -machine virt -m 128M -nographic -serial mon:stdio -bios default -kernel test_paging > test_output.log 2>&1 || true; \
-                     cat test_output.log; \
-                   fi"
+          bash -c "cd tests && chmod +x *.sh && ./test_qemu.sh"
+    
+    - name: Run syscall tests
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          thunderos-build:latest \
+          bash -c "cd tests && ./test_syscalls.sh"
+    
+    - name: Run user mode tests
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          thunderos-build:latest \
+          bash -c "cd tests && ./test_user_mode.sh"
+    
+    - name: Run quick user tests
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          thunderos-build:latest \
+          bash -c "cd tests && ./test_user_quick.sh"
     
     - name: Check for build warnings
       run: |
@@ -139,6 +159,10 @@ jobs:
           qemu_output.log
           build_warnings.log
           tests/test_output.log
+          tests/thunderos_qemu_output.txt
+          tests/thunderos_test_output.txt
+          tests/thunderos_user_mode_output.txt
+          tests/thunderos_quick_test_output.txt
         retention-days: 7
     
     - name: Report success

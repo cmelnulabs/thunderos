@@ -51,7 +51,7 @@ Once prerequisites are installed:
 .. code-block:: bash
 
    ./build_os.sh       # Build the kernel
-   ./test_qemu.sh      # Build and test in QEMU
+   tests/test_qemu.sh  # Build and test in QEMU
    ./build_docs.sh     # Build documentation
 
 Compilation
@@ -91,7 +91,10 @@ Manual Testing
 
 .. code-block:: bash
 
-   ./test_qemu.sh      # Builds and runs kernel in QEMU
+   tests/test_user_quick.sh    # Fast validation (3 seconds)
+   tests/test_syscalls.sh      # Comprehensive syscall testing
+   tests/test_user_mode.sh     # User-mode privilege testing
+   tests/test_qemu.sh          # Basic QEMU functionality
 
 **Manual Steps**
 
@@ -104,15 +107,23 @@ Manual Testing
 Automated Testing
 ~~~~~~~~~~~~~~~~~
 
-ThunderOS includes automated CI/CD testing via GitHub Actions. See ``.github/workflows/ci.yml`` for the complete test suite.
+ThunderOS includes comprehensive automated CI/CD testing via GitHub Actions. See ``.github/workflows/ci.yml`` for the complete test suite.
 
 The CI pipeline:
 
 1. Builds kernel in Docker
 2. Runs QEMU boot test
-3. Verifies boot messages and initialization
-4. Checks for build warnings
-5. Runs unit tests (if available)
+3. Executes 4 automated integration tests:
+   
+   - ``test_qemu.sh`` - Basic functionality
+   - ``test_syscalls.sh`` - Syscall validation
+   - ``test_user_mode.sh`` - User-mode testing
+   - ``test_user_quick.sh`` - Fast validation
+
+4. Verifies boot messages and initialization
+5. Checks for build warnings
+6. Runs unit tests (if available)
+7. Uploads test artifacts
 
 To run similar tests locally:
 
@@ -121,7 +132,7 @@ To run similar tests locally:
    # Build and test (mimics CI)
    docker build -t thunderos-build .
    docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build make clean && make
-   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build timeout 8s make qemu
+   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build bash -c "cd tests && ./test_user_quick.sh"
 
 
 Debugging

@@ -104,13 +104,20 @@ Build and test in QEMU:
 
 .. code-block:: bash
 
-   ./test_qemu.sh
+   make qemu
 
-Or run manually:
+Or run automated tests:
 
 .. code-block:: bash
 
-   make qemu
+   # Quick validation
+   tests/test_user_quick.sh
+
+   # Comprehensive testing
+   tests/test_syscalls.sh
+
+   # Full test suite
+   cd tests && ./test_*.sh
 
 Building Documentation
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -132,19 +139,25 @@ Project Structure
    ├── boot/              # Bootloader (assembly)
    ├── kernel/            # Kernel code
    │   ├── arch/riscv64/  # Architecture-specific code
-   │   ├── core/          # Core kernel (scheduler, etc.)
-   │   └── mm/            # Memory management
+   │   ├── core/          # Core kernel (scheduler, syscalls, etc.)
+   │   └── mm/            # Memory management (PMM, paging)
    ├── include/           # Header files
    │   ├── arch/          # Architecture headers
    │   ├── hal/           # Hardware Abstraction Layer
    │   ├── kernel/        # Kernel subsystem headers
    │   └── mm/            # Memory management headers
-   ├── tests/             # Test framework and cases
+   ├── tests/             # Automated test suite
+   │   ├── test_*.sh      # Integration test scripts
+   │   ├── test_*.c       # Unit test programs
+   │   ├── framework/     # Test framework (kunit)
+   │   └── README.md      # Test documentation
    ├── docs/              # Sphinx documentation
    ├── build/             # Build artifacts (generated)
+   ├── .github/           # GitHub Actions CI/CD
    ├── build_os.sh        # Build kernel script
    ├── build_docs.sh      # Build documentation script
-   └── test_qemu.sh       # Build and test in QEMU script
+   ├── Makefile           # Main build system
+   └── README.md          # Project documentation
 
 Next Steps
 ----------

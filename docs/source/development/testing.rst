@@ -1,7 +1,7 @@
 Testing Guide
 =============
 
-This document describes the testing framework and how to run tests for ThunderOS.
+This document describes the comprehensive testing framework and how to run tests for ThunderOS.
 
 Quick Start
 -----------
@@ -11,7 +11,7 @@ Run the automated test suite:
 .. code-block:: bash
 
    cd /path/to/thunderos
-   ./test_syscalls.sh
+   tests/test_syscalls.sh
 
 Expected output:
 
@@ -24,59 +24,48 @@ Expected output:
    ...
    [✓] All critical tests passed!
 
-Test Framework
---------------
+Test Framework Overview
+-----------------------
 
-The ``test_syscalls.sh`` script provides automated testing for the kernel:
+ThunderOS includes multiple automated test scripts in the ``tests/`` directory:
+
+**Integration Tests:**
+
+- ``test_qemu.sh`` - Basic QEMU boot and kernel functionality
+- ``test_syscalls.sh`` - Comprehensive syscall testing (6 automated checks)
+- ``test_user_mode.sh`` - User-mode process execution and privilege separation
+- ``test_user_quick.sh`` - Fast user-mode validation (4 checks)
+
+**Unit Tests:**
+
+- ``test_trap.c`` - Trap handler unit tests
+- ``test_timer.c`` - Timer interrupt unit tests
+- ``test_paging.c`` - Memory paging unit tests
 
 **Features:**
 
 - Clean compilation (``make clean && make``)
-- QEMU execution with 5-second timeout
-- Output capture to ``/tmp/thunderos_test_output.txt``
-- 5 critical validation checks
-- Color-coded results (✓ = pass, ✗ = fail)
-
-**Critical Tests:**
-
-1. **Kernel Initialization**
-   - Verifies kernel boots correctly
-   - Checks for initialization messages
-   - Status: PASS if "Kernel loaded" found in output
-
-2. **Process Creation**
-   - Verifies process table is populated
-   - Checks for demo processes (A, B, C)
-   - Status: PASS if processes created successfully
-
-3. **Scheduler Running**
-   - Verifies preemptive multitasking
-   - Checks for process interleaving
-   - Status: PASS if scheduler output detected
-
-4. **User Process Created**
-   - Verifies user-mode process (PID 4)
-   - Checks privilege transition works
-   - Status: PASS if user process runs without exception
-
-5. **sys_write Working**
-   - Verifies user-space syscalls function
-   - Checks UART output from user processes
-   - Status: PASS if process output in console
+- QEMU execution with configurable timeouts
+- Output capture to ``tests/*.txt`` files
+- Automated validation checks with color-coded results
+- CI/CD integration via GitHub Actions
 
 Test Output Analysis
 --------------------
 
-The test results are saved to ``/tmp/thunderos_test_output.txt``:
+Test results are saved to ``tests/*.txt`` files:
 
 .. code-block:: bash
 
-   # View last 50 lines
-   tail -50 /tmp/thunderos_test_output.txt
+   # View test outputs
+   ls tests/*.txt
+   
+   # View last 50 lines of syscall test
+   tail -50 tests/thunderos_test_output.txt
 
    # Search for specific strings
-   grep "Process A" /tmp/thunderos_test_output.txt
-   grep "User process" /tmp/thunderos_test_output.txt
+   grep "Process A" tests/thunderos_test_output.txt
+   grep "User process" tests/thunderos_test_output.txt
 
 Expected Process Output
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -317,7 +306,7 @@ QEMU Doesn't Start
 Test Hangs
 ~~~~~~~~~~
 
-**Issue:** Test doesn't exit after 5 seconds
+**Issue:** Test doesn't exit after timeout
 
 **Solution:** The timeout should trigger automatically. If not:
 
@@ -333,7 +322,7 @@ Test Hangs
 
    .. code-block:: bash
 
-      tail /tmp/thunderos_test_output.txt
+      tail tests/thunderos_test_output.txt
 
 QEMU Crashes
 ~~~~~~~~~~~~
@@ -394,17 +383,16 @@ For CI/CD pipelines:
    set -e
    
    cd /home/christian/Proyectos/thunderos
-   ./test_syscalls.sh
+   tests/test_syscalls.sh
    
    # Check for expected keywords
-   grep -q "All critical tests passed" /tmp/thunderos_test_output.txt
+   grep -q "All critical tests passed" tests/thunderos_test_output.txt
    
    echo "CI test passed!"
 
-See Also
---------
+The GitHub Actions workflow (``.github/workflows/ci.yml``) runs all test scripts automatically on:
 
-- :doc:`code_quality` - Coding standards
-- :doc:`../internals/syscalls` - Syscall documentation
-- :doc:`../internals/process_management` - Process structure
-- :doc:`../internals/trap_handler` - Exception handling
+- Push to main, dev/*, feature/*, release/* branches
+- Pull requests to main and dev/* branches
+
+Test artifacts are uploaded for debugging failed builds.
