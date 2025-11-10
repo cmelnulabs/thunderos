@@ -9,7 +9,6 @@
 #include "mm/pmm.h"
 #include "mm/kmalloc.h"
 #include "mm/paging.h"
-#include "mm/dma.h"
 #include "kernel/kstring.h"
 #include "kernel/process.h"
 #include "kernel/scheduler.h"
@@ -22,9 +21,6 @@
 
 // Linker symbols (defined in kernel.ld)
 extern char _kernel_end[];
-
-// External test function
-extern void test_memory_management(void);
 
 // Demo process functions
 void process_a(void *arg) {
@@ -115,10 +111,6 @@ void kernel_main(void) {
     paging_init(KERNEL_LOAD_ADDRESS, kernel_end);
     hal_uart_puts("[OK] Virtual memory initialized\n");
     
-    // Initialize DMA allocator
-    dma_init();
-    hal_uart_puts("[OK] DMA allocator initialized\n");
-    
     // Test memory allocation
     hal_uart_puts("\nTesting memory allocation:\n");
     
@@ -172,9 +164,6 @@ void kernel_main(void) {
     hal_uart_puts("\n  Free pages:  ");
     kprint_dec(free);
     hal_uart_puts("\n");
-    
-    // Run enhanced memory management tests
-    test_memory_management();
     
     // Initialize process management
     process_init();

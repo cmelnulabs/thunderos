@@ -4,6 +4,7 @@
 
 #include "mm/paging.h"
 #include "mm/pmm.h"
+#include "mm/kmalloc.h"
 #include "hal/hal_uart.h"
 #include "kernel/kstring.h"
 
@@ -593,3 +594,19 @@ void switch_page_table(page_table_t *page_table) {
     tlb_flush(0);
 }
 
+/**
+ * Translate virtual to physical using kernel page table
+ * 
+ * Convenience wrapper for common case of translating kernel virtual addresses.
+ */
+uintptr_t translate_virt_to_phys(uintptr_t vaddr) {
+    uintptr_t paddr;
+    
+    // Try using page table translation
+    if (virt_to_phys(&kernel_page_table, vaddr, &paddr) == 0) {
+        return paddr;
+    }
+    
+    // Fallback: assume identity mapping (current kernel design)
+    return vaddr;
+}

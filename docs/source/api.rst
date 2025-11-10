@@ -343,6 +343,358 @@ Virtual Memory (Paging)
 
    Flush TLB for a specific virtual address.
    
+   :param vaddr: Virtual address to flush, or 0 to flush all
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Flush specific address
+      tlb_flush(0x100000);
+      
+      // Flush entire TLB
+      tlb_flush(0);
+
+.. c:function:: page_table_t *get_kernel_page_table(void)
+
+   Get pointer to the kernel's root page table.
+   
+   :return: Pointer to kernel page table
+   :rtype: page_table_t*
+
+.. c:function:: uintptr_t translate_virt_to_phys(uintptr_t vaddr)
+
+   Translate virtual to physical using kernel page table.
+   
+   **New in v0.3.0**: Convenience wrapper for common case.
+   
+   :param vaddr: Virtual address
+   :return: Physical address, or vaddr if not mapped (identity fallback)
+   :rtype: uintptr_t
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      uint8_t *buffer = kmalloc(4096);
+      uintptr_t buffer_phys = translate_virt_to_phys((uintptr_t)buffer);
+      
+      // Program device DMA register
+      device_write(DMA_ADDR, buffer_phys);
+
+.. c:function:: uintptr_t translate_phys_to_virt(uintptr_t paddr)
+
+   Translate physical to virtual (identity mapping assumption).
+   
+   **New in v0.3.0**: Prepared for higher-half kernel.
+   
+   :param paddr: Physical address
+   :return: Virtual address
+   :rtype: uintptr_t
+   
+   **Note**: Currently returns physical address unchanged (identity mapping).
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Device gave us physical address
+      uintptr_t data_phys = device_read(DATA_ADDR);
+      
+      // Convert to virtual for CPU access
+      void *data_virt = (void *)translate_phys_to_virt(data_phys);
+
+DMA Allocator (v0.3.0)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:function:: void dma_init(void)
+
+   Initialize the DMA allocator.
+   
+   **Preconditions**: PMM and paging must be initialized.
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      pmm_init(mem_start, mem_size);
+      paging_init(kernel_start, kernel_end);
+      dma_init();
+
+.. c:function:: dma_region_t *dma_alloc(size_t size, uint32_t flags)
+
+   Allocate physically contiguous DMA-capable memory.
+   
+   :param size: Size in bytes (rounded up to page size)
+   :param flags: Allocation flags (DMA_ZERO, DMA_ALIGN_4K, DMA_ALIGN_64K)
+   :return: DMA region structure, or NULL on failure
+   :rtype: dma_region_t*
+   
+   **Flags:**
+   
+   * ``DMA_ZERO`` (0x01): Zero the allocated memory
+   * ``DMA_ALIGN_4K`` (0x02): Align to 4KB boundary (default)
+   * ``DMA_ALIGN_64K`` (0x04): Align to 64KB boundary
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Allocate 8KB for VirtIO descriptors, zeroed
+      dma_region_t *descriptors = dma_alloc(8192, DMA_ZERO);
+      if (!descriptors) {
+          return -ENOMEM;
+      }
+      
+      // Get physical address for device
+      uintptr_t desc_phys = dma_phys_addr(descriptors);
+      
+      // Get virtual address for CPU
+      void *desc_virt = dma_virt_addr(descriptors);
+
+.. c:function:: void dma_free(dma_region_t *region)
+
+   Free a DMA region.
+   
+   :param region: DMA region to free
+   
+   **Note**: Safe to call with NULL (no-op).
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      dma_free(descriptors);
+
+.. c:function:: uintptr_t dma_phys_addr(dma_region_t *region)
+
+   Get physical address of DMA region.
+   
+   :param region: DMA region
+   :return: Physical address for device programming
+   :rtype: uintptr_t
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Program device DMA address register
+      uintptr_t phys = dma_phys_addr(region);
+      device_write_reg(DMA_ADDR_LOW, phys & 0xFFFFFFFF);
+      device_write_reg(DMA_ADDR_HIGH, phys >> 32);
+
+.. c:function:: void *dma_virt_addr(dma_region_t *region)
+
+   Get virtual address of DMA region.
+   
+   :param region: DMA region
+   :return: Virtual address for CPU access
+   :rtype: void*
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Prepare data in DMA buffer
+      uint32_t *buffer = (uint32_t *)dma_virt_addr(region);
+      buffer[0] = command_id;
+      buffer[1] = data_length;
+
+.. c:function:: size_t dma_size(dma_region_t *region)
+
+   Get size of DMA region.
+   
+   :param region: DMA region
+   :return: Size in bytes (page-aligned)
+   :rtype: size_t
+
+.. c:function:: void dma_get_stats(size_t *allocated_regions, size_t *allocated_bytes)
+
+   Get DMA allocation statistics.
+   
+   :param allocated_regions: Output - number of allocated regions
+   :param allocated_bytes: Output - total bytes allocated
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      size_t regions, bytes;
+      dma_get_stats(&regions, &bytes);
+      hal_uart_puts("DMA: ");
+      kprint_dec(regions);
+      hal_uart_puts(" regions, ");
+      kprint_dec(bytes);
+      hal_uart_puts(" bytes\n");
+
+Memory Barriers (v0.3.0)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:function:: void memory_barrier(void)
+
+   Full memory barrier - orders all memory operations.
+   
+   **Implementation**: ``fence rw, rw``
+   
+   **Use when**: General device I/O, critical sections.
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Setup descriptor
+      desc->addr = buffer_phys;
+      desc->len = size;
+      memory_barrier();  // Ensure writes complete
+      
+      // Notify device
+      virtio_notify_queue(0);
+
+.. c:function:: void write_barrier(void)
+
+   Write barrier - orders write operations only.
+   
+   **Implementation**: ``fence w, w``
+   
+   **Use when**: Writing multiple device registers in sequence.
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Write descriptor ring
+      for (int i = 0; i < N; i++) {
+          ring[i] = descriptors[i];
+      }
+      write_barrier();  // Ensure all writes complete
+      
+      // Enable ring
+      device_write(RING_ENABLE, 1);
+
+.. c:function:: void read_barrier(void)
+
+   Read barrier - orders read operations only.
+   
+   **Implementation**: ``fence r, r``
+   
+   **Use when**: Reading multiple device registers in sequence.
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Wait for completion
+      while (!(device_read(STATUS) & DONE))
+          ;
+      read_barrier();  // Ensure status read before data
+      
+      // Read result
+      data = device_read(RESULT);
+
+.. c:function:: void io_barrier(void)
+
+   I/O memory barrier for MMIO operations.
+   
+   **Implementation**: ``fence rw, rw``
+   
+   **Use when**: Memory-mapped I/O synchronization.
+
+.. c:function:: void data_memory_barrier(void)
+
+   Data memory barrier for DMA operations.
+   
+   **Implementation**: ``fence rw, rw``
+   
+   **Use when**: Before/after DMA operations.
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Fill DMA buffer
+      memcpy(dma_buffer, data, size);
+      data_memory_barrier();  // Ensure visible to device
+      
+      // Start DMA
+      start_dma_transfer(dma_phys, size);
+
+.. c:function:: void data_sync_barrier(void)
+
+   Data synchronization barrier - strongest ordering.
+   
+   **Implementation**: ``fence rw, rw``
+   
+   **Use when**: Before signaling device or after receiving notification.
+
+.. c:function:: void instruction_barrier(void)
+
+   Instruction fetch barrier.
+   
+   **Implementation**: ``fence.i``
+   
+   **Use when**: After modifying executable code (JIT, dynamic loading).
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Copy JIT compiled code
+      memcpy(code_buffer, jit_code, code_size);
+      instruction_barrier();  // Flush I-cache
+      
+      // Execute
+      ((void (*)(void))code_buffer)();
+
+.. c:function:: void compiler_barrier(void)
+
+   Compiler optimization barrier (no hardware fence).
+   
+   **Implementation**: ``asm volatile("" ::: "memory")``
+   
+   **Use when**: Preventing compiler reordering only.
+
+.. c:function:: uint32_t read32_barrier(volatile uint32_t *addr)
+
+   Read 32-bit register with barrier.
+   
+   :param addr: Pointer to memory-mapped register
+   :return: Register value
+   :rtype: uint32_t
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      uint32_t status = read32_barrier(&device->status);
+
+.. c:function:: void write32_barrier(volatile uint32_t *addr, uint32_t value)
+
+   Write 32-bit register with barrier.
+   
+   :param addr: Pointer to memory-mapped register
+   :param value: Value to write
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      write32_barrier(&device->command, CMD_START);
+
+.. c:function:: void rmw32_barrier(volatile uint32_t *addr, uint32_t mask, uint32_t value)
+
+   Read-modify-write register with barriers.
+   
+   :param addr: Pointer to memory-mapped register
+   :param mask: Bits to modify
+   :param value: New value for masked bits
+   
+   :Example:
+   
+   .. code-block:: c
+   
+      // Set bits 4-7 to 0b1010
+      rmw32_barrier(&device->control, 0xF0, 0xA0);
+   
    :param vaddr: Virtual address to flush (0 = flush all)
 
 .. c:function:: page_table_t *get_kernel_page_table(void)

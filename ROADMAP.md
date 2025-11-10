@@ -69,12 +69,48 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.3.0 - "Persistence"
+## Version 0.3.0 - "Memory Foundation"
+
+**Focus:** Advanced memory management for device I/O
+
+### Planned Features
+- [ ] DMA-capable physical memory allocator
+  - [ ] Allocate physically contiguous regions
+  - [ ] Track physical vs virtual addresses
+  - [ ] Support arbitrary-sized allocations (not just pages)
+- [ ] Virtual-to-physical address translation
+  - [ ] Page table walking for kernel space
+  - [ ] Reliable virt-to-phys and phys-to-virt conversion
+  - [ ] Error handling for invalid addresses
+- [ ] Memory barriers and cache control
+  - [ ] RISC-V fence instructions (fence, fence.i)
+  - [ ] Device I/O memory barriers
+  - [ ] Cache flush/invalidate operations (if needed)
+- [ ] Enhanced paging support
+  - [ ] Non-identity-mapped kernel regions
+  - [ ] Better separation of physical/virtual addressing
+  - [ ] DMA-safe memory regions
+
+**Release Criteria:**
+- DMA allocator works reliably
+- Virtual-to-physical translation accurate
+- Memory barriers implemented for device I/O
+- Foundation ready for device drivers (VirtIO)
+
+**Rationale:**
+Initial attempt at VirtIO block driver revealed fundamental gaps in memory infrastructure. Device drivers require DMA-capable memory allocation, reliable address translation, and proper memory barriers. Building this foundation first will make device driver implementation much simpler and more robust.
+
+---
+
+## Version 0.4.0 - "Persistence"
 
 **Focus:** Filesystem and storage
 
 ### Planned Features
-- [ ] VirtIO block device driver
+- [ ] VirtIO block device driver (deferred from v0.3)
+  - [ ] Legacy VirtIO (v1) support with PFN-based queue addressing
+  - [ ] Modern VirtIO (v2) support with 64-bit queue addressing
+  - [ ] Use DMA allocator from v0.3 for descriptor rings and buffers
 - [ ] Simple filesystem (FAT32 or custom)
 - [ ] File operations (open, read, write, close, seek)
 - [ ] Directory support (create, remove, list)
@@ -82,6 +118,7 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 - [ ] Basic file utilities (ls, cat, cp, rm)
 
 **Release Criteria:**
+- VirtIO block driver works reliably
 - Can read/write files reliably
 - Programs can be loaded from disk
 - Filesystem survives reboots
@@ -89,7 +126,7 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.4.0 - "Communication"
+## Version 0.5.0 - "Communication"
 
 **Focus:** Inter-process communication and networking
 
@@ -110,7 +147,28 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.5.0 - "Visual"
+## Version 0.5.0 - "Communication"
+
+**Focus:** Inter-process communication and networking
+
+### Planned Features
+- [ ] Pipes for IPC
+- [ ] Shared memory support
+- [ ] Signals (SIGKILL, SIGTERM, SIGUSR1, etc.)
+- [ ] VirtIO network driver
+- [ ] Basic TCP/IP stack (port lwIP or custom)
+- [ ] Socket API (socket, bind, listen, connect, send, recv)
+- [ ] Simple network utilities (ping, wget)
+
+**Release Criteria:**
+- Processes can communicate via pipes
+- Basic networking works (ping, simple HTTP)
+- Can download files from network
+- Signals handled correctly
+
+---
+
+## Version 0.6.0 - "Visual"
 
 **Focus:** Graphics and user interface
 
@@ -131,7 +189,28 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.6.0 - "POSIX Lite"
+## Version 0.6.0 - "Visual"
+
+**Focus:** Graphics and user interface
+
+### Planned Features
+- [ ] Framebuffer console driver
+- [ ] VirtIO GPU driver
+- [ ] Bitmap font rendering (8x16 characters)
+- [ ] Basic graphics primitives (lines, rectangles, text)
+- [ ] Interactive shell with command history
+- [ ] Virtual terminals (Alt+F1, Alt+F2, etc.)
+- [ ] Console multiplexing
+
+**Release Criteria:**
+- Graphical console works
+- Interactive shell operational
+- Can switch between multiple terminals
+- Works on real hardware with HDMI output
+
+---
+
+## Version 0.7.0 - "POSIX Lite"
 
 **Focus:** POSIX compatibility basics
 
@@ -153,7 +232,29 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.7.0 - "Tools"
+## Version 0.7.0 - "POSIX Lite"
+
+**Focus:** POSIX compatibility basics
+
+### Planned Features
+- [ ] Fork and exec implementation
+- [ ] Wait/waitpid for process management
+- [ ] Process groups and sessions
+- [ ] Job control (background/foreground processes)
+- [ ] Environment variables
+- [ ] Expanded syscall set (50+ syscalls)
+- [ ] Basic POSIX signals implementation
+- [ ] Simple shell scripting support
+
+**Release Criteria:**
+- Can run simple POSIX programs
+- Basic shell scripts execute
+- Process tree management works
+- Job control functional
+
+---
+
+## Version 0.8.0 - "Tools"
 
 **Focus:** Development environment
 
@@ -173,7 +274,27 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.8.0 - "Performance"
+## Version 0.8.0 - "Tools"
+
+**Focus:** Development environment
+
+### Planned Features
+- [ ] Full ELF loader implementation
+- [ ] Dynamic linking support
+- [ ] Simple text editor (nano-like)
+- [ ] Embedded compiler/interpreter (TinyCC or Lua)
+- [ ] GDB stub for debugging
+- [ ] Developer utilities (make, grep, sed)
+
+**Release Criteria:**
+- Can compile and run programs on ThunderOS
+- Self-hosting capability (compile kernel on itself)
+- Developer tools available and working
+- Debugging support functional
+
+---
+
+## Version 0.9.0 - "Performance"
 
 **Focus:** Optimization and stability
 
@@ -194,7 +315,46 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.9.0 - "Hardware Ready"
+## Version 0.9.0 - "Performance"
+
+**Focus:** Optimization and stability
+
+### Planned Features
+- [ ] Advanced scheduling (CFS-like algorithm)
+- [ ] Slab allocator for kernel memory
+- [ ] Buffer cache for disk I/O
+- [ ] Profiling and performance tools
+- [ ] Multi-core support (SMP)
+- [ ] Load balancing across CPUs
+- [ ] Performance benchmarks
+
+**Release Criteria:**
+- Significant performance improvements over v0.8
+- Stable under stress tests
+- Can utilize multiple CPU cores
+- Benchmarks show competitive performance
+
+---
+
+## Version 0.10.0 - "Hardware Ready"
+
+**Focus:** Real hardware support
+
+### Planned Features
+- [ ] Device tree parsing and configuration
+- [ ] Support for multiple RISC-V boards (HiFive, BeagleV, etc.)
+- [ ] USB support (if applicable to hardware)
+- [ ] Power management (suspend, resume, shutdown)
+- [ ] Hardware detection and auto-configuration
+- [ ] Board-specific drivers (GPIO, I2C, SPI)
+
+**Release Criteria:**
+- Boots on at least 2 different RISC-V boards
+- Hardware drivers are modular and maintainable
+- Works reliably on physical hardware
+- Power management functional
+
+## Version 0.10.0 - "Hardware Ready"
 
 **Focus:** Real hardware support
 
@@ -287,13 +447,13 @@ See `CONTRIBUTING.md` for details on how to contribute to ThunderOS development.
 
 Interested in contributing? Here's where we need help:
 
-### For v0.2 (Current)
-- [x] System call implementation and testing
-- [x] User-mode support and privilege separation
-- [x] Memory isolation improvements
-- [x] Exception handling for user programs
+### For v0.3 (Current)
+- DMA allocator implementation
+- Address translation (virt-to-phys)
+- Memory barriers for device I/O
+- Enhanced paging support
 
-### For v0.3+ (Future)
+### For v0.4+ (Future)
 - Driver development (storage, network, graphics)
 - User-space utilities and programs
 - Documentation and tutorials

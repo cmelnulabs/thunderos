@@ -213,4 +213,29 @@ static inline uintptr_t kernel_phys_to_virt(uintptr_t paddr) {
     return paddr + KERNEL_VIRT_BASE;
 }
 
+/**
+ * Translate virtual to physical using current page table
+ * 
+ * Convenience wrapper that uses the kernel page table.
+ * For user page tables, use virt_to_phys() directly.
+ * 
+ * @param vaddr Virtual address
+ * @return Physical address, or 0 if not mapped
+ */
+uintptr_t translate_virt_to_phys(uintptr_t vaddr);
+
+/**
+ * Translate physical to virtual (identity mapping assumption)
+ * 
+ * In our current kernel design, all physical RAM is identity-mapped,
+ * so physical address = virtual address for kernel space.
+ * 
+ * @param paddr Physical address
+ * @return Virtual address
+ */
+static inline uintptr_t translate_phys_to_virt(uintptr_t paddr) {
+    // Currently using identity mapping for kernel
+    return paddr;
+}
+
 #endif // PAGING_H
