@@ -225,6 +225,12 @@ void ext2_unmount(ext2_fs_t *fs);
 int ext2_read_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode);
 
 /**
+ * Write an inode back to disk
+ * Returns 0 on success, -1 on error
+ */
+int ext2_write_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode);
+
+/**
  * Read data from a file
  * Returns number of bytes read, or -1 on error
  */
