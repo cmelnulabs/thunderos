@@ -4,13 +4,14 @@ A RISC-V operating system focused on AI acceleration and educational use.
 
 ## Current Status
 
-**Version 0.2.0 - "User Space"** 🎯 In Development
+**Version 0.3.0 - "Memory Foundation"** 🎯 In Development
 
-- ✅ Kernel infrastructure complete
-- ✅ User mode (U-mode) working
-- ✅ System calls implemented (13 syscalls)
-- ✅ Syscall testing framework ready
-- ✅ User-space hello world program
+- ✅ **v0.2.0 Released** - User-space programs and system calls
+- ✅ DMA-capable physical memory allocator
+- ✅ Virtual-to-physical address translation
+- ✅ Memory barriers for device I/O (RISC-V fence instructions)
+- ✅ Enhanced paging with non-identity mapping support
+- 🚧 **Next**: VirtIO block device driver (v0.4.0)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.
 
@@ -64,11 +65,12 @@ kernel/              - Kernel core
     drivers/         - RISC-V HAL implementations (UART, timer, etc.)
     interrupt/       - Trap/interrupt handling
   core/              - Portable kernel core (process, scheduler, panic)
-  mm/                - Memory management (PMM, kmalloc, paging)
+  mm/                - Memory management (PMM, kmalloc, paging, DMA)
 include/             - Header files
   hal/               - Hardware Abstraction Layer interfaces
   kernel/            - Kernel subsystem headers
-  arch/              - Architecture-specific headers
+  arch/              - Architecture-specific headers (barriers, etc.)
+  mm/                - Memory management headers (DMA, paging)
 docs/                - Sphinx documentation
 tests/               - Test framework and test cases
 build/               - Build output
@@ -86,19 +88,24 @@ See [docs/source/development/code_quality.rst](docs/source/development/code_qual
 The project includes an automated test suite:
 
 ```bash
-./test_syscalls.sh
+# Run memory management tests
+make test
+
+# Run syscall tests
+./tests/test_syscalls.sh
+
+# Run quick validation
+./tests/test_user_quick.sh
 ```
 
-This script:
-- Compiles the kernel
-- Runs QEMU with 5-second timeout
-- Captures output to `/tmp/thunderos_test_output.txt`
-- Validates key system components:
-  - ✓ Kernel initialization
-  - ✓ Process creation
-  - ✓ Scheduler functionality
-  - ✓ User process creation
-  - ✓ Syscall output (sys_write)
+Test suite validates:
+- ✓ DMA allocator (contiguous allocation, zeroing)
+- ✓ Address translation (virt↔phys)
+- ✓ Memory barriers (fence instructions)
+- ✓ Kernel initialization
+- ✓ Process creation and scheduling
+- ✓ User-space syscalls
+- ✓ Memory protection
 
 ### User-Space Programs
 
