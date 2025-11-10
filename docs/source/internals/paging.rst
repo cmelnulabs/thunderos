@@ -583,6 +583,147 @@ The ``sfence.vma`` instruction flushes the TLB:
 
 Always flush after modifying page tables!
 
+Address Translation Helpers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ThunderOS v0.3.0 added convenience functions for address translation to support DMA operations and device drivers.
+
+translate_virt_to_phys()
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Convenience wrapper for virtual-to-physical translation using the kernel page table:
+
+.. code-block:: c
+
+    uintptr_t translate_virt_to_phys(uintptr_t vaddr) {
+        uintptr_t paddr;
+        
+        // Try using page table translation
+        if (virt_to_phys(&kernel_page_table, vaddr, &paddr) == 0) {
+            return paddr;
+        }
+        
+        // Fallback: assume identity mapping
+        return vaddr;
+    }
+
+**Use case:** Device drivers need physical addresses for DMA but don't have direct page table access:
+
+.. code-block:: c
+
+    // Get physical address for DMA buffer
+    uint8_t *buffer = kmalloc(4096);
+    uintptr_t buffer_phys = translate_virt_to_phys((uintptr_t)buffer);
+    
+    // Program device DMA register
+    device_reg_write(DMA_ADDR_LOW, buffer_phys & 0xFFFFFFFF);
+    device_reg_write(DMA_ADDR_HIGH, buffer_phys >> 32);
+
+**Behavior:**
+
+* First attempts page table walk via ``virt_to_phys()``
+* Returns physical address if mapping found
+* Falls back to identity mapping assumption (current kernel design)
+* Always succeeds for valid kernel addresses
+
+translate_phys_to_virt()
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Inline function for physical-to-virtual translation:
+
+.. code-block:: c
+
+    static inline uintptr_t translate_phys_to_virt(uintptr_t paddr) {
+        // Currently using identity mapping for kernel
+        return paddr;
+    }
+
+**Use case:** Converting physical addresses (from hardware) to virtual addresses for CPU access:
+
+.. code-block:: c
+
+    // Device gave us a physical address
+    uintptr_t data_phys = device_reg_read(DATA_ADDR);
+    
+    // Convert to virtual for CPU access
+    void *data_virt = (void *)translate_phys_to_virt(data_phys);
+    
+    // Now CPU can access the data
+    process_data(data_virt, data_size);
+
+**Current Implementation:**
+
+* Simple identity mapping: physical = virtual
+* Inline function (zero overhead)
+* Will be updated when kernel moves to higher-half mapping
+
+**Future (v0.4.0+):** When kernel uses higher-half mapping (virtual base 0xFFFFFFFF80000000):
+
+.. code-block:: c
+
+    static inline uintptr_t translate_phys_to_virt(uintptr_t paddr) {
+        if (paddr < PHYS_MEMORY_SIZE) {
+            return paddr + KERNEL_VIRT_BASE;
+        }
+        return paddr;  // MMIO regions stay identity-mapped
+    }
+
+kernel_virt_to_phys() / kernel_phys_to_virt()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Inline helpers for kernel address conversion:
+
+.. code-block:: c
+
+    static inline uintptr_t kernel_virt_to_phys(uintptr_t vaddr) {
+        if (vaddr >= KERNEL_VIRT_BASE) {
+            return vaddr - KERNEL_VIRT_BASE;
+        }
+        // Identity mapped (early boot)
+        return vaddr;
+    }
+    
+    static inline uintptr_t kernel_phys_to_virt(uintptr_t paddr) {
+        return paddr + KERNEL_VIRT_BASE;
+    }
+
+**Use case:** Explicit kernel address conversion (when higher-half is active):
+
+.. code-block:: c
+
+    // Convert kernel virtual to physical
+    void *kernel_data = &some_kernel_global;
+    uintptr_t phys = kernel_virt_to_phys((uintptr_t)kernel_data);
+    
+    // Convert physical to kernel virtual
+    uintptr_t page_phys = pmm_alloc_page();
+    void *page_virt = (void *)kernel_phys_to_virt(page_phys);
+
+**Current Status:**
+
+* Prepared for higher-half kernel
+* Currently just returns identity mapping
+* No overhead when not using higher-half
+
+Integration with DMA Allocator
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The DMA allocator (v0.3.0) uses these translation functions to track both virtual and physical addresses:
+
+.. code-block:: c
+
+    // DMA allocator allocates physical pages
+    uintptr_t phys_addr = pmm_alloc_pages(num_pages);
+    
+    // Convert to virtual for CPU access (current: identity mapping)
+    void *virt_addr = (void *)translate_phys_to_virt(phys_addr);
+    
+    // DMA region tracks both addresses
+    region->phys_addr = phys_addr;  // For device
+    region->virt_addr = virt_addr;  // For CPU
+
+This abstraction allows DMA code to work unchanged when the kernel moves to higher-half mapping.
+
 Testing
 -------
 

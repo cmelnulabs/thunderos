@@ -16,6 +16,8 @@ This section documents the internal implementation details of ThunderOS.
    pmm
    kmalloc
    paging
+   dma
+   barrier
    kstring
    process_management
    user_mode
@@ -67,12 +69,18 @@ Component Status
    * - :doc:`kmalloc`
      - ✓ Done
      - Kernel heap allocator with multi-page support
-   * - :doc:`kstring`
-     - ✓ Done
-     - Kernel string utilities (kprint_dec, kprint_hex, kmemcpy, etc.)
    * - :doc:`paging`
      - ✓ Done
      - Virtual memory with Sv39 paging (identity mapping)
+   * - :doc:`dma`
+     - ✓ Done (v0.3.0)
+     - DMA allocator for physically contiguous memory
+   * - :doc:`barrier`
+     - ✓ Done (v0.3.0)
+     - Memory barriers for device I/O and synchronization
+   * - :doc:`kstring`
+     - ✓ Done
+     - Kernel string utilities (kprint_dec, kprint_hex, kmemcpy, etc.)
    * - :doc:`process_management`
      - ✓ Done
      - Process control blocks, scheduler, context switching
