@@ -5,6 +5,205 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-11-10 - "Memory Foundation"
+
+### Overview
+Third release of ThunderOS. Adds advanced memory management infrastructure required for device drivers, including DMA allocation, address translation, and memory barriers. This release builds the foundation for VirtIO device drivers in v0.4.0.
+
+### Added
+
+#### DMA Memory Allocator (`kernel/mm/dma.c`, `include/mm/dma.h`)
+- **Physically Contiguous Allocation**: Allocate multi-page regions with guaranteed physical contiguity
+  - `dma_alloc()` - Allocate DMA-capable memory regions
+  - `dma_free()` - Free DMA regions
+  - Supports arbitrary sizes (not just page-aligned)
+- **Address Tracking**: Track both physical and virtual addresses for each region
+  - `dma_region_t` structure with physical/virtual base addresses and size
+  - Linked list tracking of all allocated regions
+- **Memory Zeroing**: Optional `DMA_ZERO` flag for zeroed allocation
+- **Statistics**: Track total/free/used DMA memory via `dma_get_stats()`
+- **Region Validation**: Magic number validation for corruption detection
+
+#### Memory Barriers (`include/arch/barrier.h`)
+- **RISC-V Fence Instructions**: Complete memory barrier implementation
+  - `memory_barrier()` - Full memory barrier (fence rw, rw)
+  - `write_barrier()` - Write memory barrier (fence w, w)
+  - `read_barrier()` - Read memory barrier (fence r, r)
+  - `io_barrier()` - I/O memory barrier for device access
+  - `data_memory_barrier()` - Data memory barrier (DMB equivalent)
+  - `data_sync_barrier()` - Data synchronization barrier (DSB equivalent)
+  - `instruction_sync_barrier()` - Instruction synchronization (fence.i)
+  - `compiler_barrier()` - Compiler optimization barrier
+- **Documentation**: Inline documentation for each barrier type and use case
+
+#### Enhanced Address Translation (`kernel/mm/paging.c`, `include/mm/paging.h`)
+- **Virtual to Physical Translation**:
+  - `translate_virt_to_phys()` - Walk page tables to get physical address
+  - Error handling for invalid/unmapped addresses
+  - Support for kernel virtual addresses
+- **Physical to Virtual Translation**:
+  - `translate_phys_to_virt()` - Reverse translation (identity map assumption)
+  - `is_kernel_virt_addr()` - Check if address is in kernel virtual range
+  - `phys_to_kernel_virt()` - Convert physical to kernel virtual
+  - `kernel_virt_to_phys()` - Convert kernel virtual to physical
+- **Page Table Walking**: Manual page table traversal for address resolution
+- **TLB Management**: Helper functions for TLB flushing
+
+#### Testing Framework (`tests/test_memory_mgmt.c`)
+- **Comprehensive Test Suite**: 10 tests for new memory features
+  - DMA allocator tests (allocation, deallocation, zeroing, statistics)
+  - Address translation tests (virt↔phys, kernel helpers)
+  - Memory barrier validation
+  - All tests pass in QEMU
+
+#### Documentation
+- **Sphinx Documentation**:
+  - `docs/source/internals/dma.rst` - DMA allocator internals
+  - `docs/source/internals/barrier.rst` - Memory barrier guide
+  - `docs/source/internals/paging.rst` - Enhanced paging documentation
+  - API reference for all new functions
+  - Usage examples and best practices
+
+### Changed
+
+#### Build System
+- **Makefile**: Updated for `riscv64-unknown-elf-` toolchain
+  - Changed from `riscv64-linux-gnu-` to bare-metal toolchain
+  - Added test suite integration
+  - Memory management tests now run automatically
+- **Dockerfile**: Updated for CI/CD compatibility
+  - Installs `riscv64-unknown-elf-gcc` from official releases
+  - Includes QEMU for testing
+  - Matches GitHub Actions environment
+
+#### Kernel Initialization
+- **main.c**: Added DMA allocator initialization
+  - `dma_init()` called during boot sequence
+  - Memory management tests invoked after init
+
+#### Documentation
+- **README.md**: Updated for v0.3.0
+  - Current status reflects memory foundation features
+  - Test suite description updated
+  - Project structure updated with new components
+
+### Technical Specifications
+
+#### DMA Allocator
+- **Region Size**: Arbitrary (rounded up to page boundaries internally)
+- **Alignment**: Page-aligned (4KB)
+- **Tracking**: Linked list of `dma_region_t` structures
+- **Magic Number**: 0xDEADBEEF for corruption detection
+- **Statistics**: Total/free/used memory tracking
+
+#### Memory Barriers
+- **Architecture**: RISC-V fence instructions
+- **Ordering**: Enforces memory operation ordering for device I/O
+- **Granularity**: Per-operation barriers (read, write, full, I/O)
+
+#### Address Translation
+- **Page Table Format**: RISC-V Sv39 (39-bit virtual addressing)
+- **Translation Levels**: 3-level page table walk
+- **Error Handling**: Returns 0 for invalid/unmapped addresses
+- **Identity Mapping**: Kernel uses identity map (virt == phys for most kernel memory)
+
+### Platform Support
+- **QEMU**: virt machine (tested and working with 128MB, 256MB, 512MB RAM)
+- **Toolchain**: riscv64-unknown-elf-gcc (bare-metal)
+
+### Dependencies
+- **Toolchain**: riscv64-unknown-elf-gcc (GCC for RISC-V bare-metal)
+- **Emulator**: QEMU 5.0+ with RISC-V support
+- **Firmware**: OpenSBI (provided by QEMU)
+- **Documentation**: Sphinx 4.0+ (optional)
+
+### Known Limitations
+
+#### DMA Allocator
+- **No Fragmentation Handling**: Allocations may fail if memory is fragmented
+- **Linear Search**: Region tracking uses linked list (O(n) lookups)
+- **No IOMMU Support**: Direct physical memory access (no DMA remapping)
+
+#### Address Translation
+- **Identity Map Assumption**: `translate_phys_to_virt()` assumes identity mapping
+- **Kernel Space Only**: Translation primarily designed for kernel addresses
+- **No TLB Optimization**: Every translation walks page tables (not cached)
+
+### Performance Characteristics
+- **DMA Allocation**: O(n) where n = number of pages (bitmap scan)
+- **Address Translation**: O(1) for 3-level page table walk
+- **Memory Barriers**: 1-2 cycles per fence instruction
+
+### Security Considerations
+- **DMA Safety**: DMA regions are physically contiguous (required for device DMA)
+- **No IOMMU**: Devices can access all physical memory
+- **Memory Barriers**: Prevent speculative execution vulnerabilities around device I/O
+
+### Breaking Changes
+None (backward compatible with v0.2.0)
+
+### Deprecated
+None
+
+### Removed
+None
+
+### Fixed
+- **CI Build**: Fixed GitHub Actions build failure with correct toolchain
+- **Compiler Warnings**: Resolved warnings in paging and DMA code
+
+---
+
+## [0.2.0] - 2025-11-09 - "User Space"
+
+### Overview
+Second release of ThunderOS. Adds user-mode process support with privilege separation, system call interface, and memory isolation between processes.
+
+### Added
+
+#### User Mode Support
+- **U-mode Processes**: Processes can run in unprivileged user mode
+  - Privilege level switching (S-mode ↔ U-mode)
+  - User-mode exception handling
+  - User stack allocation and management
+
+#### System Call Interface
+- **13 System Calls Implemented**:
+  - `SYS_WRITE` - Write to console
+  - `SYS_EXIT` - Terminate process
+  - `SYS_GETPID` - Get process ID
+  - `SYS_YIELD` - Yield CPU voluntarily
+  - `SYS_GETTIME` - Get system time
+  - And 8 more syscalls
+- **Trap Handler**: User-mode trap handling with syscall dispatch
+- **Parameter Passing**: Arguments passed via registers (a0-a5)
+
+#### Memory Isolation
+- **Separate Page Tables**: Each process has its own page table
+- **Memory Protection**: Page faults for invalid memory access
+- **Kernel/User Separation**: User processes cannot access kernel memory directly
+
+#### User Programs
+- **user_hello.c**: Demonstrates syscalls (write, getpid, gettime, yield, exit)
+- **Exception Test**: Validates user exception handling
+- **Test Suite**: Automated tests for user-mode functionality
+
+#### Testing
+- **test_syscalls.sh**: Comprehensive syscall testing script
+- **test_user_quick.sh**: Quick validation of user-mode features
+- **6/6 Tests Passing**: All automated tests pass
+
+### Changed
+- **Process Management**: Enhanced to support user/kernel mode switching
+- **Page Tables**: Each process now has separate page table
+- **Trap Handler**: Extended to handle user-mode exceptions and syscalls
+
+### Fixed
+- User process exceptions now handled gracefully without kernel panic
+- Memory protection enforced between processes
+
+---
+
 ## [0.1.0] - 2025-11-01 - "First Boot"
 
 ### Overview

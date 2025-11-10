@@ -69,33 +69,45 @@ This document outlines the planned development milestones for ThunderOS, a RISC-
 
 ---
 
-## Version 0.3.0 - "Memory Foundation"
+## Version 0.3.0 - "Memory Foundation" ✅ RELEASED
+
+**Status:** Released on November 10, 2025
 
 **Focus:** Advanced memory management for device I/O
 
-### Planned Features
-- [ ] DMA-capable physical memory allocator
-  - [ ] Allocate physically contiguous regions
-  - [ ] Track physical vs virtual addresses
-  - [ ] Support arbitrary-sized allocations (not just pages)
-- [ ] Virtual-to-physical address translation
-  - [ ] Page table walking for kernel space
-  - [ ] Reliable virt-to-phys and phys-to-virt conversion
-  - [ ] Error handling for invalid addresses
-- [ ] Memory barriers and cache control
-  - [ ] RISC-V fence instructions (fence, fence.i)
-  - [ ] Device I/O memory barriers
-  - [ ] Cache flush/invalidate operations (if needed)
-- [ ] Enhanced paging support
-  - [ ] Non-identity-mapped kernel regions
-  - [ ] Better separation of physical/virtual addressing
-  - [ ] DMA-safe memory regions
+### Completed Features
+- ✅ DMA-capable physical memory allocator
+  - ✅ Allocate physically contiguous regions
+  - ✅ Track physical vs virtual addresses
+  - ✅ Support arbitrary-sized allocations (not just pages)
+  - ✅ Zeroed memory allocation
+  - ✅ Region tracking and statistics
+- ✅ Virtual-to-physical address translation
+  - ✅ Page table walking for kernel space
+  - ✅ Reliable virt-to-phys and phys-to-virt conversion
+  - ✅ Error handling for invalid addresses
+  - ✅ Kernel virtual address helpers
+- ✅ Memory barriers and cache control
+  - ✅ RISC-V fence instructions (fence, fence.i)
+  - ✅ Device I/O memory barriers
+  - ✅ Read/write/data barriers
+  - ✅ Compiler barriers
+- ✅ Enhanced paging support
+  - ✅ Better separation of physical/virtual addressing
+  - ✅ DMA-safe memory regions
+  - ✅ TLB flush helpers
+
+### Testing Completed
+- ✅ DMA allocator tested (allocation, deallocation, zeroing)
+- ✅ Address translation verified (virt↔phys)
+- ✅ Memory barriers validated
+- ✅ All tests pass in QEMU
 
 **Release Criteria:**
-- DMA allocator works reliably
-- Virtual-to-physical translation accurate
-- Memory barriers implemented for device I/O
-- Foundation ready for device drivers (VirtIO)
+- ✅ DMA allocator works reliably
+- ✅ Virtual-to-physical translation accurate
+- ✅ Memory barriers implemented for device I/O
+- ✅ Foundation ready for device drivers (VirtIO)
 
 **Rationale:**
 Initial attempt at VirtIO block driver revealed fundamental gaps in memory infrastructure. Device drivers require DMA-capable memory allocation, reliable address translation, and proper memory barriers. Building this foundation first will make device driver implementation much simpler and more robust.
