@@ -123,56 +123,58 @@ static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
  * Create file in ext2 directory via VFS
  */
 static int ext2_vfs_create(vfs_node_t *dir, const char *name, uint32_t mode) {
-    if (!dir || !dir->fs || !dir->fs->fs_data || !dir->fs_data) {
+    if (!dir || !dir->fs || !dir->fs->fs_data) {
         return -1;
     }
     
     ext2_fs_t *ext2_fs = (ext2_fs_t *)dir->fs->fs_data;
-    ext2_inode_t *dir_inode = (ext2_inode_t *)dir->fs_data;
+    uint32_t dir_inode_num = dir->inode;
     
-    return ext2_create_file(ext2_fs, dir_inode, name, mode);
+    uint32_t new_inode = ext2_create_file(ext2_fs, dir_inode_num, name, mode);
+    return (new_inode == 0) ? -1 : 0;
 }
 
 /**
  * Create directory in ext2 via VFS
  */
 static int ext2_vfs_mkdir(vfs_node_t *dir, const char *name, uint32_t mode) {
-    if (!dir || !dir->fs || !dir->fs->fs_data || !dir->fs_data) {
+    if (!dir || !dir->fs || !dir->fs->fs_data) {
         return -1;
     }
     
     ext2_fs_t *ext2_fs = (ext2_fs_t *)dir->fs->fs_data;
-    ext2_inode_t *dir_inode = (ext2_inode_t *)dir->fs_data;
+    uint32_t dir_inode_num = dir->inode;
     
-    return ext2_create_dir(ext2_fs, dir_inode, name, mode);
+    uint32_t new_inode = ext2_create_dir(ext2_fs, dir_inode_num, name, mode);
+    return (new_inode == 0) ? -1 : 0;
 }
 
 /**
  * Remove file from ext2 directory via VFS
  */
 static int ext2_vfs_unlink(vfs_node_t *dir, const char *name) {
-    if (!dir || !dir->fs || !dir->fs->fs_data || !dir->fs_data) {
+    if (!dir || !dir->fs || !dir->fs->fs_data) {
         return -1;
     }
     
     ext2_fs_t *ext2_fs = (ext2_fs_t *)dir->fs->fs_data;
-    ext2_inode_t *dir_inode = (ext2_inode_t *)dir->fs_data;
+    uint32_t dir_inode_num = dir->inode;
     
-    return ext2_remove_file(ext2_fs, dir_inode, name);
+    return ext2_remove_file(ext2_fs, dir_inode_num, name);
 }
 
 /**
  * Remove directory from ext2 via VFS
  */
 static int ext2_vfs_rmdir(vfs_node_t *dir, const char *name) {
-    if (!dir || !dir->fs || !dir->fs->fs_data || !dir->fs_data) {
+    if (!dir || !dir->fs || !dir->fs->fs_data) {
         return -1;
     }
     
     ext2_fs_t *ext2_fs = (ext2_fs_t *)dir->fs->fs_data;
-    ext2_inode_t *dir_inode = (ext2_inode_t *)dir->fs_data;
+    uint32_t dir_inode_num = dir->inode;
     
-    return ext2_remove_dir(ext2_fs, dir_inode, name);
+    return ext2_remove_dir(ext2_fs, dir_inode_num, name);
 }
 
 /**

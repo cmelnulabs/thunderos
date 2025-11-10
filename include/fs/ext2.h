@@ -286,27 +286,27 @@ int ext2_write_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
 
 /**
  * Create a new file in a directory
- * Returns 0 on success, -1 on error
+ * Returns inode number on success, 0 on error
  */
-int ext2_create_file(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name, uint32_t mode);
+uint32_t ext2_create_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name, uint32_t mode);
 
 /**
  * Create a new directory
- * Returns 0 on success, -1 on error
+ * Returns inode number on success, 0 on error
  */
-int ext2_create_dir(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name, uint32_t mode);
+uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name, uint32_t mode);
 
 /**
  * Remove a file from a directory
  * Returns 0 on success, -1 on error
  */
-int ext2_remove_file(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name);
+int ext2_remove_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name);
 
 /**
  * Remove a directory
  * Returns 0 on success, -1 on error
  */
-int ext2_remove_dir(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name);
+int ext2_remove_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name);
 
 /* VFS integration */
 

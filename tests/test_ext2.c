@@ -499,6 +499,110 @@ void test_ext2_write_offset(void) {
 }
 
 /**
+ * Test 9: Create a new file
+ */
+void test_ext2_create_file(void) {
+    hal_uart_puts("\n[TEST] ext2 create new file\n");
+    
+    /* Create a new file in root directory */
+    uint32_t new_inode = ext2_create_file(&g_ext2_fs, EXT2_ROOT_INO, "newfile.txt", 
+                                          EXT2_S_IRUSR | EXT2_S_IWUSR);
+    TEST_ASSERT(new_inode != 0, "Created new file");
+    
+    if (new_inode != 0) {
+        /* Verify file exists */
+        ext2_inode_t root_inode;
+        int ret = ext2_read_inode(&g_ext2_fs, EXT2_ROOT_INO, &root_inode);
+        TEST_ASSERT(ret == 0, "Read root inode");
+        
+        if (ret == 0) {
+            uint32_t found = ext2_lookup(&g_ext2_fs, &root_inode, "newfile.txt");
+            TEST_ASSERT(found == new_inode, "New file found in directory");
+            
+            /* Read the new file's inode */
+            ext2_inode_t file_inode;
+            ret = ext2_read_inode(&g_ext2_fs, new_inode, &file_inode);
+            TEST_ASSERT(ret == 0, "Read new file inode");
+            TEST_ASSERT((file_inode.i_mode & EXT2_S_IFMT) == EXT2_S_IFREG, 
+                        "New file is regular file");
+            TEST_ASSERT(file_inode.i_size == 0, "New file has size 0");
+        }
+    }
+}
+
+/**
+ * Test 10: Create a new directory
+ */
+void test_ext2_create_directory(void) {
+    hal_uart_puts("\n[TEST] ext2 create new directory\n");
+    
+    /* Create a new directory in root */
+    uint32_t new_dir_inode = ext2_create_dir(&g_ext2_fs, EXT2_ROOT_INO, "testdir",
+                                             EXT2_S_IRUSR | EXT2_S_IWUSR | EXT2_S_IXUSR);
+    TEST_ASSERT(new_dir_inode != 0, "Created new directory");
+    
+    if (new_dir_inode != 0) {
+        /* Verify directory exists in root */
+        ext2_inode_t root_inode;
+        int ret = ext2_read_inode(&g_ext2_fs, EXT2_ROOT_INO, &root_inode);
+        TEST_ASSERT(ret == 0, "Read root inode");
+        
+        if (ret == 0) {
+            uint32_t found = ext2_lookup(&g_ext2_fs, &root_inode, "testdir");
+            TEST_ASSERT(found == new_dir_inode, "New directory found in root");
+            
+            /* Read the new directory's inode */
+            ext2_inode_t dir_inode;
+            ret = ext2_read_inode(&g_ext2_fs, new_dir_inode, &dir_inode);
+            TEST_ASSERT(ret == 0, "Read new directory inode");
+            TEST_ASSERT((dir_inode.i_mode & EXT2_S_IFMT) == EXT2_S_IFDIR,
+                        "New entry is a directory");
+            TEST_ASSERT(dir_inode.i_links_count == 2, "Directory has 2 links (. and parent)");
+        }
+    }
+}
+
+/**
+ * Test 11: Create file in subdirectory
+ */
+void test_ext2_create_in_subdir(void) {
+    hal_uart_puts("\n[TEST] ext2 create file in subdirectory\n");
+    
+    /* First, find the testdir we created */
+    ext2_inode_t root_inode;
+    int ret = ext2_read_inode(&g_ext2_fs, EXT2_ROOT_INO, &root_inode);
+    TEST_ASSERT(ret == 0, "Read root inode");
+    
+    if (ret != 0) {
+        return;
+    }
+    
+    uint32_t testdir_inode_num = ext2_lookup(&g_ext2_fs, &root_inode, "testdir");
+    TEST_ASSERT(testdir_inode_num != 0, "Found testdir");
+    
+    if (testdir_inode_num == 0) {
+        return;
+    }
+    
+    /* Create a file in testdir */
+    uint32_t subfile_inode = ext2_create_file(&g_ext2_fs, testdir_inode_num, "subfile.txt",
+                                              EXT2_S_IRUSR | EXT2_S_IWUSR);
+    TEST_ASSERT(subfile_inode != 0, "Created file in subdirectory");
+    
+    if (subfile_inode != 0) {
+        /* Verify file exists in subdirectory */
+        ext2_inode_t testdir_inode;
+        ret = ext2_read_inode(&g_ext2_fs, testdir_inode_num, &testdir_inode);
+        TEST_ASSERT(ret == 0, "Read testdir inode");
+        
+        if (ret == 0) {
+            uint32_t found = ext2_lookup(&g_ext2_fs, &testdir_inode, "subfile.txt");
+            TEST_ASSERT(found == subfile_inode, "Subfile found in testdir");
+        }
+    }
+}
+
+/**
  * Run all ext2 tests
  */
 void test_ext2_all(void) {
@@ -519,6 +623,9 @@ void test_ext2_all(void) {
     test_ext2_append_file();
     test_ext2_write_large_file();
     test_ext2_write_offset();
+    test_ext2_create_file();
+    test_ext2_create_directory();
+    test_ext2_create_in_subdir();
     
     /* Unmount filesystem */
     ext2_unmount(&g_ext2_fs);
