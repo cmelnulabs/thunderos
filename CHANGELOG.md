@@ -5,6 +5,321 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-11-11 - "Persistence"
+
+### Overview
+Fourth release of ThunderOS. Adds persistent storage capabilities with VirtIO block device driver, ext2 filesystem, Virtual Filesystem abstraction layer, and ELF program loader. This milestone enables ThunderOS to store and execute programs from disk, providing true persistence across reboots.
+
+### Added
+
+#### VirtIO Block Device Driver (`kernel/drivers/virtio_blk.c`)
+- **Modern MMIO Interface**: Implements VirtIO 1.0+ specification
+  - 64-bit queue addressing (QUEUE_DESC_LOW/HIGH, QUEUE_AVAIL_LOW/HIGH, QUEUE_USED_LOW/HIGH)
+  - Modern device feature negotiation
+  - Non-legacy addressing mode (``-global virtio-mmio.force-legacy=false``)
+- **Descriptor Ring Management**:
+  - 256-entry virtqueue with descriptor table, available ring, and used ring
+  - Descriptor chaining for complex I/O operations (request header → data buffer → status)
+  - Free descriptor tracking and allocation
+- **Block I/O Operations**:
+  - ``virtio_blk_read()``: Read sectors from device (512-byte units)
+  - ``virtio_blk_write()``: Write sectors to device
+  - Synchronous I/O with polling (100-600 iterations typical)
+- **DMA Integration**:
+  - Uses DMA allocator for physically contiguous ring buffers
+  - Physical address translation for all device-accessible memory
+  - Memory barriers (``memory_barrier()``) for correct descriptor ordering
+- **Device Initialization**:
+  - Full VirtIO device initialization protocol (ACKNOWLEDGE → DRIVER → FEATURES_OK → DRIVER_OK)
+  - Device capacity detection (sectors × 512 bytes)
+  - MMIO base address: ``0x10008000``
+- **QEMU Integration**:
+  - Tested with ``-drive file=disk.img,if=none,format=raw,id=hd0 -device virtio-blk-device,drive=hd0``
+  - Compatible with raw disk images created by ``mkfs.ext2``
+
+#### ext2 Filesystem (`kernel/fs/ext2.c`, `kernel/fs/ext2_vfs.c`)
+- **On-Disk Structure Support**:
+  - Superblock parsing (magic number validation, block size calculation)
+  - Block group descriptor table reading
+  - Inode table access with 128 or 256-byte inodes
+  - Block and inode bitmap management
+- **File Operations**:
+  - ``ext2_read_file()``: Read file data with offset and size
+  - ``ext2_write_file()``: Write file data (allocates blocks as needed)
+  - ``ext2_read_inode()``: Read inode metadata by number
+  - ``ext2_write_inode()``: Update inode on disk
+- **Directory Operations**:
+  - ``ext2_readdir()``: Iterate through directory entries
+  - ``ext2_lookup_entry()``: Find file by name in directory
+  - ``ext2_path_to_inode()``: Resolve full path to inode number
+  - Support for ``.`` and ``..`` entries
+- **Block Addressing**:
+  - Direct blocks (``i_block[0..11]``): 12 × 4KB = 48 KB
+  - Single indirect blocks (``i_block[12]``): 1024 × 4KB = 4 MB
+  - Files up to ~4 MB supported (double/triple indirect not yet implemented)
+- **Block Allocation**:
+  - ``ext2_alloc_block()``: Allocate free block from bitmap
+  - ``ext2_free_block()``: Mark block as free
+  - Bitmap-based allocation with superblock free count updates
+- **Mounting**:
+  - ``ext2_mount()``: Validate and mount ext2 filesystem from block device
+  - Superblock located at offset 1024 bytes (sector 2)
+  - Validates magic number (``0xEF53``), calculates block size from ``s_log_block_size``
+  - Caches critical metadata (inode table location, block group descriptors)
+- **Compatibility**:
+  - Compatible with standard ext2 created by ``mkfs.ext2 -b 4096``
+  - Supports 1KB, 2KB, and 4KB block sizes
+  - Works with revision 0 and 1 ext2 filesystems
+
+#### Virtual Filesystem (VFS) Layer (`kernel/fs/vfs.c`)
+- **Mount Point Management**:
+  - ``vfs_mount()``: Associate filesystem with path (e.g., ``/`` → ext2)
+  - Linked list of VFS nodes for multiple mount points
+  - Path resolution with longest-prefix matching
+- **File Descriptor Table**:
+  - Global file descriptor table (64 entries, FDs 0-63)
+  - FDs 0-2 reserved for stdin/stdout/stderr
+  - Tracks open files, current offsets, and flags
+- **File Operations**:
+  - ``vfs_open()``: Open file by path, returns file descriptor
+  - ``vfs_read()``: Read from file descriptor
+  - ``vfs_write()``: Write to file descriptor
+  - ``vfs_seek()``: Change file offset (SEEK_SET, SEEK_CUR, SEEK_END)
+  - ``vfs_close()``: Close file descriptor
+- **Directory Operations**:
+  - ``vfs_readdir()``: List directory contents with callback
+  - ``vfs_mkdir()``: Create directory
+  - ``vfs_stat()``: Get file metadata (size, permissions, timestamps)
+- **VFS Operations Interface**:
+  - Function pointer table for filesystem-specific implementations
+  - Abstraction allows multiple filesystem types
+  - ext2 implements all core VFS operations
+- **Path Resolution**:
+  - Converts absolute paths to filesystem-relative paths
+  - Handles mount point boundaries
+  - Supports nested mount points (future: ``/mnt/usb``, etc.)
+
+#### ELF64 Program Loader (`kernel/core/elf_loader.c`)
+- **ELF File Parsing**:
+  - Validates ELF64 header (magic number ``0x7F 'E' 'L' 'F'``)
+  - Checks RISC-V architecture (``e_machine == 0xF3``)
+  - Verifies executable type (``ET_EXEC``)
+  - Validates entry point address
+- **Program Header Loading**:
+  - Iterates through ``PT_LOAD`` segments
+  - Allocates physical pages for each segment
+  - Maps pages into process's page table with correct permissions:
+    - Code segment: ``PTE_READ | PTE_EXECUTE`` (no write)
+    - Data segment: ``PTE_READ | PTE_WRITE`` (no execute)
+    - User-accessible: ``PTE_USER`` flag
+- **Segment Loading**:
+  - Reads file data into mapped pages
+  - Handles ``p_filesz`` < ``p_memsz`` (zero-fills ``.bss`` section)
+  - Supports segments at any virtual address (typically ``0x10000`` for code)
+- **Process Creation**:
+  - ``elf_create_process()``: Load ELF and create new process
+  - Allocates separate page table for memory isolation
+  - Creates user stack (8 KB at ``0x7FFFE0000000``)
+  - Sets entry point (PC) to ``e_entry``
+  - Sets stack pointer to stack top
+  - Marks process as ready for scheduling
+- **Memory Layout**:
+  - Code: ``0x10000`` - ``0x11000``
+  - Data: ``0x12000`` - ``0x18000``
+  - User Stack: ``0x7FFFE0000000`` - ``0x7FFFE0002000`` (grows down)
+- **Security**:
+  - Each process has isolated address space
+  - NX (no-execute) protection on data and stack
+  - Read-only code pages
+  - User pages cannot access kernel memory
+
+#### Interactive Shell Enhancements (`kernel/core/shell.c`)
+- **File Operations Commands**:
+  - ``ls [path]``: List directory contents
+    - Shows all files and subdirectories
+    - Handles ``.`` and ``..`` entries
+    - Defaults to ``/`` if no path specified
+  - ``cat <path>``: Display file contents
+    - Reads entire file and prints to console
+    - Requires absolute path
+    - Handles files up to memory limits
+- **Program Execution**:
+  - Detects paths starting with ``/`` as programs to execute
+  - Loads ELF file using ``elf_create_process()``
+  - Adds process to scheduler
+  - Waits for process completion using ``waitpid()``
+  - Displays exit status
+- **Code Quality Improvements**:
+  - Applied clean code standards:
+    - Descriptive variable names (``argument_count``, ``file_descriptor``, ``bytes_read``)
+    - Meaningful function names (``handle_ls_command``, ``handle_cat_command``)
+    - Consistent formatting and indentation
+  - Removed all verbose debug output
+  - Silent operation (only essential output)
+
+#### Process Management Enhancements (`kernel/core/process.c`)
+- **waitpid() System Call**:
+  - ``waitpid(pid, &status, options)``: Wait for child process to exit
+  - Blocks parent until child terminates
+  - Returns exit status code
+  - Handles zombie process cleanup
+- **Process Exit Status**:
+  - Processes set exit code via ``SYS_EXIT`` syscall
+  - Parent retrieves exit code via ``waitpid()``
+  - Zombie processes cleaned up after parent reads status
+- **Process Hierarchy**:
+  - Tracks parent-child relationships
+  - Orphaned processes adopted by init (PID 1)
+
+### Changed
+
+#### Build System
+- **Makefile**: Added VirtIO and filesystem targets
+  - ``make qemu-disk``: Run with VirtIO disk attached
+  - ``userland`` target: Build user-space programs
+  - Automatic disk image creation for testing
+- **Dockerfile**: Added ``e2fsprogs`` package for CI
+  - Enables ``mkfs.ext2`` in GitHub Actions
+  - Allows test scripts to create ext2 filesystems
+
+#### Kernel Initialization
+- **main.c**: Added filesystem and storage initialization
+  - VirtIO block driver initialization
+  - ext2 filesystem mounting at ``/``
+  - VFS root filesystem registration
+  - Shell now starts with filesystem access
+
+#### Test Scripts
+- **test_syscalls.sh, test_user_mode.sh, test_user_quick.sh**:
+  - Create ext2 disk images before running tests
+  - Attach VirtIO block device to QEMU
+  - Updated test criteria to verify VirtIO/ext2 initialization
+  - Build userland programs and copy to disk image
+  - Tests now validate filesystem operations
+
+#### Documentation
+- **README.md**: Updated for v0.4.0
+  - Current status reflects persistence features
+  - Added filesystem usage instructions
+  - Updated project structure
+  - Added disk image creation steps
+- **Sphinx Documentation**: New comprehensive internals docs
+  - ``docs/source/internals/virtio_block.rst``: Complete VirtIO driver documentation
+  - ``docs/source/internals/ext2_filesystem.rst``: Full ext2 implementation guide
+  - ``docs/source/internals/vfs.rst``: VFS architecture and API reference
+  - ``docs/source/internals/elf_loader.rst``: ELF64 loading process documentation
+
+### Technical Specifications
+
+#### VirtIO Block Driver
+- **MMIO Base**: ``0x10008000``
+- **Queue Size**: 256 descriptors
+- **I/O Mode**: Synchronous polling (100-600 iterations per operation)
+- **Sector Size**: 512 bytes
+- **Addressing**: Modern 64-bit physical addresses
+- **DMA**: Uses ``dma_alloc()`` for ring buffers
+- **Memory Barriers**: RISC-V ``fence`` instructions for ordering
+
+#### ext2 Filesystem
+- **Block Size**: 4096 bytes (configurable: 1024, 2048, 4096)
+- **Inode Size**: 128 or 256 bytes
+- **Max File Size**: ~4 MB (direct + single indirect blocks)
+- **Max Files**: Limited by inode count (typically 2560 for 10MB disk)
+- **Superblock Location**: Offset 1024 bytes (sector 2)
+- **Magic Number**: ``0xEF53``
+
+#### ELF Loader
+- **Format**: ELF64 RISC-V executables
+- **Linking**: Statically linked only (no dynamic linking)
+- **Entry Point**: Typically ``0x10000``
+- **User Stack**: 8 KB at ``0x7FFFE0000000`` (grows down)
+- **Page Protection**: NX on data/stack, read-only code
+- **Address Space**: Isolated per-process page tables
+
+#### VFS Layer
+- **File Descriptors**: 64 total (0-2 reserved, 3-63 for files)
+- **Mount Points**: Unlimited (linked list)
+- **Path Resolution**: Longest-prefix matching
+- **Open Flags**: ``O_RDONLY``, ``O_WRONLY``, ``O_RDWR``, ``O_CREAT``, ``O_TRUNC``, ``O_APPEND``
+
+### Platform Support
+- **QEMU**: virt machine (tested with 128MB, 256MB RAM)
+- **Disk Format**: Raw disk images with ext2 filesystem
+- **Toolchain**: riscv64-unknown-elf-gcc (bare-metal)
+
+### Dependencies
+- **Toolchain**: riscv64-unknown-elf-gcc (GCC for RISC-V bare-metal)
+- **Emulator**: QEMU 5.0+ with RISC-V support
+- **Firmware**: OpenSBI (provided by QEMU)
+- **Filesystem Tools**: e2fsprogs (``mkfs.ext2``, ``debugfs``, ``e2fsck``)
+- **Documentation**: Sphinx 4.0+ (optional)
+
+### Known Limitations
+
+#### VirtIO Block Driver
+- **Polling-Based I/O**: No interrupt support (busy-wait for completion)
+- **Single Request**: Processes one I/O at a time (no batching)
+- **No Error Recovery**: Limited error handling for I/O failures
+
+#### ext2 Filesystem
+- **Single Block Group**: Only supports filesystems with one block group
+- **Limited File Size**: ~4 MB maximum (no double/triple indirect blocks)
+- **No Journaling**: Not ext3/ext4 (no transaction support)
+- **No Extended Attributes**: No xattr support
+- **Synchronous Operations**: Every write waits for disk (no caching)
+- **No Block Preallocation**: Allocates blocks one at a time
+
+#### ELF Loader
+- **No Dynamic Linking**: Only statically linked executables
+- **Fixed Addresses**: No ASLR (Address Space Layout Randomization)
+- **No Relocations**: Must be linked at fixed virtual addresses
+- **Small Stack**: 8 KB user stack (no automatic growth)
+- **No Arguments**: Cannot pass argc/argv/envp to programs
+
+#### VFS Layer
+- **Global File Descriptors**: All processes share FD table
+- **No Special Files**: No pipes, sockets, or device files
+- **No Symbolic Links**: No symlink support
+- **Limited Error Handling**: Basic error codes only
+
+### Performance Characteristics
+- **VirtIO Read**: 100-600 polling iterations (microseconds in QEMU)
+- **ext2 Read**: ~1-2 ms for 4KB block (includes VirtIO overhead)
+- **ELF Loading**: ~10-50 ms depending on program size
+- **Filesystem Mount**: ~5-10 ms (reads superblock and block group descriptors)
+
+### Security Considerations
+- **Memory Isolation**: Each process has separate page table
+- **NX Protection**: Stack and data pages are non-executable
+- **Code Protection**: Code pages are read-only (no self-modifying code)
+- **User/Kernel Separation**: User processes cannot access kernel memory
+- **No ASLR**: Programs always load at same addresses (predictable)
+- **No Stack Canaries**: No buffer overflow detection
+- **No DMA Protection**: No IOMMU (devices can access all physical memory)
+
+### Breaking Changes
+- **Boot Process**: Now requires VirtIO disk with ext2 filesystem
+- **Test Scripts**: Updated to create disk images automatically
+- **QEMU Invocation**: Requires ``-drive`` and ``-device virtio-blk-device`` flags
+
+### Deprecated
+None
+
+### Removed
+- **Verbose Debug Output**: Removed from VirtIO driver, ext2, ELF loader, and shell
+  - ``"[VirtIO] Found block device"`` messages
+  - ``"Loading ELF segment..."`` messages
+  - ``"Mounting ext2 filesystem..."`` verbose output
+  - All 14 ELF loader debug messages
+
+### Fixed
+- **GitHub Actions CI**: Added ``e2fsprogs`` to Docker for ``mkfs.ext2`` support
+- **Test Scripts**: Now create VirtIO disks so tests pass in CI
+- **Test Criteria**: Updated to match actual boot output (no longer looking for removed debug messages)
+- **Memory Leaks**: Proper cleanup of file descriptors and page tables
+
+---
+
 ## [0.3.0] - 2025-11-10 - "Memory Foundation"
 
 ### Overview

@@ -114,27 +114,60 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.4.0 - "Persistence"
+## Version 0.4.0 - "Persistence" ✅ RELEASED
+
+**Status:** Released on November 11, 2025
 
 **Focus:** Filesystem and storage
 
-### Planned Features
-- [ ] VirtIO block device driver (deferred from v0.3)
-  - [ ] Legacy VirtIO (v1) support with PFN-based queue addressing
-  - [ ] Modern VirtIO (v2) support with 64-bit queue addressing
-  - [ ] Use DMA allocator from v0.3 for descriptor rings and buffers
-- [ ] Simple filesystem (FAT32 or custom)
-- [ ] File operations (open, read, write, close, seek)
-- [ ] Directory support (create, remove, list)
-- [ ] Persistent program storage
-- [ ] Basic file utilities (ls, cat, cp, rm)
+### Completed Features
+- ✅ VirtIO block device driver
+  - ✅ Modern VirtIO (v2) with 64-bit queue addressing
+  - ✅ DMA allocator integration for descriptor rings
+  - ✅ Synchronous I/O with polling
+  - ✅ 512-byte sector reads and writes
+- ✅ ext2 filesystem implementation
+  - ✅ Superblock and block group descriptor parsing
+  - ✅ Inode table access and management
+  - ✅ File read/write operations
+  - ✅ Directory operations (readdir, lookup)
+  - ✅ Block allocation and bitmap management
+  - ✅ Path resolution (``/path/to/file``)
+- ✅ Virtual Filesystem (VFS) abstraction layer
+  - ✅ Mount point management
+  - ✅ File descriptor table (open, read, write, close, seek)
+  - ✅ VFS operations interface
+  - ✅ ext2 integration
+- ✅ ELF64 program loader
+  - ✅ ELF header validation (magic, architecture, type)
+  - ✅ Program header parsing (``PT_LOAD`` segments)
+  - ✅ Process creation with isolated page tables
+  - ✅ User stack allocation (8 KB)
+  - ✅ Memory permission enforcement (NX, read-only code)
+- ✅ Interactive shell enhancements
+  - ✅ ``ls`` command - list directory contents
+  - ✅ ``cat`` command - display file contents
+  - ✅ Program execution from disk (``/bin/program``)
+  - ✅ ``waitpid()`` for process completion
+- ✅ Persistent program storage
+  - ✅ Programs loaded from ext2 filesystem
+  - ✅ Userland programs: hello, cat, ls
+- ✅ Clean code standards applied throughout
+
+### Testing Completed
+- ✅ VirtIO driver tested with QEMU (100-600 polling iterations per I/O)
+- ✅ ext2 filesystem read/write operations verified
+- ✅ ELF programs execute correctly from disk
+- ✅ Shell commands (ls, cat, program execution) working
+- ✅ GitHub Actions CI passing with disk image creation
+- ✅ All automated tests passing (test_syscalls.sh, test_user_mode.sh, test_user_quick.sh)
 
 **Release Criteria:**
-- VirtIO block driver works reliably
-- Can read/write files reliably
-- Programs can be loaded from disk
-- Filesystem survives reboots
-- Basic file utilities operational
+- ✅ VirtIO block driver works reliably
+- ✅ Can read/write files reliably
+- ✅ Programs can be loaded from disk
+- ✅ Filesystem survives reboots
+- ✅ Basic file utilities operational
 
 ---
 
@@ -156,48 +189,6 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - Basic networking works (ping, simple HTTP)
 - Can download files from network
 - Signals handled correctly
-
----
-
-## Version 0.5.0 - "Communication"
-
-**Focus:** Inter-process communication and networking
-
-### Planned Features
-- [ ] Pipes for IPC
-- [ ] Shared memory support
-- [ ] Signals (SIGKILL, SIGTERM, SIGUSR1, etc.)
-- [ ] VirtIO network driver
-- [ ] Basic TCP/IP stack (port lwIP or custom)
-- [ ] Socket API (socket, bind, listen, connect, send, recv)
-- [ ] Simple network utilities (ping, wget)
-
-**Release Criteria:**
-- Processes can communicate via pipes
-- Basic networking works (ping, simple HTTP)
-- Can download files from network
-- Signals handled correctly
-
----
-
-## Version 0.6.0 - "Visual"
-
-**Focus:** Graphics and user interface
-
-### Planned Features
-- [ ] Framebuffer console driver
-- [ ] VirtIO GPU driver
-- [ ] Bitmap font rendering (8x16 characters)
-- [ ] Basic graphics primitives (lines, rectangles, text)
-- [ ] Interactive shell with command history
-- [ ] Virtual terminals (Alt+F1, Alt+F2, etc.)
-- [ ] Console multiplexing
-
-**Release Criteria:**
-- Graphical console works
-- Interactive shell operational
-- Can switch between multiple terminals
-- Works on real hardware with HDMI output
 
 ---
 
@@ -244,28 +235,6 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.7.0 - "POSIX Lite"
-
-**Focus:** POSIX compatibility basics
-
-### Planned Features
-- [ ] Fork and exec implementation
-- [ ] Wait/waitpid for process management
-- [ ] Process groups and sessions
-- [ ] Job control (background/foreground processes)
-- [ ] Environment variables
-- [ ] Expanded syscall set (50+ syscalls)
-- [ ] Basic POSIX signals implementation
-- [ ] Simple shell scripting support
-
-**Release Criteria:**
-- Can run simple POSIX programs
-- Basic shell scripts execute
-- Process tree management works
-- Job control functional
-
----
-
 ## Version 0.8.0 - "Tools"
 
 **Focus:** Development environment
@@ -283,47 +252,6 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - Self-hosting capability (compile kernel on itself)
 - Developer tools available and working
 - Debugging support functional
-
----
-
-## Version 0.8.0 - "Tools"
-
-**Focus:** Development environment
-
-### Planned Features
-- [ ] Full ELF loader implementation
-- [ ] Dynamic linking support
-- [ ] Simple text editor (nano-like)
-- [ ] Embedded compiler/interpreter (TinyCC or Lua)
-- [ ] GDB stub for debugging
-- [ ] Developer utilities (make, grep, sed)
-
-**Release Criteria:**
-- Can compile and run programs on ThunderOS
-- Self-hosting capability (compile kernel on itself)
-- Developer tools available and working
-- Debugging support functional
-
----
-
-## Version 0.9.0 - "Performance"
-
-**Focus:** Optimization and stability
-
-### Planned Features
-- [ ] Advanced scheduling (CFS-like algorithm)
-- [ ] Slab allocator for kernel memory
-- [ ] Buffer cache for disk I/O
-- [ ] Profiling and performance tools
-- [ ] Multi-core support (SMP)
-- [ ] Load balancing across CPUs
-- [ ] Performance benchmarks
-
-**Release Criteria:**
-- Significant performance improvements over v0.7
-- Stable under stress tests
-- Can utilize multiple CPU cores
-- Benchmarks show competitive performance
 
 ---
 
@@ -347,24 +275,6 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - Benchmarks show competitive performance
 
 ---
-
-## Version 0.10.0 - "Hardware Ready"
-
-**Focus:** Real hardware support
-
-### Planned Features
-- [ ] Device tree parsing and configuration
-- [ ] Support for multiple RISC-V boards (HiFive, BeagleV, etc.)
-- [ ] USB support (if applicable to hardware)
-- [ ] Power management (suspend, resume, shutdown)
-- [ ] Hardware detection and auto-configuration
-- [ ] Board-specific drivers (GPIO, I2C, SPI)
-
-**Release Criteria:**
-- Boots on at least 2 different RISC-V boards
-- Hardware drivers are modular and maintainable
-- Works reliably on physical hardware
-- Power management functional
 
 ## Version 0.10.0 - "Hardware Ready"
 

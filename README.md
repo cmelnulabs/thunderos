@@ -4,14 +4,15 @@ A RISC-V operating system focused on AI acceleration and educational use.
 
 ## Current Status
 
-**Version 0.3.0 - "Memory Foundation"** 🎯 In Development
+**Version 0.4.0 - "Persistence"** 🎯 Released!
 
-- ✅ **v0.2.0 Released** - User-space programs and system calls
-- ✅ DMA-capable physical memory allocator
-- ✅ Virtual-to-physical address translation
-- ✅ Memory barriers for device I/O (RISC-V fence instructions)
-- ✅ Enhanced paging with non-identity mapping support
-- 🚧 **Next**: VirtIO block device driver (v0.4.0)
+- ✅ **v0.4.0 Released** - Persistent storage with VirtIO and ext2
+- ✅ VirtIO block device driver (modern MMIO interface)
+- ✅ ext2 filesystem with read/write support
+- ✅ Virtual Filesystem (VFS) abstraction layer
+- ✅ ELF64 loader for executing programs from disk
+- ✅ Interactive shell with ls, cat, and program execution
+- 🚧 **Next**: Inter-process communication and networking (v0.5.0)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.
 
@@ -27,12 +28,26 @@ make clean && make
 make qemu
 ```
 
+### Running with Filesystem
+```bash
+# Create a disk image with ext2 filesystem
+./build_disk.sh
+
+# Run with VirtIO block device
+make qemu-disk
+```
+
+The OS will mount the ext2 filesystem and you can interact with files using shell commands.
+
 ### Automated Testing
 ```bash
 # Run comprehensive syscall tests
 tests/test_syscalls.sh
 
-# Run quick user-mode validation
+# Run user-mode tests
+tests/test_user_mode.sh
+
+# Run quick validation
 tests/test_user_quick.sh
 
 # Run all tests (see tests/README.md)
@@ -64,15 +79,19 @@ kernel/              - Kernel core
   arch/riscv64/      - RISC-V architecture-specific code
     drivers/         - RISC-V HAL implementations (UART, timer, etc.)
     interrupt/       - Trap/interrupt handling
-  core/              - Portable kernel core (process, scheduler, panic)
+  core/              - Portable kernel core (process, scheduler, shell, ELF loader)
+  drivers/           - Device drivers (VirtIO block, etc.)
+  fs/                - Filesystem implementations (VFS, ext2)
   mm/                - Memory management (PMM, kmalloc, paging, DMA)
 include/             - Header files
   hal/               - Hardware Abstraction Layer interfaces
   kernel/            - Kernel subsystem headers
+  fs/                - Filesystem headers (VFS, ext2)
   arch/              - Architecture-specific headers (barriers, etc.)
   mm/                - Memory management headers (DMA, paging)
 docs/                - Sphinx documentation
 tests/               - Test framework and test cases
+userland/            - User-space programs
 build/               - Build output
 ```
 
@@ -106,22 +125,18 @@ Test suite validates:
 - ✓ Process creation and scheduling
 - ✓ User-space syscalls
 - ✓ Memory protection
+- ✓ VirtIO block device I/O
+- ✓ ext2 filesystem operations
+- ✓ ELF program loading and execution
 
 ### User-Space Programs
 
-Located in `tests/`:
-- **user_hello.c** - Demonstrates user-space syscalls:
-  - Reads current process ID via SYS_GETPID
-  - Outputs to console via SYS_WRITE
-  - Gets system time via SYS_GETTIME
-  - Yields CPU via SYS_YIELD
-  - Exits cleanly via SYS_EXIT
+Located in `userland/`:
+- **hello.c** - Simple hello world program
+- **cat.c** - Display file contents
+- **ls.c** - List directory contents
 
-Compile with cross-compiler:
-```bash
-riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -nostdlib \
-    -Iinclude tests/user_hello.c -o tests/user_hello.o
-```
+Programs are compiled as RISC-V ELF64 executables and can be loaded from the ext2 filesystem.
 
 ## Platform Support
 
