@@ -29,6 +29,7 @@ extern void test_virtio_blk_all(void);
 extern void test_ext2_all(void);
 extern void test_vfs_all(void);
 extern void test_syscalls_all(void);
+extern void test_elf_all(void);
 
 // Demo process functions
 void process_a(void *arg) {
@@ -191,6 +192,9 @@ void kernel_main(void) {
     
     // Run filesystem syscall tests
     test_syscalls_all();
+    
+    // Run ELF loader tests
+    test_elf_all();
     
     // Initialize process management
     process_init();

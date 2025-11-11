@@ -212,4 +212,30 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
  */
 void user_return(struct trap_frame *trap_frame) __attribute__((noreturn));
 
+/**
+ * Allocate memory for a process segment
+ * 
+ * @param proc Process to allocate memory for
+ * @param vaddr Virtual address to map
+ * @param size Size in bytes
+ * @return Pointer to allocated memory, or NULL on failure
+ */
+void *process_alloc_mem(struct process *proc, uint64_t vaddr, uint64_t size);
+
+/**
+ * Set up process arguments (argc, argv)
+ * 
+ * @param proc Process to set up
+ * @param argv Array of argument strings
+ * @param argc Argument count
+ */
+void process_setup_args(struct process *proc, const char *argv[], int argc);
+
+/**
+ * Mark process as ready to run
+ * 
+ * @param proc Process to mark as ready
+ */
+void process_ready(struct process *proc);
+
 #endif // PROCESS_H

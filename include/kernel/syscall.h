@@ -25,8 +25,9 @@
 #define SYS_MKDIR       17  // Create directory
 #define SYS_UNLINK      18  // Remove file
 #define SYS_RMDIR       19  // Remove directory
+#define SYS_EXECVE      20  // Execute program from file
 
-#define SYSCALL_COUNT   20
+#define SYSCALL_COUNT   21
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -64,5 +65,6 @@ uint64_t sys_stat(const char *path, void *statbuf);
 uint64_t sys_mkdir(const char *path, int mode);
 uint64_t sys_unlink(const char *path);
 uint64_t sys_rmdir(const char *path);
+uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]);
 
 #endif // SYSCALL_H

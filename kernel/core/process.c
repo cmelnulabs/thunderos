@@ -10,6 +10,7 @@
 #include "mm/kmalloc.h"
 #include "mm/paging.h"
 #include "hal/hal_uart.h"
+#include "kernel/elf_loader.h"
 #include <stddef.h>
 
 // Process table

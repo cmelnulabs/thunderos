@@ -9,6 +9,7 @@
 #include "hal/hal_uart.h"
 #include "kernel/scheduler.h"
 #include "kernel/panic.h"
+#include "kernel/elf_loader.h"
 #include "fs/vfs.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -465,6 +466,39 @@ uint64_t sys_rmdir(const char *path) {
 }
 
 /**
+ * sys_execve - Execute program from filesystem
+ * 
+ * @param path Path to executable
+ * @param argv Argument array
+ * @param envp Environment array (ignored)
+ * @return Does not return on success, -1 on error
+ */
+uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
+    (void)envp;
+    
+    if (!is_valid_user_pointer(path, 1)) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Count arguments
+    int argc = 0;
+    if (argv) {
+        while (argv[argc] && argc < 256) {
+            if (!is_valid_user_pointer(argv[argc], 1)) {
+                return SYSCALL_ERROR;
+            }
+            argc++;
+        }
+    }
+    
+    // Load and execute ELF binary
+    int result = elf_load_exec(path, argv, argc);
+    
+    // If we get here, exec failed
+    return (result < 0) ? SYSCALL_ERROR : result;
+}
+
+/**
  * syscall_handler - Main system call dispatcher
  * 
  * Called from trap handler when ECALL is executed from user mode.
@@ -555,6 +589,10 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_RMDIR:
             return_value = sys_rmdir((const char *)argument0);
+            break;
+            
+        case SYS_EXECVE:
+            return_value = sys_execve((const char *)argument0, (const char **)argument1, (const char **)argument2);
             break;
             
         case SYS_FORK:
