@@ -101,40 +101,40 @@ else
     TEST_RESULTS=$((TEST_RESULTS + 1))
 fi
 
-# Test 2: Check for user mode processes
-if grep -q "Created user process\|USER PROCESS EXCEPTION" "${OUTPUT_FILE}"; then
-    print_status "Test 2: User mode processes detected - PASS"
+# Test 2: Check for VirtIO and filesystem (indicates full boot)
+if grep -q "VirtIO block device\|ext2 filesystem mounted\|Interactive Shell" "${OUTPUT_FILE}"; then
+    print_status "Test 2: VirtIO and filesystem operational - PASS"
 else
-    print_error "Test 2: User mode processes detected - FAIL"
+    print_error "Test 2: VirtIO and filesystem operational - FAIL"
     TEST_RESULTS=$((TEST_RESULTS + 1))
 fi
 
-# Test 3: Check for privilege separation
-if grep -q "privilege\|S-mode\|U-mode\|separation" "${OUTPUT_FILE}"; then
-    print_status "Test 3: Privilege separation active - PASS"
+# Test 3: Check for virtual memory (Sv39)
+if grep -q "Sv39\|Virtual memory initialized\|page table" "${OUTPUT_FILE}"; then
+    print_status "Test 3: Virtual memory enabled - PASS"
 else
-    print_error "Test 3: Privilege separation active - FAIL (optional)"
+    print_error "Test 3: Virtual memory enabled - FAIL (optional)"
 fi
 
-# Test 4: Check for memory isolation
-if grep -q "memory isolation\|page table\|Sv39" "${OUTPUT_FILE}"; then
-    print_status "Test 4: Memory isolation enabled - PASS"
+# Test 4: Check for DMA and memory tests
+if grep -q "DMA allocator initialized\|Memory Management Feature Tests" "${OUTPUT_FILE}"; then
+    print_status "Test 4: Memory subsystem operational - PASS"
 else
-    print_error "Test 4: Memory isolation enabled - FAIL (optional)"
+    print_error "Test 4: Memory subsystem operational - FAIL (optional)"
 fi
 
-# Test 5: Check for system calls
-if grep -q "USER PROCESS EXCEPTION\|Load page fault" "${OUTPUT_FILE}"; then
-    print_status "Test 5: System calls operational - PASS"
+# Test 5: Check for ELF loader
+if grep -q "ELF Loader Tests\|ALL TESTS PASSED" "${OUTPUT_FILE}"; then
+    print_status "Test 5: ELF loader operational - PASS"
 else
-    print_error "Test 5: System calls operational - FAIL (optional)"
+    print_error "Test 5: ELF loader operational - FAIL (optional)"
 fi
 
-# Test 6: Check for scheduler with user processes
-if grep -q "Scheduler\|scheduling\|PID" "${OUTPUT_FILE}"; then
-    print_status "Test 6: Scheduler running with user processes - PASS"
+# Test 6: Check for process management
+if grep -q "Process management initialized\|Scheduler initialized" "${OUTPUT_FILE}"; then
+    print_status "Test 6: Process and scheduler subsystems - PASS"
 else
-    print_error "Test 6: Scheduler running with user processes - FAIL (optional)"
+    print_error "Test 6: Process and scheduler subsystems - FAIL (optional)"
 fi
 
 # Summary

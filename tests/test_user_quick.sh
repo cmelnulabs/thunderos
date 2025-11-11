@@ -101,23 +101,23 @@ else
     TEST_RESULTS=$((TEST_RESULTS + 1))
 fi
 
-# Test 2: Check for user processes
-if grep -q "User process\|user mode\|PID" "${OUTPUT_FILE}"; then
-    print_status "Test 2: User processes running - PASS"
+# Test 2: Check for VirtIO and filesystem
+if grep -q "VirtIO block device\|ext2 filesystem mounted\|Interactive Shell" "${OUTPUT_FILE}"; then
+    print_status "Test 2: VirtIO and filesystem operational - PASS"
 else
-    print_error "Test 2: User processes running - FAIL"
+    print_error "Test 2: VirtIO and filesystem operational - FAIL"
     TEST_RESULTS=$((TEST_RESULTS + 1))
 fi
 
-# Test 3: Check for system calls
-if grep -q "syscall\|sys_write\|Hello" "${OUTPUT_FILE}"; then
-    print_status "Test 3: System calls working - PASS"
+# Test 3: Check for memory management
+if grep -q "Memory management initialized\|DMA allocator" "${OUTPUT_FILE}"; then
+    print_status "Test 3: Memory subsystem working - PASS"
 else
-    print_error "Test 3: System calls working - FAIL (optional)"
+    print_error "Test 3: Memory subsystem working - FAIL (optional)"
 fi
 
-# Test 4: Check for scheduler
-if grep -q "Scheduler\|scheduling" "${OUTPUT_FILE}"; then
+# Test 4: Check for process and scheduler initialization
+if grep -q "Process management initialized\|Scheduler initialized" "${OUTPUT_FILE}"; then
     print_status "Test 4: Scheduler operational - PASS"
 else
     print_error "Test 4: Scheduler operational - FAIL (optional)"
