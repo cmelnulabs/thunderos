@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "kernel/kstring.h"
+#include "kernel/errno.h"
 #include "fs/vfs.h"
 #include "kernel/process.h"
 #include "mm/kmalloc.h"
@@ -52,7 +53,7 @@ typedef struct {
  * @param path Path to ELF binary
  * @param argv Argument array (unused)
  * @param argc Argument count (unused)
- * @return PID of new process, or negative error code
+ * @return PID of new process, or -1 on error (errno set)
  */
 int elf_load_exec(const char *path, const char *argv[], int argc) {
     (void)argv;
@@ -61,6 +62,7 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     /* Open file */
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0) {
+        /* errno already set by vfs_open */
         return -1;
     }
     
@@ -68,31 +70,31 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     elf64_ehdr_t ehdr;
     if (vfs_read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr)) {
         vfs_close(fd);
-        return -2;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     /* Verify ELF magic */
     if (ehdr.magic != ELF_MAGIC) {
         vfs_close(fd);
-        return -3;
+        RETURN_ERRNO(THUNDEROS_EELF_MAGIC);
     }
     
     /* Verify it's a RISC-V executable */
     if (ehdr.machine != 0xF3) {  /* EM_RISCV */
         vfs_close(fd);
-        return -4;
+        RETURN_ERRNO(THUNDEROS_EELF_ARCH);
     }
     
     /* Verify it's an executable */
     if (ehdr.type != 2) {  /* ET_EXEC */
         vfs_close(fd);
-        return -5;
+        RETURN_ERRNO(THUNDEROS_EELF_TYPE);
     }
     
     /* Read program headers */
     if (ehdr.phnum == 0 || ehdr.phnum > 16) {
         vfs_close(fd);
-        return -6;
+        RETURN_ERRNO(THUNDEROS_EELF_NOPHDR);
     }
     
     /* Allocate space for program headers */
@@ -100,21 +102,22 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     elf64_phdr_t *phdrs = kmalloc(phdrs_size);
     if (!phdrs) {
         vfs_close(fd);
-        return -7;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Seek to program headers */
     if (vfs_seek(fd, ehdr.phoff, SEEK_SET) < 0) {
         kfree(phdrs);
         vfs_close(fd);
-        return -8;
+        /* errno already set by vfs_seek */
+        return -1;
     }
     
     /* Read all program headers */
     if (vfs_read(fd, phdrs, phdrs_size) != (int)phdrs_size) {
         kfree(phdrs);
         vfs_close(fd);
-        return -9;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     // Find the total memory needed and lowest/highest addresses
@@ -136,7 +139,7 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     if (min_addr == (uint64_t)-1) {
         kfree(phdrs);
         vfs_close(fd);
-        return -10;
+        RETURN_ERRNO(THUNDEROS_EELF_NOPHDR);
     }
     
     /* Allocate memory for the entire program (page-aligned) */
@@ -146,7 +149,7 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     if (!program_phys) {
         kfree(phdrs);
         vfs_close(fd);
-        return -11;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Convert to virtual address for kernel access when loading segments */
@@ -170,7 +173,8 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
             pmm_free_pages(program_phys, num_pages);
             kfree(phdrs);
             vfs_close(fd);
-            return -12;
+            /* errno already set by vfs_seek */
+            return -1;
         }
         
         /* Read segment data */
@@ -180,7 +184,7 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
                 pmm_free_pages(program_phys, num_pages);
                 kfree(phdrs);
                 vfs_close(fd);
-                return -13;
+                RETURN_ERRNO(THUNDEROS_EIO);
             }
         }
         
@@ -208,9 +212,10 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     
     if (!proc) {
         pmm_free_pages(program_phys, num_pages);
-        return -14;
+        RETURN_ERRNO(THUNDEROS_EPROC_INIT);
     }
     
+    clear_errno();
     /* Return process ID */
     return proc->pid;
 }

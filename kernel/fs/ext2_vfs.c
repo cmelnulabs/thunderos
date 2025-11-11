@@ -6,6 +6,7 @@
 #include "../../include/fs/vfs.h"
 #include "../../include/mm/kmalloc.h"
 #include "../../include/hal/hal_uart.h"
+#include "../../include/kernel/errno.h"
 #include <stddef.h>
 
 /* Forward declarations for ext2 VFS operations */
@@ -49,6 +50,7 @@ static void strcpy_safe(char *dst, const char *src, uint32_t max_len) {
  */
 static int ext2_vfs_read(vfs_node_t *node, uint32_t offset, void *buffer, uint32_t size) {
     if (!node || !node->fs || !node->fs->fs_data || !node->fs_data) {
+        set_errno(THUNDEROS_EINVAL);
         return -1;
     }
     
@@ -63,6 +65,7 @@ static int ext2_vfs_read(vfs_node_t *node, uint32_t offset, void *buffer, uint32
  */
 static int ext2_vfs_write(vfs_node_t *node, uint32_t offset, const void *buffer, uint32_t size) {
     if (!node || !node->fs || !node->fs->fs_data || !node->fs_data) {
+        set_errno(THUNDEROS_EINVAL);
         return -1;
     }
     
@@ -77,6 +80,7 @@ static int ext2_vfs_write(vfs_node_t *node, uint32_t offset, const void *buffer,
  */
 static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
     if (!dir || !dir->fs || !dir->fs->fs_data || !dir->fs_data) {
+        set_errno(THUNDEROS_EINVAL);
         return NULL;
     }
     
@@ -86,17 +90,20 @@ static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
     /* Lookup inode number */
     uint32_t inode_num = ext2_lookup(ext2_fs, dir_inode, name);
     if (inode_num == 0) {
+        set_errno(THUNDEROS_ENOENT);
         return NULL;
     }
     
     /* Allocate and read inode */
     ext2_inode_t *inode = (ext2_inode_t *)kmalloc(sizeof(ext2_inode_t));
     if (!inode) {
+        set_errno(THUNDEROS_ENOMEM);
         return NULL;
     }
     
     if (ext2_read_inode(ext2_fs, inode_num, inode) != 0) {
         kfree(inode);
+        /* errno already set by ext2_read_inode */
         return NULL;
     }
     
