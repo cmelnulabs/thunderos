@@ -96,6 +96,11 @@ $(BUILD_DIR)/%.o: %.S
 clean:
 	rm -rf $(BUILD_DIR)
 
+userland:
+	@echo "Building userland programs..."
+	@chmod +x build_userland.sh
+	@./build_userland.sh
+
 qemu: $(KERNEL_ELF)
 	$(QEMU) $(QEMU_FLAGS) -kernel $(KERNEL_ELF)
 
@@ -107,14 +112,17 @@ qemu-blk: $(KERNEL_ELF)
 		-drive file=$(BUILD_DIR)/test-disk.img,if=none,format=raw,id=hd0 \
 		-device virtio-blk-device,drive=hd0
 
-qemu-ext2: $(KERNEL_ELF)
+qemu-ext2: $(KERNEL_ELF) userland
 	@echo "Creating ext2 test disk image (10MB)..."
 	@rm -rf $(BUILD_DIR)/testfs
-	@mkdir -p $(BUILD_DIR)/testfs
+	@mkdir -p $(BUILD_DIR)/testfs/bin
 	@echo "Hello from ext2 filesystem!" > $(BUILD_DIR)/testfs/test.txt
+	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "Warning: cat not built"
+	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "Warning: ls not built"
+	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "Warning: hello not built"
 	@mkfs.ext2 -F -q -d $(BUILD_DIR)/testfs $(BUILD_DIR)/ext2-disk.img 10M
 	@rm -rf $(BUILD_DIR)/testfs
-	@echo "ext2 filesystem created with test.txt"
+	@echo "ext2 filesystem created with test.txt and /bin programs"
 	$(QEMU) $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
 		-global virtio-mmio.force-legacy=false \
 		-drive file=$(BUILD_DIR)/ext2-disk.img,if=none,format=raw,id=hd0 \

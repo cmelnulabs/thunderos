@@ -49,6 +49,7 @@ uint64_t syscall_handler(uint64_t syscall_num,
 
 // Individual syscall implementations
 uint64_t sys_exit(int status);
+uint64_t sys_waitpid(int pid, int *wstatus, int options);
 uint64_t sys_write(int fd, const char *buf, size_t len);
 uint64_t sys_read(int fd, char *buf, size_t len);
 uint64_t sys_getpid(void);

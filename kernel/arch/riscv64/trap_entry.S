@@ -43,12 +43,16 @@ trap_from_kernel:
     # Restore sp from sscratch and continue
     csrrw sp, sscratch, sp
     
-    # Allocate trap frame on kernel stack
+    # Allocate trap frame on kernel stack  
     addi sp, sp, -272
     
     # Save kernel sp (before we decremented it)
     addi t0, sp, 272
     sd t0, 8(sp)
+    
+    # DEBUG: This should not be reached for user programs
+    # If we get here, something is wrong with sscratch
+    # For now, just continue - we'll see a different error pattern
     
 save_registers:
     # Save sepc (exception program counter)

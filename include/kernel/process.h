@@ -41,10 +41,10 @@ typedef int32_t pid_t;
 // RISC-V ABI requires 16-byte stack alignment
 #define STACK_ALIGNMENT 16
 
-// User memory layout
-#define USER_CODE_BASE    0x10000        // User code starts at 64KB
-#define USER_STACK_TOP    0x80000000     // User stack top at 2GB
-#define USER_HEAP_START   0x20000        // User heap after code (128KB)
+// User space memory layout
+#define USER_CODE_BASE    0x0000000000010000  // User code starts at 64KB
+#define USER_STACK_TOP    0x0000000040000000  // User stack top at 1GB (in user space)
+#define USER_HEAP_BASE    0x0000000000100000  // User heap base (future)
 #define USER_MMAP_START   0x40000000     // Memory mapped region (1GB)
 
 // Process context - saved during context switch
@@ -138,6 +138,24 @@ struct process *process_get(pid_t pid);
 void process_yield(void);
 
 /**
+ * Find a zombie child process
+ * 
+ * @param parent Parent process
+ * @param target_pid PID to search for (-1 for any child)
+ * @return Zombie child process, or NULL if none found
+ */
+struct process *process_find_zombie_child(struct process *parent, int target_pid);
+
+/**
+ * Check if parent has any children matching criteria
+ * 
+ * @param parent Parent process
+ * @param target_pid PID to search for (-1 for any child)
+ * @return 1 if children exist, 0 otherwise
+ */
+int process_has_children(struct process *parent, int target_pid);
+
+/**
  * Sleep for a number of ticks
  * 
  * @param ticks Number of timer ticks to sleep
@@ -201,6 +219,23 @@ int process_exec(void (*entry_point)(void *), void *arg);
  * @return Pointer to new process, or NULL on failure
  */
 struct process *process_create_user(const char *name, void *user_code, size_t code_size);
+
+/**
+ * Create a new user process from loaded ELF segments
+ * 
+ * This function is similar to process_create_user but allows specifying
+ * custom virtual address base and entry point for loaded ELF programs.
+ * 
+ * @param name Process name
+ * @param code_base Virtual address base where code should be mapped
+ * @param code_mem Physical address of loaded code (page-aligned)
+ * @param code_size Size of code in bytes
+ * @param entry_point Entry point virtual address
+ * @return Pointer to new process, or NULL on failure
+ */
+struct process *process_create_elf(const char *name, uint64_t code_base, 
+                                   void *code_mem, size_t code_size, 
+                                   uint64_t entry_point);
 
 /**
  * Return to user mode (assembly function)

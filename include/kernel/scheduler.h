@@ -24,6 +24,14 @@ void scheduler_init(void);
 void schedule(void);
 
 /**
+ * Voluntarily yield CPU to another process
+ * 
+ * Current process gives up its CPU time slice and scheduler
+ * picks the next process to run. Useful for cooperative multitasking.
+ */
+void scheduler_yield(void);
+
+/**
  * Add a process to the ready queue
  * 
  * @param proc Process to add

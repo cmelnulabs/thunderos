@@ -81,6 +81,73 @@ static void shell_echo(int argc, char **argv) {
 }
 
 /**
+ * List directory contents
+ */
+static void shell_ls(int argc, char **argv) {
+    const char *path = (argc > 1) ? argv[1] : "/";
+    
+    // Resolve the directory path
+    vfs_node_t *dir = vfs_resolve_path(path);
+    if (!dir) {
+        hal_uart_puts("ls: cannot access '");
+        hal_uart_puts(path);
+        hal_uart_puts("': No such file or directory\n");
+        return;
+    }
+    
+    if (dir->type != VFS_TYPE_DIRECTORY) {
+        hal_uart_puts("ls: '");
+        hal_uart_puts(path);
+        hal_uart_puts("': Not a directory\n");
+        return;
+    }
+    
+    // List directory entries
+    char name[256];
+    uint32_t inode;
+    uint32_t index = 0;
+    
+    while (dir->ops->readdir(dir, index, name, &inode) == 0) {
+        hal_uart_puts(name);
+        hal_uart_puts("\n");
+        index++;
+    }
+}
+
+/**
+ * Display file contents
+ */
+static void shell_cat(int argc, char **argv) {
+    if (argc < 2) {
+        hal_uart_puts("Usage: cat <file>\n");
+        return;
+    }
+    
+    const char *path = argv[1];
+    
+    // Open the file
+    int fd = vfs_open(path, O_RDONLY);
+    if (fd < 0) {
+        hal_uart_puts("cat: ");
+        hal_uart_puts(path);
+        hal_uart_puts(": No such file or directory\n");
+        return;
+    }
+    
+    // Read and display contents
+    char buffer[256];
+    int bytes_read;
+    
+    while ((bytes_read = vfs_read(fd, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[bytes_read] = '\0';
+        hal_uart_puts(buffer);
+    }
+    
+    // Close the file
+    vfs_close(fd);
+}
+
+/**
  * Parse command line into arguments
  * 
  * @param cmdline Command line string
@@ -179,6 +246,12 @@ static void shell_execute(char *cmdline) {
     }
     else if (shell_strcmp(argv[0], "echo") == 0) {
         shell_echo(argc, argv);
+    }
+    else if (shell_strcmp(argv[0], "ls") == 0) {
+        shell_ls(argc, argv);
+    }
+    else if (shell_strcmp(argv[0], "cat") == 0) {
+        shell_cat(argc, argv);
     }
     else if (shell_strcmp(argv[0], "exit") == 0) {
         hal_uart_puts("Goodbye!\n");

@@ -337,6 +337,64 @@ void process_yield(void) {
 }
 
 /**
+ * Find a zombie child process
+ * 
+ * @param parent Parent process
+ * @param target_pid PID to search for (-1 for any child)
+ * @return Zombie child process, or NULL if none found
+ */
+struct process *process_find_zombie_child(struct process *parent, int target_pid) {
+    if (!parent) return NULL;
+    
+    lock_acquire(&process_lock);
+    
+    // Search through process table for zombie children
+    for (int i = 0; i < MAX_PROCS; i++) {
+        struct process *proc = &process_table[i];
+        
+        if (proc->state == PROC_ZOMBIE && proc->parent == parent) {
+            // Found a zombie child
+            if (target_pid == -1 || proc->pid == target_pid) {
+                lock_release(&process_lock);
+                return proc;
+            }
+        }
+    }
+    
+    lock_release(&process_lock);
+    return NULL;
+}
+
+/**
+ * Check if parent has any children matching criteria
+ * 
+ * @param parent Parent process
+ * @param target_pid PID to search for (-1 for any child)
+ * @return 1 if children exist, 0 otherwise
+ */
+int process_has_children(struct process *parent, int target_pid) {
+    if (!parent) return 0;
+    
+    lock_acquire(&process_lock);
+    
+    // Search through process table for children
+    for (int i = 0; i < MAX_PROCS; i++) {
+        struct process *proc = &process_table[i];
+        
+        if (proc->state != PROC_UNUSED && proc->parent == parent) {
+            // Found a child
+            if (target_pid == -1 || proc->pid == target_pid) {
+                lock_release(&process_lock);
+                return 1;
+            }
+        }
+    }
+    
+    lock_release(&process_lock);
+    return 0;
+}
+
+/**
  * User process sleep
  * 
  * Marks process as sleeping and yields to scheduler.
@@ -522,6 +580,140 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     // Initialize process metadata
     proc->cpu_time = 0;
     proc->priority = 10;  // Default priority (lower number = higher priority)
+    proc->parent = current_process;
+    proc->exit_code = 0;
+    
+    // Mark as ready and enqueue for scheduling
+    proc->state = PROC_READY;
+    scheduler_enqueue(proc);
+    
+    return proc;
+}
+
+/**
+ * Create a new user process from loaded ELF segments
+ * 
+ * Unlike process_create_user which maps code at a fixed address (USER_CODE_BASE),
+ * this function maps code at the virtual address specified by the ELF file,
+ * and sets the entry point to the ELF entry address.
+ */
+struct process *process_create_elf(const char *name, uint64_t code_base, 
+                                   void *code_mem, size_t code_size, 
+                                   uint64_t entry_point) {
+    if (!name || !code_mem || code_size == 0) {
+        return NULL;
+    }
+    
+    // Allocate process structure
+    struct process *proc = alloc_process();
+    if (!proc) {
+        return NULL;
+    }
+    
+    // Assign unique PID
+    proc->pid = alloc_pid();
+    
+    // Set process name
+    kstrncpy(proc->name, name, PROC_NAME_LEN - 1);
+    proc->name[PROC_NAME_LEN - 1] = '\0';
+    
+    // Allocate kernel stack
+    proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
+    if (!proc->kernel_stack) {
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Create isolated page table for this process
+    proc->page_table = create_user_page_table();
+    if (!proc->page_table) {
+        kfree((void *)proc->kernel_stack);
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Map user code at the specified virtual address base
+    // Round size up to page boundary
+    size_t code_pages = (code_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    for (size_t i = 0; i < code_pages; i++) {
+        uintptr_t vaddr = code_base + (i * PAGE_SIZE);
+        uintptr_t paddr = (uintptr_t)code_mem + (i * PAGE_SIZE);
+        
+        // Map as user-readable, executable
+        if (map_page(proc->page_table, vaddr, paddr, 
+                           PTE_V | PTE_R | PTE_X | PTE_U) != 0) {
+            free_page_table(proc->page_table);
+            kfree((void *)proc->kernel_stack);
+            process_free(proc);
+            return NULL;
+        }
+    }
+    
+    // Allocate user stack (multiple pages for stack growth)
+    #define INITIAL_STACK_PAGES 8  // 32KB initial stack
+    uintptr_t stack_base_vaddr = USER_STACK_TOP - (INITIAL_STACK_PAGES * PAGE_SIZE);
+    
+    for (int i = 0; i < INITIAL_STACK_PAGES; i++) {
+        uintptr_t stack_phys = pmm_alloc_page();
+        if (!stack_phys) {
+            free_page_table(proc->page_table);
+            kfree((void *)proc->kernel_stack);
+            process_free(proc);
+            return NULL;
+        }
+        
+        // Zero out stack via virtual address
+        kmemset((void *)translate_phys_to_virt(stack_phys), 0, PAGE_SIZE);
+        
+        // Map stack page
+        uintptr_t stack_vaddr = stack_base_vaddr + (i * PAGE_SIZE);
+        if (map_page(proc->page_table, stack_vaddr, stack_phys,
+                           PTE_V | PTE_R | PTE_W | PTE_U) != 0) {
+            free_page_table(proc->page_table);
+            kfree((void *)proc->kernel_stack);
+            process_free(proc);
+            return NULL;
+        }
+    }
+    
+    proc->user_stack = stack_base_vaddr;
+    
+    // Allocate trap frame to save user state on traps
+    proc->trap_frame = (struct trap_frame *)kmalloc(sizeof(struct trap_frame));
+    if (!proc->trap_frame) {
+        free_page_table(proc->page_table);
+        kfree((void *)proc->kernel_stack);
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Zero trap frame
+    kmemset(proc->trap_frame, 0, sizeof(struct trap_frame));
+    
+    // Set entry point to the ELF entry address
+    proc->trap_frame->sepc = entry_point;
+    
+    // Set stack pointer to top of user stack (grows downward)
+    proc->trap_frame->sp = USER_STACK_TOP;
+    
+    // Set sstatus for user mode return:
+    // SPIE=1 (enable interrupts after sret)
+    // SPP=0 (return to user mode, not supervisor)
+    proc->trap_frame->sstatus = (1 << 5);  // SPIE=1, SPP=0
+    
+    // Setup kernel context for initial context switch
+    kmemset(&proc->context, 0, sizeof(struct context));
+    
+    // When scheduler first runs this process, it returns to user_mode_entry_wrapper
+    extern void user_mode_entry_wrapper(void);
+    proc->context.ra = (unsigned long)user_mode_entry_wrapper;
+    
+    // Set kernel stack pointer (16-byte aligned per RISC-V ABI)
+    proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    
+    // Initialize process metadata
+    proc->cpu_time = 0;
+    proc->priority = 10;  // Default priority
     proc->parent = current_process;
     proc->exit_code = 0;
     

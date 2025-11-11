@@ -112,11 +112,16 @@ void hal_timer_set_next(unsigned long interval_us) {
  * Handle timer interrupt
  * 
  * This is called from the trap handler when a timer interrupt occurs.
- * It increments the tick counter and schedules the next interrupt.
+ * It increments the tick counter, calls the scheduler for preemptive
+ * multitasking, and schedules the next interrupt.
  */
 void hal_timer_handle_interrupt(void) {
     // Increment tick counter
     ticks++;
+    
+    // Call scheduler for preemptive multitasking
+    extern void schedule(void);
+    schedule();
     
     // Schedule next interrupt using the configured interval
     hal_timer_set_next(timer_interval_us);

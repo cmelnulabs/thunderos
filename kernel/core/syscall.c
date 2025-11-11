@@ -69,6 +69,63 @@ uint64_t sys_exit(int status) {
 }
 
 /**
+ * sys_waitpid - Wait for a child process to change state
+ * 
+ * @param pid Process ID to wait for:
+ *            -1 = wait for any child
+ *            >0 = wait for specific child PID
+ * @param wstatus Pointer to store exit status (can be NULL)
+ * @param options Options (0 for blocking wait)
+ * @return PID of terminated child, or -1 on error
+ */
+uint64_t sys_waitpid(int pid, int *wstatus, int options) {
+    (void)options;  // Options not implemented yet
+    
+    struct process *current = process_current();
+    if (!current) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Find zombie child process
+    while (1) {
+        struct process *child = NULL;
+        int found_child = 0;
+        
+        // Search for matching child process
+        extern struct process *process_find_zombie_child(struct process *parent, int target_pid);
+        child = process_find_zombie_child(current, pid);
+        
+        if (child) {
+            // Found zombie child - reap it
+            int exit_code = child->exit_code;
+            pid_t child_pid = child->pid;
+            
+            // Store exit status if requested
+            if (wstatus) {
+                *wstatus = (exit_code & 0xFF) << 8;  // Linux-style status encoding
+            }
+            
+            // Free child process resources
+            process_free(child);
+            
+            return child_pid;
+        }
+        
+        // Check if parent has any children at all
+        extern int process_has_children(struct process *parent, int target_pid);
+        found_child = process_has_children(current, pid);
+        
+        if (!found_child) {
+            // No such child process
+            return SYSCALL_ERROR;
+        }
+        
+        // Child exists but hasn't exited yet - yield and try again
+        scheduler_yield();
+    }
+}
+
+/**
  * sys_getpid - Get current process ID
  * 
  * @return Current process ID, or -1 on error
@@ -526,6 +583,10 @@ uint64_t syscall_handler(uint64_t syscall_number,
         case SYS_EXIT:
             return_value = sys_exit((int)argument0);
             break;
+        
+        case SYS_WAIT:  // waitpid
+            return_value = sys_waitpid((int)argument0, (int *)argument1, (int)argument2);
+            break;
             
         case SYS_WRITE:
             return_value = sys_write((int)argument0, (const char *)argument1, (size_t)argument2);
@@ -597,7 +658,6 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_FORK:
         case SYS_EXEC:
-        case SYS_WAIT:
             return_value = SYSCALL_ERROR;
             break;
             

@@ -229,6 +229,21 @@ void schedule(void) {
 }
 
 /**
+ * Voluntarily yield CPU to another process
+ * 
+ * Current process gives up its CPU time slice and scheduler
+ * picks the next process to run. Useful for cooperative multitasking
+ * and when waiting for child processes.
+ */
+void scheduler_yield(void) {
+    // Reset time slice to force scheduling
+    current_time_slice = 0;
+    
+    // Call scheduler
+    schedule();
+}
+
+/**
  * Helper function called from assembly to get current process trap frame
  */
 struct trap_frame *process_get_current_trap_frame(void) {

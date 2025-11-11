@@ -107,11 +107,17 @@ user_return:
     ld a0, 72(t6)       # Restore a0
     ld t6, 240(t6)      # Restore t6
     
+    # IMPORTANT: sscratch should already be set by caller (user_mode_entry_wrapper)
+    # Verify it's non-zero (sanity check)
+    # If sscratch is 0, we'll crash on first trap from user mode
+    # But we can't fix it here without clobbering registers
+    
     # Return to user mode
     # sret will:
     # 1. Set privilege level to SPP field in sstatus (0 = user mode)
     # 2. Jump to address in sepc register
-    # 3. Restore interrupt enable from SPIE field in sstatus
+    # 3. Restore interrupt enable from SPIE field in sstatus  
+    # 4. sscratch is NOT modified by sret - it persists
     sret
 
 .size user_return, .-user_return

@@ -220,16 +220,7 @@ static int virtio_blk_do_request(virtio_blk_device_t *dev, virtio_blk_request_t 
     uintptr_t data_phys = translate_virt_to_phys((uintptr_t)buffer);
     uintptr_t status_phys = translate_virt_to_phys((uintptr_t)&req->status);
     
-    hal_uart_puts("[VirtIO] Request: sector=");
-    hal_uart_put_uint32(sector);
-    hal_uart_puts(" type=");
-    hal_uart_put_uint32(type);
-    hal_uart_puts(" sectors=");
-    hal_uart_put_uint32(sectors);
-    hal_uart_puts("\n");
-    
     if (header_phys == 0 || data_phys == 0 || status_phys == 0) {
-        hal_uart_puts("[VirtIO] ERROR: Address translation failed\n");
         virtqueue_free_desc_chain(vq, desc_idx);
         return -1;
     }
@@ -268,52 +259,29 @@ static int virtio_blk_do_request(virtio_blk_device_t *dev, virtio_blk_request_t 
     
     /* Poll for completion (synchronous for now) */
     uint32_t timeout = 1000000;
-    uint32_t poll_count = 0;
     
     while (timeout > 0) {
         /* Check and acknowledge interrupt status even in polling mode */
         uint32_t int_status = VIRTIO_READ32(dev, VIRTIO_MMIO_INTERRUPT_STATUS);
         if (int_status) {
             VIRTIO_WRITE32(dev, VIRTIO_MMIO_INTERRUPT_ACK, int_status);
-            hal_uart_puts("[VirtIO] Interrupt status: 0x");
-            hal_uart_put_hex(int_status);
-            hal_uart_puts("\n");
         }
         
         uint16_t used_idx;
         uint32_t len;
         if (virtqueue_get_used_buf(vq, &used_idx, &len) == 0) {
-            hal_uart_puts("[VirtIO] Request completed after ");
-            hal_uart_put_uint32(poll_count);
-            hal_uart_puts(" polls, status=");
-            hal_uart_put_uint32(req->status);
-            hal_uart_puts("\n");
             virtqueue_free_desc_chain(vq, used_idx);
             
             if (req->status != VIRTIO_BLK_S_OK) {
-                hal_uart_puts("[VirtIO] ERROR: Request failed with status ");
-                hal_uart_put_uint32(req->status);
-                hal_uart_puts("\n");
                 return -1;
             }
             
             return sectors;
         }
         timeout--;
-        poll_count++;
     }
     
-    hal_uart_puts("[VirtIO] ERROR: Timeout after ");
-    hal_uart_put_uint32(poll_count);
-    hal_uart_puts(" polls\n");
-    hal_uart_puts("[VirtIO] avail.idx=");
-    hal_uart_put_uint32(vq->avail->idx);
-    hal_uart_puts(" used.idx=");
-    hal_uart_put_uint32(vq->used->idx);
-    hal_uart_puts(" last_seen_used=");
-    hal_uart_put_uint32(vq->last_seen_used);
-    hal_uart_puts("\n");
-    
+    hal_uart_puts("[VirtIO] ERROR: Timeout\n");
     virtqueue_free_desc_chain(vq, desc_idx);
     return -1;
 }
@@ -323,14 +291,9 @@ static int virtio_blk_do_request(virtio_blk_device_t *dev, virtio_blk_request_t 
  */
 int virtio_blk_init(uintptr_t base_addr, uint32_t irq)
 {
-    hal_uart_puts("[VirtIO] Probing device at 0x");
-    hal_uart_put_hex(base_addr);
-    hal_uart_puts("\n");
-    
     /* Allocate device structure */
     g_blk_device = (virtio_blk_device_t *)kmalloc(sizeof(virtio_blk_device_t));
     if (!g_blk_device) {
-        hal_uart_puts("[VirtIO] ERROR: Failed to allocate device structure\n");
         return -1;
     }
     
@@ -353,19 +316,13 @@ int virtio_blk_init(uintptr_t base_addr, uint32_t irq)
     g_blk_device->device_id = VIRTIO_READ32(g_blk_device, VIRTIO_MMIO_DEVICE_ID);
     g_blk_device->vendor_id = VIRTIO_READ32(g_blk_device, VIRTIO_MMIO_VENDOR_ID);
     
-    hal_uart_puts("[VirtIO] Found device: id=");
-    hal_uart_put_uint32(g_blk_device->device_id);
-    hal_uart_puts(" vendor=");
-    hal_uart_put_hex(g_blk_device->vendor_id);
-    hal_uart_puts(" version=");
-    hal_uart_put_uint32(g_blk_device->version);
-    hal_uart_puts("\n");
-    
     if (g_blk_device->device_id != VIRTIO_DEVICE_ID_BLOCK) {
         kfree(g_blk_device);
         g_blk_device = NULL;
         return -1;
     }
+    
+    hal_uart_puts("[VirtIO] Found block device\n");
     
     /* Reset device */
     VIRTIO_WRITE32(g_blk_device, VIRTIO_MMIO_STATUS, 0);
