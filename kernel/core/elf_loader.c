@@ -58,73 +58,60 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     (void)argv;
     (void)argc;
     
-    hal_uart_puts("elf_loader: Loading ");
-    hal_uart_puts(path);
-    hal_uart_puts("\n");
-    
-    // Open file
+    /* Open file */
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0) {
-        hal_uart_puts("elf_loader: Failed to open file\n");
         return -1;
     }
     
-    // Read ELF header
+    /* Read ELF header */
     elf64_ehdr_t ehdr;
     if (vfs_read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr)) {
-        hal_uart_puts("elf_loader: Failed to read ELF header\n");
         vfs_close(fd);
         return -2;
     }
     
-    // Verify ELF magic
+    /* Verify ELF magic */
     if (ehdr.magic != ELF_MAGIC) {
-        hal_uart_puts("elf_loader: Invalid ELF magic\n");
         vfs_close(fd);
         return -3;
     }
     
-    // Verify it's a RISC-V executable
-    if (ehdr.machine != 0xF3) {  // EM_RISCV
-        hal_uart_puts("elf_loader: Not a RISC-V binary\n");
+    /* Verify it's a RISC-V executable */
+    if (ehdr.machine != 0xF3) {  /* EM_RISCV */
         vfs_close(fd);
         return -4;
     }
     
-    // Verify it's an executable
-    if (ehdr.type != 2) {  // ET_EXEC
-        hal_uart_puts("elf_loader: Not an executable\n");
+    /* Verify it's an executable */
+    if (ehdr.type != 2) {  /* ET_EXEC */
         vfs_close(fd);
         return -5;
     }
     
-    // Read program headers
+    /* Read program headers */
     if (ehdr.phnum == 0 || ehdr.phnum > 16) {
-        hal_uart_puts("elf_loader: Invalid program header count\n");
         vfs_close(fd);
         return -6;
     }
     
-    // Allocate space for program headers
+    /* Allocate space for program headers */
     size_t phdrs_size = ehdr.phnum * sizeof(elf64_phdr_t);
     elf64_phdr_t *phdrs = kmalloc(phdrs_size);
     if (!phdrs) {
-        hal_uart_puts("elf_loader: Failed to allocate program headers\n");
         vfs_close(fd);
         return -7;
     }
     
-    // Seek to program headers
+    /* Seek to program headers */
     if (vfs_seek(fd, ehdr.phoff, SEEK_SET) < 0) {
-        hal_uart_puts("elf_loader: Failed to seek to program headers\n");
         kfree(phdrs);
         vfs_close(fd);
         return -8;
     }
     
-    // Read all program headers
+    /* Read all program headers */
     if (vfs_read(fd, phdrs, phdrs_size) != (int)phdrs_size) {
-        hal_uart_puts("elf_loader: Failed to read program headers\n");
         kfree(phdrs);
         vfs_close(fd);
         return -9;
@@ -147,53 +134,49 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     }
     
     if (min_addr == (uint64_t)-1) {
-        hal_uart_puts("elf_loader: No loadable segments\n");
         kfree(phdrs);
         vfs_close(fd);
         return -10;
     }
     
-    // Allocate memory for the entire program (page-aligned)
+    /* Allocate memory for the entire program (page-aligned) */
     size_t total_size = max_addr - min_addr;
     size_t num_pages = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;
     uintptr_t program_phys = pmm_alloc_pages(num_pages);
     if (!program_phys) {
-        hal_uart_puts("elf_loader: Failed to allocate program memory\n");
         kfree(phdrs);
         vfs_close(fd);
         return -11;
     }
     
-    // Convert to virtual address for kernel access when loading segments
+    /* Convert to virtual address for kernel access when loading segments */
     void *program_mem_virt = (void *)translate_phys_to_virt(program_phys);
     void *program_mem_phys = (void *)program_phys;
     
-    // Zero out the memory
+    /* Zero out the memory */
     kmemset(program_mem_virt, 0, total_size);
     
-    // Load each PT_LOAD segment
+    /* Load each PT_LOAD segment */
     for (int i = 0; i < ehdr.phnum; i++) {
         if (phdrs[i].type != PT_LOAD) {
             continue;
         }
         
-        // Calculate offset into allocated memory (use virtual address for access)
+        /* Calculate offset into allocated memory (use virtual address for access) */
         void *dest = (uint8_t*)program_mem_virt + (phdrs[i].vaddr - min_addr);
         
-        // Seek to segment data in file
+        /* Seek to segment data in file */
         if (vfs_seek(fd, phdrs[i].offset, SEEK_SET) < 0) {
-            hal_uart_puts("elf_loader: Failed to seek to segment\n");
             pmm_free_pages(program_phys, num_pages);
             kfree(phdrs);
             vfs_close(fd);
             return -12;
         }
         
-        // Read segment data
+        /* Read segment data */
         if (phdrs[i].filesz > 0) {
             int nread = vfs_read(fd, dest, phdrs[i].filesz);
             if (nread != (int)phdrs[i].filesz) {
-                hal_uart_puts("elf_loader: Failed to read segment data\n");
                 pmm_free_pages(program_phys, num_pages);
                 kfree(phdrs);
                 vfs_close(fd);
@@ -208,28 +191,26 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
         }
     }
     
-    // Done with file and program headers
+    /* Done with file and program headers */
     vfs_close(fd);
     kfree(phdrs);
     
-    // Extract program name from path for process name
-    const char *name = path;
+    /* Extract program name from path for process name */
+    const char *program_name = path;
     for (const char *p = path; *p; p++) {
         if (*p == '/') {
-            name = p + 1;
+            program_name = p + 1;
         }
     }
     
-    // Create user process with loaded code and custom entry point
-    // Pass physical address for mapping
-    struct process *proc = process_create_elf(name, min_addr, program_mem_phys, total_size, ehdr.entry);
+    /* Create user process with loaded code and custom entry point */
+    struct process *proc = process_create_elf(program_name, min_addr, program_mem_phys, total_size, ehdr.entry);
     
     if (!proc) {
-        hal_uart_puts("elf_loader: Failed to create process\n");
         pmm_free_pages(program_phys, num_pages);
         return -14;
     }
     
-    // Return PID
+    /* Return process ID */
     return proc->pid;
 }

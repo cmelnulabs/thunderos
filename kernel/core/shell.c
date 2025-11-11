@@ -30,12 +30,20 @@ static int shell_strcmp(const char *s1, const char *s2) {
 
 /**
  * Concatenate two strings
+ * 
+ * @param destination Destination string buffer
+ * @param source Source string to append
+ * @return Pointer to destination string
  */
-static char *shell_strcat(char *dest, const char *src) {
-    char *d = dest;
-    while (*d) d++;
-    while ((*d++ = *src++));
-    return dest;
+static char *shell_strcat(char *destination, const char *source) {
+    char *dest_ptr = destination;
+    while (*dest_ptr) {
+        dest_ptr++;
+    }
+    while ((*dest_ptr++ = *source++)) {
+        /* Copy until null terminator */
+    }
+    return destination;
 }
 
 /**
@@ -60,20 +68,23 @@ static void shell_help(void) {
 }
 
 /**
- * Clear the screen
+ * Clear the screen using ANSI escape codes
  */
 static void shell_clear(void) {
-    // ANSI escape code to clear screen and move cursor to home
+    /* ANSI escape: clear screen and move cursor to home */
     hal_uart_puts("\033[2J\033[H");
 }
 
 /**
- * Echo command - print arguments
+ * Echo command - print arguments to console
+ * 
+ * @param argument_count Number of arguments
+ * @param argument_vector Array of argument strings
  */
-static void shell_echo(int argc, char **argv) {
-    for (int i = 1; i < argc; i++) {
-        hal_uart_puts(argv[i]);
-        if (i < argc - 1) {
+static void shell_echo(int argument_count, char **argument_vector) {
+    for (int arg_index = 1; arg_index < argument_count; arg_index++) {
+        hal_uart_puts(argument_vector[arg_index]);
+        if (arg_index < argument_count - 1) {
             hal_uart_puts(" ");
         }
     }
@@ -82,230 +93,235 @@ static void shell_echo(int argc, char **argv) {
 
 /**
  * List directory contents
+ * 
+ * @param argument_count Number of arguments
+ * @param argument_vector Array of argument strings
  */
-static void shell_ls(int argc, char **argv) {
-    const char *path = (argc > 1) ? argv[1] : "/";
+static void shell_ls(int argument_count, char **argument_vector) {
+    const char *directory_path = (argument_count > 1) ? argument_vector[1] : "/";
     
-    // Resolve the directory path
-    vfs_node_t *dir = vfs_resolve_path(path);
-    if (!dir) {
+    /* Resolve the directory path */
+    vfs_node_t *directory_node = vfs_resolve_path(directory_path);
+    if (!directory_node) {
         hal_uart_puts("ls: cannot access '");
-        hal_uart_puts(path);
+        hal_uart_puts(directory_path);
         hal_uart_puts("': No such file or directory\n");
         return;
     }
     
-    if (dir->type != VFS_TYPE_DIRECTORY) {
+    if (directory_node->type != VFS_TYPE_DIRECTORY) {
         hal_uart_puts("ls: '");
-        hal_uart_puts(path);
+        hal_uart_puts(directory_path);
         hal_uart_puts("': Not a directory\n");
         return;
     }
     
-    // List directory entries
-    char name[256];
-    uint32_t inode;
-    uint32_t index = 0;
+    /* List directory entries */
+    char entry_name[256];
+    uint32_t entry_inode = 0;
+    uint32_t entry_index = 0;
     
-    while (dir->ops->readdir(dir, index, name, &inode) == 0) {
-        hal_uart_puts(name);
+    while (directory_node->ops->readdir(directory_node, entry_index, entry_name, &entry_inode) == 0) {
+        hal_uart_puts(entry_name);
         hal_uart_puts("\n");
-        index++;
+        entry_index++;
     }
 }
 
 /**
- * Display file contents
+ * Display file contents to console
+ * 
+ * @param argument_count Number of arguments
+ * @param argument_vector Array of argument strings
  */
-static void shell_cat(int argc, char **argv) {
-    if (argc < 2) {
+static void shell_cat(int argument_count, char **argument_vector) {
+    if (argument_count < 2) {
         hal_uart_puts("Usage: cat <file>\n");
         return;
     }
     
-    const char *path = argv[1];
+    const char *file_path = argument_vector[1];
     
-    // Open the file
-    int fd = vfs_open(path, O_RDONLY);
-    if (fd < 0) {
+    /* Open the file */
+    int file_descriptor = vfs_open(file_path, O_RDONLY);
+    if (file_descriptor < 0) {
         hal_uart_puts("cat: ");
-        hal_uart_puts(path);
+        hal_uart_puts(file_path);
         hal_uart_puts(": No such file or directory\n");
         return;
     }
     
-    // Read and display contents
-    char buffer[256];
-    int bytes_read;
+    /* Read and display contents */
+    char read_buffer[256];
+    int bytes_read = 0;
     
-    while ((bytes_read = vfs_read(fd, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[bytes_read] = '\0';
-        hal_uart_puts(buffer);
+    while ((bytes_read = vfs_read(file_descriptor, read_buffer, sizeof(read_buffer) - 1)) > 0) {
+        read_buffer[bytes_read] = '\0';
+        hal_uart_puts(read_buffer);
     }
     
-    // Close the file
-    vfs_close(fd);
+    /* Close the file */
+    vfs_close(file_descriptor);
 }
 
 /**
  * Parse command line into arguments
  * 
- * @param cmdline Command line string
- * @param argv Array to store argument pointers
- * @param max_args Maximum number of arguments
+ * @param command_line Command line string to parse
+ * @param argument_vector Array to store argument pointers
+ * @param max_arguments Maximum number of arguments
  * @return Number of arguments parsed
  */
-static int shell_parse_args(char *cmdline, char **argv, int max_args) {
-    int argc = 0;
-    char *p = cmdline;
+static int shell_parse_args(char *command_line, char **argument_vector, int max_arguments) {
+    int argument_count = 0;
+    char *parser_position = command_line;
     
-    // Skip leading whitespace
-    while (*p && (*p == ' ' || *p == '\t')) {
-        p++;
+    /* Skip leading whitespace */
+    while (*parser_position && (*parser_position == ' ' || *parser_position == '\t')) {
+        parser_position++;
     }
     
-    while (*p && argc < max_args) {
-        // Start of argument
-        argv[argc++] = p;
+    while (*parser_position && argument_count < max_arguments) {
+        /* Start of argument */
+        argument_vector[argument_count++] = parser_position;
         
-        // Find end of argument
-        while (*p && *p != ' ' && *p != '\t') {
-            p++;
+        /* Find end of argument */
+        while (*parser_position && *parser_position != ' ' && *parser_position != '\t') {
+            parser_position++;
         }
         
-        // Null-terminate if not end of string
-        if (*p) {
-            *p = '\0';
-            p++;
+        /* Null-terminate if not end of string */
+        if (*parser_position) {
+            *parser_position = '\0';
+            parser_position++;
             
-            // Skip whitespace
-            while (*p && (*p == ' ' || *p == '\t')) {
-                p++;
+            /* Skip whitespace */
+            while (*parser_position && (*parser_position == ' ' || *parser_position == '\t')) {
+                parser_position++;
             }
         }
     }
     
-    return argc;
+    return argument_count;
 }
 
 /**
- * Execute external program
+ * Execute external program from filesystem
  * 
- * @param path Path to executable
- * @param argc Number of arguments
- * @param argv Argument array
+ * @param program_path Path to executable file
+ * @param argument_count Number of arguments
+ * @param argument_vector Argument array
  * @return 0 on success, -1 on error
  */
-static int shell_exec_program(const char *path, int argc, char **argv) {
-    // Convert to const char** for elf_load_exec
-    const char **const_argv = (const char **)argv;
+static int shell_exec_program(const char *program_path, int argument_count, char **argument_vector) {
+    /* Convert to const char** for elf_load_exec */
+    const char **const_argv = (const char **)argument_vector;
     
-    // Load ELF executable and create process
-    int result = elf_load_exec(path, const_argv, argc);
+    /* Load ELF executable and create process */
+    int process_id = elf_load_exec(program_path, const_argv, argument_count);
     
-    if (result < 0) {
+    if (process_id < 0) {
         hal_uart_puts("Error: Failed to execute ");
-        hal_uart_puts(path);
+        hal_uart_puts(program_path);
         hal_uart_puts("\n");
         return -1;
     }
     
-    // Wait for child process to complete
-    // For now, just yield a few times to let it run
-    // In a real implementation, we'd use waitpid properly
-    for (int i = 0; i < 100; i++) {
-        extern void schedule(void);
-        schedule();
+    /* Wait for child process to complete */
+    int wait_status = 0;
+    extern uint64_t sys_waitpid(int pid, int *wstatus, int options);
+    int result = sys_waitpid(process_id, &wait_status, 0);
+    
+    if (result < 0) {
+        hal_uart_puts("Error: waitpid failed\n");
+        return -1;
     }
     
     return 0;
 }
 
 /**
- * Execute a command
+ * Execute a shell command
  * 
- * @param cmdline Command line to execute
+ * @param command_line Command line to execute
  */
-static void shell_execute(char *cmdline) {
-    char *argv[MAX_ARGS];
-    int argc;
+static void shell_execute(char *command_line) {
+    char *argument_vector[MAX_ARGS];
+    int argument_count = 0;
     
-    // Parse command line
-    argc = shell_parse_args(cmdline, argv, MAX_ARGS);
+    /* Parse command line */
+    argument_count = shell_parse_args(command_line, argument_vector, MAX_ARGS);
     
-    if (argc == 0) {
-        return;  // Empty command
+    if (argument_count == 0) {
+        return;  /* Empty command */
     }
     
-    // Check for built-in commands
-    if (shell_strcmp(argv[0], "help") == 0) {
+    /* Check for built-in commands */
+    if (shell_strcmp(argument_vector[0], "help") == 0) {
         shell_help();
     }
-    else if (shell_strcmp(argv[0], "clear") == 0) {
+    else if (shell_strcmp(argument_vector[0], "clear") == 0) {
         shell_clear();
     }
-    else if (shell_strcmp(argv[0], "echo") == 0) {
-        shell_echo(argc, argv);
+    else if (shell_strcmp(argument_vector[0], "echo") == 0) {
+        shell_echo(argument_count, argument_vector);
     }
-    else if (shell_strcmp(argv[0], "ls") == 0) {
-        shell_ls(argc, argv);
+    else if (shell_strcmp(argument_vector[0], "ls") == 0) {
+        shell_ls(argument_count, argument_vector);
     }
-    else if (shell_strcmp(argv[0], "cat") == 0) {
-        shell_cat(argc, argv);
+    else if (shell_strcmp(argument_vector[0], "cat") == 0) {
+        shell_cat(argument_count, argument_vector);
     }
-    else if (shell_strcmp(argv[0], "exit") == 0) {
+    else if (shell_strcmp(argument_vector[0], "exit") == 0) {
         hal_uart_puts("Goodbye!\n");
-        // In a real OS, we'd exit the shell process
-        // For now, just return to prompt
     }
     else {
-        // Try to execute as external program
-        // Look in /bin directory
-        char path[256];
-        path[0] = '\0';
-        shell_strcat(path, "/bin/");
-        shell_strcat(path, argv[0]);
+        /* Try to execute as external program from /bin directory */
+        char program_path[256];
+        program_path[0] = '\0';
+        shell_strcat(program_path, "/bin/");
+        shell_strcat(program_path, argument_vector[0]);
         
-        shell_exec_program(path, argc, argv);
+        shell_exec_program(program_path, argument_count, argument_vector);
     }
 }
 
 /**
- * Process a character of input
+ * Process a character of input from console
  * 
- * @param c Character to process
+ * @param input_char Character to process
  */
-static void shell_process_char(char c) {
-    if (c == '\r' || c == '\n') {
-        // End of line
+static void shell_process_char(char input_char) {
+    if (input_char == '\r' || input_char == '\n') {
+        /* End of line - execute command */
         hal_uart_puts("\n");
         
-        // Null-terminate input
+        /* Null-terminate input */
         input_buffer[input_pos] = '\0';
         
-        // Execute command
+        /* Execute command */
         if (input_pos > 0) {
             shell_execute(input_buffer);
         }
         
-        // Reset input buffer
+        /* Reset input buffer */
         input_pos = 0;
         
-        // Print new prompt
+        /* Print new prompt */
         shell_print_prompt();
     }
-    else if (c == 127 || c == '\b') {
-        // Backspace
+    else if (input_char == 127 || input_char == '\b') {
+        /* Backspace - erase character */
         if (input_pos > 0) {
             input_pos--;
-            hal_uart_puts("\b \b");  // Erase character
+            hal_uart_puts("\b \b");
         }
     }
-    else if (c >= 32 && c < 127) {
-        // Printable character
+    else if (input_char >= 32 && input_char < 127) {
+        /* Printable character - echo and store */
         if (input_pos < MAX_CMD_LEN - 1) {
-            input_buffer[input_pos++] = c;
-            hal_uart_putc(c);  // Echo character
+            input_buffer[input_pos++] = input_char;
+            hal_uart_putc(input_char);
         }
     }
 }
@@ -328,13 +344,15 @@ void shell_init(void) {
 
 /**
  * Run the shell main loop
+ * 
+ * Continuously reads characters from UART and processes them
  */
 void shell_run(void) {
     while (1) {
-        // Read character from UART
-        char c = hal_uart_getc();
+        /* Read character from UART */
+        char input_char = hal_uart_getc();
         
-        // Process character
-        shell_process_char(c);
+        /* Process character */
+        shell_process_char(input_char);
     }
 }

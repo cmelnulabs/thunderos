@@ -122,67 +122,72 @@ static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
 
 /**
  * Read directory entry by index via VFS
+ * 
+ * @param directory VFS directory node
+ * @param entry_index Index of directory entry to read
+ * @param entry_name Buffer to store entry name
+ * @param entry_inode Pointer to store entry inode number
+ * @return 0 on success, -1 on error
  */
-static int ext2_vfs_readdir(vfs_node_t *dir, uint32_t index, char *name, uint32_t *inode) {
-    if (!dir || !dir->fs || !dir->fs->fs_data || !dir->fs_data || !name || !inode) {
+static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *entry_name, uint32_t *entry_inode) {
+    if (!directory || !directory->fs || !directory->fs->fs_data || !directory->fs_data || !entry_name || !entry_inode) {
         return -1;
     }
     
-    ext2_fs_t *ext2_fs = (ext2_fs_t *)dir->fs->fs_data;
-    ext2_inode_t *dir_inode = (ext2_inode_t *)dir->fs_data;
+    ext2_fs_t *ext2_filesystem = (ext2_fs_t *)directory->fs->fs_data;
+    ext2_inode_t *directory_inode = (ext2_inode_t *)directory->fs_data;
     
     /* Verify this is a directory */
-    if ((dir_inode->i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+    if ((directory_inode->i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
         return -1;
     }
     
     /* Allocate buffer for directory data */
-    uint8_t *dir_buffer = (uint8_t *)kmalloc(dir_inode->i_size);
-    if (!dir_buffer) {
+    uint8_t *directory_buffer = (uint8_t *)kmalloc(directory_inode->i_size);
+    if (!directory_buffer) {
         return -1;
     }
     
     /* Read directory contents */
-    int ret = ext2_read_file(ext2_fs, dir_inode, 0, dir_buffer, dir_inode->i_size);
-    if (ret < 0) {
-        kfree(dir_buffer);
+    int read_result = ext2_read_file(ext2_filesystem, directory_inode, 0, directory_buffer, directory_inode->i_size);
+    if (read_result < 0) {
+        kfree(directory_buffer);
         return -1;
     }
     
     /* Find the entry at the requested index */
-    uint32_t offset = 0;
+    uint32_t buffer_offset = 0;
     uint32_t current_index = 0;
-    int found = 0;
+    int entry_found = 0;
     
-    while (offset < dir_inode->i_size) {
-        ext2_dirent_t *entry = (ext2_dirent_t *)(dir_buffer + offset);
+    while (buffer_offset < directory_inode->i_size) {
+        ext2_dirent_t *directory_entry = (ext2_dirent_t *)(directory_buffer + buffer_offset);
         
         /* Check for invalid entry */
-        if (entry->rec_len == 0) {
+        if (directory_entry->rec_len == 0) {
             break;
         }
         
         /* Count only valid entries */
-        if (entry->inode != 0) {
-            if (current_index == index) {
-                /* Found the requested entry */
-                /* Copy name and null-terminate */
-                for (uint32_t i = 0; i < entry->name_len && i < 255; i++) {
-                    name[i] = entry->name[i];
+        if (directory_entry->inode != 0) {
+            if (current_index == entry_index) {
+                /* Found the requested entry - copy name and null-terminate */
+                for (uint32_t char_index = 0; char_index < directory_entry->name_len && char_index < 255; char_index++) {
+                    entry_name[char_index] = directory_entry->name[char_index];
                 }
-                name[entry->name_len] = '\0';
-                *inode = entry->inode;
-                found = 1;
+                entry_name[directory_entry->name_len] = '\0';
+                *entry_inode = directory_entry->inode;
+                entry_found = 1;
                 break;
             }
             current_index++;
         }
         
-        offset += entry->rec_len;
+        buffer_offset += directory_entry->rec_len;
     }
     
-    kfree(dir_buffer);
-    return found ? 0 : -1;
+    kfree(directory_buffer);
+    return entry_found ? 0 : -1;
 }
 
 /**

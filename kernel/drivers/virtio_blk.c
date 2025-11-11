@@ -281,7 +281,7 @@ static int virtio_blk_do_request(virtio_blk_device_t *dev, virtio_blk_request_t 
         timeout--;
     }
     
-    hal_uart_puts("[VirtIO] ERROR: Timeout\n");
+    /* Request timed out */
     virtqueue_free_desc_chain(vq, desc_idx);
     return -1;
 }
@@ -321,8 +321,6 @@ int virtio_blk_init(uintptr_t base_addr, uint32_t irq)
         g_blk_device = NULL;
         return -1;
     }
-    
-    hal_uart_puts("[VirtIO] Found block device\n");
     
     /* Reset device */
     VIRTIO_WRITE32(g_blk_device, VIRTIO_MMIO_STATUS, 0);
