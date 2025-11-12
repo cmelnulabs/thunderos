@@ -496,6 +496,117 @@ Register error handlers:
 
    void set_error_handler(void (*handler)(int errno, const char *msg));
 
+Testing and Validation
+-----------------------
+
+Running errno Tests
+~~~~~~~~~~~~~~~~~~~
+
+ThunderOS includes comprehensive errno tests that validate error handling across all subsystems.
+
+**Build and Run:**
+
+.. code-block:: bash
+
+   # Build ThunderOS
+   make clean && make
+   
+   # Create test ext2 filesystem
+   cd build
+   mkdir -p testfs
+   echo "Test file" > testfs/test.txt
+   mkfs.ext2 -F -q -d testfs ext2-disk.img 10M
+   cd ..
+   
+   # Run with QEMU (IMPORTANT: use virtio-mmio.force-legacy=false)
+   qemu-system-riscv64 \
+       -machine virt \
+       -m 128M \
+       -nographic \
+       -serial mon:stdio \
+       -bios default \
+       -kernel build/thunderos.elf \
+       -global virtio-mmio.force-legacy=false \
+       -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \
+       -device virtio-blk-device,drive=hd0
+
+**Critical QEMU Configuration:**
+
+The ``-global virtio-mmio.force-legacy=false`` flag is **required** for VirtIO to work correctly in modern (non-legacy) mode. Without this flag:
+
+- VirtIO block device will timeout on all I/O operations
+- ext2 filesystem mounting will fail with ``THUNDEROS_EIO``
+- All filesystem operations will return ``THUNDEROS_ENOENT`` or ``THUNDEROS_EIO``
+
+This flag ensures QEMU uses the modern VirtIO specification instead of the legacy interface.
+
+**Test Coverage:**
+
+The errno test suite validates:
+
+- Basic errno operations (set/get/clear)
+- Error string conversion (``thunderos_strerror``)
+- Kernel error printing (``kernel_perror``)
+- VFS error propagation
+- ELF loader error codes
+- ext2 filesystem errors (when filesystem is mounted)
+- ``RETURN_ERRNO`` macro functionality
+- Error code range validation
+- Call stack error propagation
+- Multiple consecutive errors
+
+**Expected Output:**
+
+.. code-block:: text
+
+   ========================================
+          errno Error Handling Tests
+   ========================================
+   
+   [SETUP] Checking filesystem for errno tests
+     [OK] Using pre-mounted ext2 filesystem
+   
+   [TEST] errno basic operations
+     [PASS] errno cleared to 0
+     [PASS] errno set to EINVAL
+     ...
+   
+   [TEST] ext2 filesystem errno error codes
+     [PASS] ext2_read_inode succeeded
+     [PASS] errno cleared on success
+     [PASS] ext2_lookup failed for non-existent file
+     [PASS] errno set to ENOENT
+     ...
+   
+   ========================================
+   Tests passed: 50+, Tests failed: 0
+   *** ALL ERRNO TESTS PASSED ***
+   ========================================
+
+Common Issues
+~~~~~~~~~~~~~
+
+**Issue: "VirtIO block device timeout" or "Failed to mount ext2 filesystem"**
+
+**Cause:** Missing ``-global virtio-mmio.force-legacy=false`` flag in QEMU command.
+
+**Solution:** Always include this flag when running ThunderOS with VirtIO devices.
+
+**Issue: "Filesystem not mounted, skipping ext2 tests"**
+
+**Cause:** VirtIO device not available or ext2 mount failed.
+
+**Solution:** 
+1. Verify QEMU is started with VirtIO block device parameters
+2. Check that ext2-disk.img exists and is properly formatted
+3. Ensure ``-global virtio-mmio.force-legacy=false`` is present
+
+**Issue: errno tests show failures**
+
+**Cause:** Actual bugs in error handling implementation.
+
+**Solution:** Review test output to identify which subsystem is failing and fix the error handling code.
+
 See Also
 --------
 
