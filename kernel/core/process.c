@@ -58,6 +58,7 @@ void process_init(void) {
     init_proc->priority = 0;
     init_proc->parent = NULL;
     init_proc->exit_code = 0;
+    init_proc->errno_value = 0;
     init_proc->trap_frame = NULL;
     
     current_process = init_proc;
@@ -281,6 +282,7 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->priority = 10;  // Default priority
     proc->parent = current_process;
     proc->exit_code = 0;
+    proc->errno_value = 0;
     
     // Mark as ready and add to scheduler
     proc->state = PROC_READY;
@@ -582,6 +584,7 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     proc->priority = 10;  // Default priority (lower number = higher priority)
     proc->parent = current_process;
     proc->exit_code = 0;
+    proc->errno_value = 0;
     
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
@@ -716,6 +719,7 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->priority = 10;  // Default priority
     proc->parent = current_process;
     proc->exit_code = 0;
+    proc->errno_value = 0;
     
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;

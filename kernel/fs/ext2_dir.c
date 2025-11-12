@@ -5,6 +5,7 @@
 #include "../include/fs/ext2.h"
 #include "../include/hal/hal_uart.h"
 #include "../include/mm/kmalloc.h"
+#include "../include/kernel/errno.h"
 #include <stddef.h>
 
 /**
@@ -39,18 +40,21 @@ static int strncmp(const char *s1, const char *s2, uint32_t n) {
 uint32_t ext2_lookup(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name) {
     if (!fs || !dir_inode || !name) {
         hal_uart_puts("ext2: Invalid parameters to ext2_lookup\n");
+        set_errno(THUNDEROS_EINVAL);
         return 0;
     }
     
     /* Verify this is a directory */
     if ((dir_inode->i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
         hal_uart_puts("ext2: Inode is not a directory\n");
+        set_errno(THUNDEROS_EFS_BADDIR);
         return 0;
     }
     
     uint32_t name_len = strlen(name);
     if (name_len == 0 || name_len > EXT2_NAME_LEN) {
         hal_uart_puts("ext2: Invalid filename length\n");
+        set_errno(THUNDEROS_EINVAL);
         return 0;
     }
     
@@ -58,6 +62,7 @@ uint32_t ext2_lookup(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name) {
     uint8_t *dir_buffer = (uint8_t *)kmalloc(dir_inode->i_size);
     if (!dir_buffer) {
         hal_uart_puts("ext2: Failed to allocate directory buffer\n");
+        set_errno(THUNDEROS_ENOMEM);
         return 0;
     }
     
@@ -66,6 +71,7 @@ uint32_t ext2_lookup(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name) {
     if (ret < 0) {
         hal_uart_puts("ext2: Failed to read directory\n");
         kfree(dir_buffer);
+        /* errno already set by ext2_read_file */
         return 0;
     }
     
@@ -84,6 +90,7 @@ uint32_t ext2_lookup(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name) {
             if (strncmp(entry->name, name, name_len) == 0) {
                 uint32_t inode_num = entry->inode;
                 kfree(dir_buffer);
+                clear_errno();
                 return inode_num;
             }
         }
@@ -92,6 +99,7 @@ uint32_t ext2_lookup(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name) {
     }
     
     kfree(dir_buffer);
+    set_errno(THUNDEROS_ENOENT);
     return 0;  /* Not found */
 }
 
@@ -101,20 +109,20 @@ uint32_t ext2_lookup(ext2_fs_t *fs, ext2_inode_t *dir_inode, const char *name) {
 int ext2_list_dir(ext2_fs_t *fs, ext2_inode_t *dir_inode, ext2_dir_callback_t callback) {
     if (!fs || !dir_inode || !callback) {
         hal_uart_puts("ext2: Invalid parameters to ext2_list_dir\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* Verify this is a directory */
     if ((dir_inode->i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
         hal_uart_puts("ext2: Inode is not a directory\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFS_BADDIR);
     }
     
     /* Allocate buffer for directory data */
     uint8_t *dir_buffer = (uint8_t *)kmalloc(dir_inode->i_size);
     if (!dir_buffer) {
         hal_uart_puts("ext2: Failed to allocate directory buffer\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Read directory contents */
@@ -122,6 +130,7 @@ int ext2_list_dir(ext2_fs_t *fs, ext2_inode_t *dir_inode, ext2_dir_callback_t ca
     if (ret < 0) {
         hal_uart_puts("ext2: Failed to read directory\n");
         kfree(dir_buffer);
+        /* errno already set by ext2_read_file */
         return -1;
     }
     
@@ -130,7 +139,7 @@ int ext2_list_dir(ext2_fs_t *fs, ext2_inode_t *dir_inode, ext2_dir_callback_t ca
     if (!name_buffer) {
         hal_uart_puts("ext2: Failed to allocate name buffer\n");
         kfree(dir_buffer);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Parse directory entries */
@@ -160,5 +169,6 @@ int ext2_list_dir(ext2_fs_t *fs, ext2_inode_t *dir_inode, ext2_dir_callback_t ca
     
     kfree(name_buffer);
     kfree(dir_buffer);
+    clear_errno();
     return 0;
 }

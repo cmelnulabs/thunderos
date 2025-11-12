@@ -89,6 +89,9 @@ struct process {
     
     // Exit status
     int exit_code;                      // Exit code if state is ZOMBIE
+    
+    // Error handling
+    int errno_value;                    // Per-process error number (errno)
 };
 
 /**

@@ -6,6 +6,7 @@
 #include "../include/drivers/virtio_blk.h"
 #include "../include/mm/kmalloc.h"
 #include "../include/hal/hal_uart.h"
+#include "../include/kernel/errno.h"
 #include <stddef.h>
 
 /**
@@ -20,10 +21,12 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -39,10 +42,12 @@ static int write_block(void *device, uint32_t block_num, const void *buffer, uin
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_write(sector + i, (const uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -259,7 +264,7 @@ int ext2_write_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
                     const void *buffer, uint32_t size) {
     if (!fs || !inode || !buffer || size == 0) {
         hal_uart_puts("ext2: Invalid parameters to ext2_write_file\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     const uint8_t *src = (const uint8_t *)buffer;
@@ -269,7 +274,7 @@ int ext2_write_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
     uint8_t *block_buffer = (uint8_t *)kmalloc(fs->block_size);
     if (!block_buffer) {
         hal_uart_puts("ext2: Failed to allocate block buffer\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     while (bytes_written < size) {
@@ -282,6 +287,7 @@ int ext2_write_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
         if (block_num == 0) {
             hal_uart_puts("ext2: Failed to allocate block for file write\n");
             kfree(block_buffer);
+            /* errno already set by get_or_alloc_block */
             return -1;
         }
         
@@ -312,6 +318,7 @@ int ext2_write_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
             hal_uart_put_uint32(block_num);
             hal_uart_puts("\n");
             kfree(block_buffer);
+            /* errno already set by write_block */
             return -1;
         }
         
@@ -364,7 +371,7 @@ static int add_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode, uint32_t dir_in
     uint32_t name_len = strlen(name);
     if (name_len == 0 || name_len > EXT2_NAME_LEN) {
         hal_uart_puts("ext2: Invalid directory entry name length\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* Calculate required entry size (aligned to 4 bytes) */
@@ -376,7 +383,7 @@ static int add_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode, uint32_t dir_in
     uint8_t *dir_buffer = (uint8_t *)kmalloc(dir_size + required_len + 512);  /* Extra space */
     if (!dir_buffer) {
         hal_uart_puts("ext2: Failed to allocate directory buffer\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Read current directory contents */
@@ -385,6 +392,7 @@ static int add_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode, uint32_t dir_in
         if (ret < 0) {
             hal_uart_puts("ext2: Failed to read directory\n");
             kfree(dir_buffer);
+            /* errno already set by ext2_read_file */
             return -1;
         }
     }
@@ -446,6 +454,7 @@ static int add_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode, uint32_t dir_in
     if (ret < 0) {
         hal_uart_puts("ext2: Failed to write directory\n");
         kfree(dir_buffer);
+        /* errno already set by ext2_write_file */
         return -1;
     }
     
@@ -454,10 +463,12 @@ static int add_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode, uint32_t dir_in
     if (ret < 0) {
         hal_uart_puts("ext2: Failed to update directory inode\n");
         kfree(dir_buffer);
+        /* errno already set by ext2_write_inode */
         return -1;
     }
     
     kfree(dir_buffer);
+    clear_errno();
     return 0;
 }
 
@@ -679,7 +690,7 @@ int ext2_remove_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     (void)name;
     
     hal_uart_puts("ext2: remove_file not yet implemented\n");
-    return -1;
+    RETURN_ERRNO(THUNDEROS_EPERM);
 }
 
 /**
@@ -691,5 +702,5 @@ int ext2_remove_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     (void)name;
     
     hal_uart_puts("ext2: remove_dir not yet implemented\n");
-    return -1;
+    RETURN_ERRNO(THUNDEROS_EPERM);
 }

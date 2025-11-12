@@ -19,12 +19,17 @@ This section documents the internal implementation details of ThunderOS.
    dma
    barrier
    kstring
+   errno
    process_management
    user_mode
    testing_framework
    linker_script
    memory_layout
    registers
+   virtio_block
+   ext2_filesystem
+   vfs
+   elf_loader
    hal/index
 
 Overview

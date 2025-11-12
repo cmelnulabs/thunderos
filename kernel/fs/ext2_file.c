@@ -6,6 +6,7 @@
 #include "../include/drivers/virtio_blk.h"
 #include "../include/mm/kmalloc.h"
 #include "../include/hal/hal_uart.h"
+#include "../include/kernel/errno.h"
 #include <stddef.h>
 
 /**
@@ -23,10 +24,12 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
         int ret = virtio_blk_read(sector + i, 
                                   (uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -55,12 +58,14 @@ static uint32_t get_block_number(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t fi
         
         indirect_buffer = (uint32_t *)kmalloc(fs->block_size);
         if (!indirect_buffer) {
+            set_errno(THUNDEROS_ENOMEM);
             return 0;
         }
         
         if (read_block(fs->device, inode->i_block[EXT2_IND_BLOCK], 
                       indirect_buffer, fs->block_size) != 0) {
             kfree(indirect_buffer);
+            /* errno already set by read_block */
             return 0;
         }
         
@@ -80,12 +85,14 @@ static uint32_t get_block_number(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t fi
         /* Read double-indirect block */
         dindirect_buffer = (uint32_t *)kmalloc(fs->block_size);
         if (!dindirect_buffer) {
+            set_errno(THUNDEROS_ENOMEM);
             return 0;
         }
         
         if (read_block(fs->device, inode->i_block[EXT2_DIND_BLOCK], 
                       dindirect_buffer, fs->block_size) != 0) {
             kfree(dindirect_buffer);
+            /* errno already set by read_block */
             return 0;
         }
         
@@ -101,12 +108,14 @@ static uint32_t get_block_number(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t fi
         /* Read indirect block */
         indirect_buffer = (uint32_t *)kmalloc(fs->block_size);
         if (!indirect_buffer) {
+            set_errno(THUNDEROS_ENOMEM);
             return 0;
         }
         
         if (read_block(fs->device, indirect_block_num, 
                       indirect_buffer, fs->block_size) != 0) {
             kfree(indirect_buffer);
+            /* errno already set by read_block */
             return 0;
         }
         
@@ -120,6 +129,7 @@ static uint32_t get_block_number(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t fi
     /* Triple-indirect block - not implemented for now */
     /* Most files won't need this (would need to be > 4GB on 1KB blocks) */
     hal_uart_puts("ext2: Triple-indirect blocks not yet supported\n");
+    set_errno(THUNDEROS_EFBIG);
     return 0;
 }
 
@@ -130,11 +140,12 @@ int ext2_read_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
                    void *buffer, uint32_t size) {
     if (!fs || !inode || !buffer) {
         hal_uart_puts("ext2: Invalid parameters to ext2_read_file\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* Check if offset is beyond file size */
     if (offset >= inode->i_size) {
+        clear_errno();
         return 0;
     }
     
@@ -150,7 +161,7 @@ int ext2_read_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
     uint8_t *block_buffer = (uint8_t *)kmalloc(fs->block_size);
     if (!block_buffer) {
         hal_uart_puts("ext2: Failed to allocate block buffer\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     while (bytes_read < size) {
@@ -179,6 +190,7 @@ int ext2_read_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
             hal_uart_put_uint32(block_num);
             hal_uart_puts("\n");
             kfree(block_buffer);
+            /* errno already set by read_block */
             return -1;
         }
         
@@ -196,5 +208,6 @@ int ext2_read_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
     }
     
     kfree(block_buffer);
+    clear_errno();
     return bytes_read;
 }

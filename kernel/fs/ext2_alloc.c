@@ -6,6 +6,7 @@
 #include "../include/drivers/virtio_blk.h"
 #include "../include/mm/kmalloc.h"
 #include "../include/hal/hal_uart.h"
+#include "../include/kernel/errno.h"
 #include <stddef.h>
 
 /**
@@ -20,10 +21,12 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -39,10 +42,12 @@ static int write_block(void *device, uint32_t block_num, const void *buffer, uin
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_write(sector + i, (const uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -52,6 +57,7 @@ static int write_block(void *device, uint32_t block_num, const void *buffer, uin
  */
 uint32_t ext2_alloc_block(ext2_fs_t *fs, uint32_t group) {
     if (!fs || group >= fs->num_groups) {
+        set_errno(THUNDEROS_EINVAL);
         return 0;
     }
     
@@ -59,17 +65,20 @@ uint32_t ext2_alloc_block(ext2_fs_t *fs, uint32_t group) {
     
     /* Check if group has free blocks */
     if (gd->bg_free_blocks_count == 0) {
+        set_errno(THUNDEROS_EFS_NOBLK);
         return 0;
     }
     
     /* Read block bitmap */
     uint8_t *bitmap = (uint8_t *)kmalloc(fs->block_size);
     if (!bitmap) {
+        set_errno(THUNDEROS_ENOMEM);
         return 0;
     }
     
     if (read_block(fs->device, gd->bg_block_bitmap, bitmap, fs->block_size) != 0) {
         kfree(bitmap);
+        /* errno already set by read_block */
         return 0;
     }
     
@@ -86,6 +95,7 @@ uint32_t ext2_alloc_block(ext2_fs_t *fs, uint32_t group) {
             /* Write bitmap back */
             if (write_block(fs->device, gd->bg_block_bitmap, bitmap, fs->block_size) != 0) {
                 kfree(bitmap);
+                /* errno already set by write_block */
                 return 0;
             }
             
@@ -96,11 +106,13 @@ uint32_t ext2_alloc_block(ext2_fs_t *fs, uint32_t group) {
             fs->superblock->s_free_blocks_count--;
             
             kfree(bitmap);
+            clear_errno();
             return group * blocks_per_group + i;
         }
     }
     
     kfree(bitmap);
+    set_errno(THUNDEROS_EFS_NOBLK);
     return 0;
 }
 
@@ -109,7 +121,7 @@ uint32_t ext2_alloc_block(ext2_fs_t *fs, uint32_t group) {
  */
 int ext2_free_block(ext2_fs_t *fs, uint32_t block_num) {
     if (!fs || block_num == 0) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* Determine which group contains this block */
@@ -118,7 +130,7 @@ int ext2_free_block(ext2_fs_t *fs, uint32_t block_num) {
     uint32_t offset = block_num % blocks_per_group;
     
     if (group >= fs->num_groups) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     ext2_group_desc_t *gd = &fs->group_desc[group];
@@ -126,11 +138,12 @@ int ext2_free_block(ext2_fs_t *fs, uint32_t block_num) {
     /* Read block bitmap */
     uint8_t *bitmap = (uint8_t *)kmalloc(fs->block_size);
     if (!bitmap) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     if (read_block(fs->device, gd->bg_block_bitmap, bitmap, fs->block_size) != 0) {
         kfree(bitmap);
+        /* errno already set by read_block */
         return -1;
     }
     
@@ -142,6 +155,7 @@ int ext2_free_block(ext2_fs_t *fs, uint32_t block_num) {
     /* Write bitmap back */
     if (write_block(fs->device, gd->bg_block_bitmap, bitmap, fs->block_size) != 0) {
         kfree(bitmap);
+        /* errno already set by write_block */
         return -1;
     }
     
@@ -152,6 +166,7 @@ int ext2_free_block(ext2_fs_t *fs, uint32_t block_num) {
     fs->superblock->s_free_blocks_count++;
     
     kfree(bitmap);
+    clear_errno();
     return 0;
 }
 
@@ -161,6 +176,7 @@ int ext2_free_block(ext2_fs_t *fs, uint32_t block_num) {
  */
 uint32_t ext2_alloc_inode(ext2_fs_t *fs, uint32_t group) {
     if (!fs || group >= fs->num_groups) {
+        set_errno(THUNDEROS_EINVAL);
         return 0;
     }
     
@@ -168,17 +184,20 @@ uint32_t ext2_alloc_inode(ext2_fs_t *fs, uint32_t group) {
     
     /* Check if group has free inodes */
     if (gd->bg_free_inodes_count == 0) {
+        set_errno(THUNDEROS_EFS_NOINODE);
         return 0;
     }
     
     /* Read inode bitmap */
     uint8_t *bitmap = (uint8_t *)kmalloc(fs->block_size);
     if (!bitmap) {
+        set_errno(THUNDEROS_ENOMEM);
         return 0;
     }
     
     if (read_block(fs->device, gd->bg_inode_bitmap, bitmap, fs->block_size) != 0) {
         kfree(bitmap);
+        /* errno already set by read_block */
         return 0;
     }
     
@@ -195,6 +214,7 @@ uint32_t ext2_alloc_inode(ext2_fs_t *fs, uint32_t group) {
             /* Write bitmap back */
             if (write_block(fs->device, gd->bg_inode_bitmap, bitmap, fs->block_size) != 0) {
                 kfree(bitmap);
+                /* errno already set by write_block */
                 return 0;
             }
             
@@ -205,11 +225,13 @@ uint32_t ext2_alloc_inode(ext2_fs_t *fs, uint32_t group) {
             fs->superblock->s_free_inodes_count--;
             
             kfree(bitmap);
+            clear_errno();
             return group * inodes_per_group + i + 1;  /* Inodes are 1-indexed */
         }
     }
     
     kfree(bitmap);
+    set_errno(THUNDEROS_EFS_NOINODE);
     return 0;
 }
 
@@ -218,7 +240,7 @@ uint32_t ext2_alloc_inode(ext2_fs_t *fs, uint32_t group) {
  */
 int ext2_free_inode(ext2_fs_t *fs, uint32_t inode_num) {
     if (!fs || inode_num == 0) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* Inodes are 1-indexed */
@@ -230,7 +252,7 @@ int ext2_free_inode(ext2_fs_t *fs, uint32_t inode_num) {
     uint32_t offset = inode_index % inodes_per_group;
     
     if (group >= fs->num_groups) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     ext2_group_desc_t *gd = &fs->group_desc[group];
@@ -238,11 +260,12 @@ int ext2_free_inode(ext2_fs_t *fs, uint32_t inode_num) {
     /* Read inode bitmap */
     uint8_t *bitmap = (uint8_t *)kmalloc(fs->block_size);
     if (!bitmap) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     if (read_block(fs->device, gd->bg_inode_bitmap, bitmap, fs->block_size) != 0) {
         kfree(bitmap);
+        /* errno already set by read_block */
         return -1;
     }
     
@@ -254,6 +277,7 @@ int ext2_free_inode(ext2_fs_t *fs, uint32_t inode_num) {
     /* Write bitmap back */
     if (write_block(fs->device, gd->bg_inode_bitmap, bitmap, fs->block_size) != 0) {
         kfree(bitmap);
+        /* errno already set by write_block */
         return -1;
     }
     
@@ -264,5 +288,6 @@ int ext2_free_inode(ext2_fs_t *fs, uint32_t inode_num) {
     fs->superblock->s_free_inodes_count++;
     
     kfree(bitmap);
+    clear_errno();
     return 0;
 }

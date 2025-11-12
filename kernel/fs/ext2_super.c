@@ -7,6 +7,7 @@
 #include "../include/mm/kmalloc.h"
 #include "../include/mm/dma.h"
 #include "../include/hal/hal_uart.h"
+#include "../include/kernel/errno.h"
 #include <stddef.h>
 
 /**
@@ -24,10 +25,12 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
         int ret = virtio_blk_read(sector + i, 
                                   (uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -36,7 +39,7 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
  */
 int ext2_mount(ext2_fs_t *fs, void *device) {
     if (!fs || !device) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* Initialize filesystem context */
@@ -47,7 +50,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     /* Allocate buffer for superblock (1024 bytes) */
     fs->superblock = (ext2_superblock_t *)kmalloc(EXT2_SUPERBLOCK_SIZE);
     if (!fs->superblock) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Read first two sectors (superblock starts at byte 1024) */
@@ -59,7 +62,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     if (ret != 1) {
         kfree(fs->superblock);
         fs->superblock = NULL;
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     /* Read sector 2 (offset 1024) into first 512 bytes of superblock */
@@ -67,7 +70,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     if (ret != 1) {
         kfree(fs->superblock);
         fs->superblock = NULL;
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     /* Read sector 3 (offset 1536) into second 512 bytes of superblock */
@@ -75,14 +78,14 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     if (ret != 1) {
         kfree(fs->superblock);
         fs->superblock = NULL;
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     /* Verify magic number */
     if (fs->superblock->s_magic != EXT2_SUPER_MAGIC) {
         kfree(fs->superblock);
         fs->superblock = NULL;
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFS_BADSUPER);
     }
     
     /* Calculate block size */
@@ -92,7 +95,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     if (fs->block_size < EXT2_MIN_BLOCK_SIZE || fs->block_size > EXT2_MAX_BLOCK_SIZE) {
         kfree(fs->superblock);
         fs->superblock = NULL;
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFS_INVAL);
     }
     
     /* Calculate number of block groups */
@@ -114,7 +117,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     if (!fs->group_desc) {
         kfree(fs->superblock);
         fs->superblock = NULL;
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Read group descriptor table (starts in block after superblock) */
@@ -128,10 +131,12 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
             kfree(fs->superblock);
             fs->group_desc = NULL;
             fs->superblock = NULL;
+            /* errno already set by read_block */
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 

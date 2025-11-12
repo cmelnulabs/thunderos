@@ -5,6 +5,7 @@
 #include "../../include/fs/vfs.h"
 #include "../../include/hal/hal_uart.h"
 #include "../../include/mm/kmalloc.h"
+#include "../../include/kernel/errno.h"
 #include <stddef.h>
 
 /* Global file descriptor table (per-process would be better, but global for now) */
@@ -74,13 +75,14 @@ int vfs_init(void) {
 int vfs_mount_root(vfs_filesystem_t *fs) {
     if (!fs || !fs->root) {
         hal_uart_puts("vfs: Invalid filesystem\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     g_root_fs = fs;
     hal_uart_puts("vfs: Mounted root filesystem (");
     hal_uart_puts(fs->name);
     hal_uart_puts(")\n");
+    clear_errno();
     return 0;
 }
 
@@ -97,7 +99,8 @@ int vfs_alloc_fd(void) {
             return i;
         }
     }
-    return -1;  /* No free descriptors */
+    /* No free descriptors */
+    RETURN_ERRNO(THUNDEROS_EMFILE);
 }
 
 /**
@@ -117,6 +120,7 @@ void vfs_free_fd(int fd) {
  */
 vfs_file_t *vfs_get_file(int fd) {
     if (fd < 0 || fd >= VFS_MAX_OPEN_FILES || !g_file_table[fd].in_use) {
+        set_errno(THUNDEROS_EBADF);
         return NULL;
     }
     return &g_file_table[fd];
@@ -129,11 +133,13 @@ vfs_file_t *vfs_get_file(int fd) {
 vfs_node_t *vfs_resolve_path(const char *path) {
     if (!g_root_fs) {
         hal_uart_puts("vfs: No root filesystem mounted\n");
+        set_errno(THUNDEROS_EFS_NOTMNT);
         return NULL;
     }
     
     if (!path || path[0] != '/') {
         hal_uart_puts("vfs: Path must be absolute (start with /)\n");
+        set_errno(THUNDEROS_EINVAL);
         return NULL;
     }
     
@@ -172,12 +178,14 @@ vfs_node_t *vfs_resolve_path(const char *path) {
         /* Lookup component in current directory */
         if (!current->ops || !current->ops->lookup) {
             hal_uart_puts("vfs: No lookup operation\n");
+            set_errno(THUNDEROS_EIO);
             return NULL;
         }
         
         vfs_node_t *next = current->ops->lookup(current, component);
         if (!next) {
-            return NULL;  /* Component not found */
+            /* errno already set by lookup */
+            return NULL;
         }
         
         current = next;
@@ -197,7 +205,7 @@ vfs_node_t *vfs_resolve_path(const char *path) {
 int vfs_open(const char *path, uint32_t flags) {
     if (!path) {
         hal_uart_puts("vfs: NULL path\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* Resolve path */
@@ -215,7 +223,7 @@ int vfs_open(const char *path, uint32_t flags) {
             while (*p && *p != '/') p++;
             if (*p == '/') {
                 hal_uart_puts("vfs: O_CREAT only supports root directory for now\n");
-                return -1;
+                RETURN_ERRNO(THUNDEROS_EINVAL);
             }
             
             /* Create file in root directory */
@@ -224,6 +232,7 @@ int vfs_open(const char *path, uint32_t flags) {
                 int ret = root->ops->create(root, filename, 0644);
                 if (ret != 0) {
                     hal_uart_puts("vfs: Failed to create file\n");
+                    /* errno already set by create */
                     return -1;
                 }
                 
@@ -237,13 +246,14 @@ int vfs_open(const char *path, uint32_t flags) {
         hal_uart_puts("vfs: File not found: ");
         hal_uart_puts(path);
         hal_uart_puts("\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOENT);
     }
     
     /* Allocate file descriptor */
     int fd = vfs_alloc_fd();
     if (fd < 0) {
         hal_uart_puts("vfs: No free file descriptors\n");
+        /* errno already set by vfs_alloc_fd */
         return -1;
     }
     
@@ -257,6 +267,7 @@ int vfs_open(const char *path, uint32_t flags) {
         int ret = node->ops->open(node, flags);
         if (ret != 0) {
             vfs_free_fd(fd);
+            /* errno already set by open */
             return -1;
         }
     }
@@ -271,6 +282,7 @@ int vfs_open(const char *path, uint32_t flags) {
         g_file_table[fd].pos = node->size;
     }
     
+    clear_errno();
     return fd;
 }
 
@@ -280,6 +292,7 @@ int vfs_open(const char *path, uint32_t flags) {
 int vfs_close(int fd) {
     vfs_file_t *file = vfs_get_file(fd);
     if (!file) {
+        /* errno already set by vfs_get_file */
         return -1;
     }
     
@@ -290,6 +303,7 @@ int vfs_close(int fd) {
     
     /* Free the file descriptor */
     vfs_free_fd(fd);
+    clear_errno();
     return 0;
 }
 
@@ -299,19 +313,20 @@ int vfs_close(int fd) {
 int vfs_read(int fd, void *buffer, uint32_t size) {
     vfs_file_t *file = vfs_get_file(fd);
     if (!file || !file->node) {
+        /* errno already set by vfs_get_file */
         return -1;
     }
     
     /* Check if opened for reading */
     if ((file->flags & O_WRONLY) && !(file->flags & O_RDWR)) {
         hal_uart_puts("vfs: File not open for reading\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EACCES);
     }
     
     /* Check if read operation exists */
     if (!file->node->ops || !file->node->ops->read) {
         hal_uart_puts("vfs: No read operation\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     /* Read from current position */
@@ -329,19 +344,20 @@ int vfs_read(int fd, void *buffer, uint32_t size) {
 int vfs_write(int fd, const void *buffer, uint32_t size) {
     vfs_file_t *file = vfs_get_file(fd);
     if (!file || !file->node) {
+        /* errno already set by vfs_get_file */
         return -1;
     }
     
     /* Check if opened for writing */
     if ((file->flags & O_RDONLY) && !(file->flags & O_RDWR)) {
         hal_uart_puts("vfs: File not open for writing\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EACCES);
     }
     
     /* Check if write operation exists */
     if (!file->node->ops || !file->node->ops->write) {
         hal_uart_puts("vfs: No write operation\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     /* Write at current position */
@@ -364,6 +380,7 @@ int vfs_write(int fd, const void *buffer, uint32_t size) {
 int vfs_seek(int fd, int offset, int whence) {
     vfs_file_t *file = vfs_get_file(fd);
     if (!file || !file->node) {
+        /* errno already set by vfs_get_file */
         return -1;
     }
     
@@ -384,10 +401,11 @@ int vfs_seek(int fd, int offset, int whence) {
             
         default:
             hal_uart_puts("vfs: Invalid whence value\n");
-            return -1;
+            RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     file->pos = new_pos;
+    clear_errno();
     return new_pos;
 }
 
@@ -396,12 +414,12 @@ int vfs_seek(int fd, int offset, int whence) {
  */
 int vfs_mkdir(const char *path, uint32_t mode) {
     if (!g_root_fs || !path) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* For now, only support directories in root */
     if (path[0] != '/' || path[1] == '\0') {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     const char *dirname = path + 1;
@@ -411,13 +429,13 @@ int vfs_mkdir(const char *path, uint32_t mode) {
     while (*p && *p != '/') p++;
     if (*p == '/') {
         hal_uart_puts("vfs: mkdir only supports root directory for now\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     vfs_node_t *root = g_root_fs->root;
     if (!root->ops || !root->ops->mkdir) {
         hal_uart_puts("vfs: No mkdir operation\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     return root->ops->mkdir(root, dirname, mode);
@@ -428,12 +446,12 @@ int vfs_mkdir(const char *path, uint32_t mode) {
  */
 int vfs_rmdir(const char *path) {
     if (!g_root_fs || !path) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* For now, only support directories in root */
     if (path[0] != '/' || path[1] == '\0') {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     const char *dirname = path + 1;
@@ -441,7 +459,7 @@ int vfs_rmdir(const char *path) {
     vfs_node_t *root = g_root_fs->root;
     if (!root->ops || !root->ops->rmdir) {
         hal_uart_puts("vfs: No rmdir operation\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     return root->ops->rmdir(root, dirname);
@@ -452,12 +470,12 @@ int vfs_rmdir(const char *path) {
  */
 int vfs_unlink(const char *path) {
     if (!g_root_fs || !path) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     /* For now, only support files in root */
     if (path[0] != '/' || path[1] == '\0') {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     const char *filename = path + 1;
@@ -465,7 +483,7 @@ int vfs_unlink(const char *path) {
     vfs_node_t *root = g_root_fs->root;
     if (!root->ops || !root->ops->unlink) {
         hal_uart_puts("vfs: No unlink operation\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EIO);
     }
     
     return root->ops->unlink(root, filename);
@@ -477,6 +495,7 @@ int vfs_unlink(const char *path) {
 int vfs_stat(const char *path, uint32_t *size, uint32_t *type) {
     vfs_node_t *node = vfs_resolve_path(path);
     if (!node) {
+        /* errno already set by vfs_resolve_path */
         return -1;
     }
     
@@ -487,6 +506,7 @@ int vfs_stat(const char *path, uint32_t *size, uint32_t *type) {
         *type = node->type;
     }
     
+    clear_errno();
     return 0;
 }
 
