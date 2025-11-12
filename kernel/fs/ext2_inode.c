@@ -6,6 +6,7 @@
 #include "../include/drivers/virtio_blk.h"
 #include "../include/mm/kmalloc.h"
 #include "../include/hal/hal_uart.h"
+#include "../include/kernel/errno.h"
 #include <stddef.h>
 
 /**
@@ -23,10 +24,12 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
         int ret = virtio_blk_read(sector + i, 
                                   (uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -42,10 +45,12 @@ static int write_block(void *device, uint32_t block_num, const void *buffer, uin
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_write(sector + i, (const uint8_t *)buffer + (i * 512), 1);
         if (ret != 1) {
+            set_errno(THUNDEROS_EIO);
             return -1;
         }
     }
     
+    clear_errno();
     return 0;
 }
 
@@ -55,14 +60,14 @@ static int write_block(void *device, uint32_t block_num, const void *buffer, uin
 int ext2_read_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
     if (!fs || !inode || inode_num == 0) {
         hal_uart_puts("ext2: Invalid parameters to ext2_read_inode\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     if (inode_num > fs->superblock->s_inodes_count) {
         hal_uart_puts("ext2: Inode number ");
         hal_uart_put_uint32(inode_num);
         hal_uart_puts(" out of range\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFS_BADINO);
     }
     
     /* Inodes are numbered starting from 1, so subtract 1 for index */
@@ -75,7 +80,7 @@ int ext2_read_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
         hal_uart_puts("ext2: Block group ");
         hal_uart_put_uint32(group);
         hal_uart_puts(" out of range\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFS_BADINO);
     }
     
     /* Get the group descriptor */
@@ -96,7 +101,7 @@ int ext2_read_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
     uint8_t *block_buffer = (uint8_t *)kmalloc(fs->block_size);
     if (!block_buffer) {
         hal_uart_puts("ext2: Failed to allocate block buffer for inode\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Read the block containing the inode */
@@ -106,6 +111,7 @@ int ext2_read_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
         hal_uart_put_uint32(inode_block);
         hal_uart_puts("\n");
         kfree(block_buffer);
+        /* errno already set by read_block */
         return -1;
     }
     
@@ -117,6 +123,7 @@ int ext2_read_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
     }
     
     kfree(block_buffer);
+    clear_errno();
     return 0;
 }
 
@@ -126,14 +133,14 @@ int ext2_read_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
 int ext2_write_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
     if (!fs || !inode || inode_num == 0) {
         hal_uart_puts("ext2: Invalid parameters to ext2_write_inode\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     if (inode_num > fs->superblock->s_inodes_count) {
         hal_uart_puts("ext2: Inode number ");
         hal_uart_put_uint32(inode_num);
         hal_uart_puts(" out of range\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFS_BADINO);
     }
     
     /* Inodes are numbered starting from 1, so subtract 1 for index */
@@ -146,7 +153,7 @@ int ext2_write_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
         hal_uart_puts("ext2: Block group ");
         hal_uart_put_uint32(group);
         hal_uart_puts(" out of range\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFS_BADINO);
     }
     
     /* Get the group descriptor */
@@ -167,7 +174,7 @@ int ext2_write_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
     uint8_t *block_buffer = (uint8_t *)kmalloc(fs->block_size);
     if (!block_buffer) {
         hal_uart_puts("ext2: Failed to allocate block buffer for inode write\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     /* Read the block containing the inode first */
@@ -177,6 +184,7 @@ int ext2_write_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
         hal_uart_put_uint32(inode_block);
         hal_uart_puts("\n");
         kfree(block_buffer);
+        /* errno already set by read_block */
         return -1;
     }
     
@@ -194,10 +202,12 @@ int ext2_write_inode(ext2_fs_t *fs, uint32_t inode_num, ext2_inode_t *inode) {
         hal_uart_put_uint32(inode_block);
         hal_uart_puts("\n");
         kfree(block_buffer);
+        /* errno already set by write_block */
         return -1;
     }
     
     kfree(block_buffer);
+    clear_errno();
     return 0;
 }
 
