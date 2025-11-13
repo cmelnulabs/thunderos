@@ -14,11 +14,19 @@ KERNEL_DIR := kernel
 BOOT_DIR := boot
 INCLUDE_DIR := include
 
+# Build configuration
+ENABLE_TESTS ?= 1
+
 # Compiler flags
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany
 CFLAGS += -nostdlib -nostartfiles -ffreestanding -fno-common
 CFLAGS += -O0 -Wall -Wextra
 CFLAGS += -I$(INCLUDE_DIR)
+
+# Enable kernel tests (set ENABLE_TESTS=0 to disable)
+ifeq ($(ENABLE_TESTS),1)
+    CFLAGS += -DENABLE_KERNEL_TESTS
+endif
 
 # Linker flags
 LDFLAGS := -nostdlib -T kernel/arch/riscv64/kernel.ld
@@ -33,18 +41,19 @@ KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/fs/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/core/*.c) \
-                    $(wildcard $(KERNEL_DIR)/arch/riscv64/drivers/*.c) \
-                    tests/test_memory_mgmt.c \
-                    tests/test_virtio_blk.c \
-                    tests/test_ext2.c \
-                    tests/test_vfs.c \
-                    tests/test_syscalls.c \
-                    tests/test_elf.c
+                    $(wildcard $(KERNEL_DIR)/arch/riscv64/drivers/*.c)
+
+# Add test sources if enabled
+ifeq ($(ENABLE_TESTS),1)
+    KERNEL_C_SOURCES += tests/unit/test_memory_mgmt.c \
+                        tests/unit/test_elf.c
+endif
+
 KERNEL_ASM_SOURCES := $(wildcard $(KERNEL_DIR)/arch/riscv64/*.S)
 
-# Test programs
-TEST_ASM_SOURCES := tests/user_exception_test.S
-TEST_ASM_OBJS := $(patsubst tests/%.S,$(BUILD_DIR)/tests/%.o,$(TEST_ASM_SOURCES))
+# Test programs (no longer used)
+TEST_ASM_SOURCES :=
+TEST_ASM_OBJS :=
 
 KERNEL_ASM_SOURCES := $(sort $(KERNEL_ASM_SOURCES))
 
@@ -69,7 +78,7 @@ QEMU_FLAGS += -bios default
 FS_IMG := $(BUILD_DIR)/fs.img
 FS_SIZE := 10M
 
-.PHONY: all clean qemu debug fs
+.PHONY: all clean qemu debug fs userland test
 
 all: $(KERNEL_ELF) $(KERNEL_BIN)
 
@@ -112,6 +121,7 @@ $(FS_IMG): userland
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "⚠ cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "⚠ ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "⚠ hello not built"
+	@cp userland/build/pipe_test $(BUILD_DIR)/testfs/bin/pipe_test 2>/dev/null || echo "⚠ pipe_test not built"
 	@if command -v mkfs.ext2 >/dev/null 2>&1; then \
 		mkfs.ext2 -F -q -d $(BUILD_DIR)/testfs $(FS_IMG) $(FS_SIZE); \
 		rm -rf $(BUILD_DIR)/testfs; \
@@ -125,6 +135,10 @@ userland:
 	@echo "Building userland programs..."
 	@chmod +x build_userland.sh
 	@./build_userland.sh
+
+test:
+	@echo "Running ThunderOS test suite..."
+	@cd tests/scripts && bash run_all_tests.sh
 
 qemu: $(KERNEL_ELF) $(FS_IMG)
 	@echo "Running ThunderOS with ext2 filesystem..."

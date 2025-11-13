@@ -2,7 +2,11 @@
  * Memory Management Test Program
  * 
  * Tests DMA allocation, address translation, and memory barriers
+ * 
+ * This file is only compiled when ENABLE_KERNEL_TESTS is defined.
  */
+
+#ifdef ENABLE_KERNEL_TESTS
 
 #include "hal/hal_uart.h"
 #include "mm/dma.h"
@@ -313,3 +317,5 @@ void test_memory_management(void) {
     }
     hal_uart_puts("========================================\n\n");
 }
+
+#endif // ENABLE_KERNEL_TESTS

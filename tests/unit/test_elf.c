@@ -1,6 +1,10 @@
 /*
  * ELF Loader Tests
+ * 
+ * This file is only compiled when ENABLE_KERNEL_TESTS is defined.
  */
+
+#ifdef ENABLE_KERNEL_TESTS
 
 #include "kernel/elf_loader.h"
 #include "fs/vfs.h"
@@ -71,3 +75,5 @@ void test_elf_all(void) {
     }
     hal_uart_puts("========================================\n");
 }
+
+#endif // ENABLE_KERNEL_TESTS

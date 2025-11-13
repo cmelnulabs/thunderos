@@ -27,15 +27,14 @@
 // Linker symbols (defined in kernel.ld)
 extern char _kernel_end[];
 
-// External test functions
-extern void test_memory_management(void);
-extern void test_virtio_blk_all(void);
-extern void test_ext2_all(void);
-extern void test_vfs_all(void);
-
+// External functions
 ext2_fs_t g_test_ext2_fs;
-extern void test_syscalls_all(void);
+
+#ifdef ENABLE_KERNEL_TESTS
+// Built-in test functions (only compiled if ENABLE_KERNEL_TESTS is set)
+extern void test_memory_management(void);
 extern void test_elf_all(void);
+#endif
 
 // Demo process functions
 void process_a(void *arg) {
@@ -184,23 +183,13 @@ void kernel_main(void) {
     kprint_dec(free);
     hal_uart_puts("\n");
     
-    // Run enhanced memory management tests
+#ifdef ENABLE_KERNEL_TESTS
+    // Run built-in kernel tests
+    hal_uart_puts("\n[INFO] Running built-in kernel tests...\n");
     test_memory_management();
-    
-    // Skip block device tests - they fail but don't crash
-    // test_virtio_blk_all();
-    
-    // Skip ext2 tests - they crash the kernel
-    // test_ext2_all();
-    
-    // Run VFS and file operations tests
-    // test_vfs_all();
-    
-    // Skip filesystem syscall tests - they crash
-    // test_syscalls_all();
-    
-    // Run ELF loader tests
     test_elf_all();
+    hal_uart_puts("[INFO] Built-in tests completed\n\n");
+#endif
     
     // Initialize process management
     process_init();

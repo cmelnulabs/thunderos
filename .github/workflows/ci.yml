@@ -91,41 +91,17 @@ jobs:
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/workspace \
-          -w /workspace/tests \
+          -w /workspace \
           thunderos-build:latest \
-          bash -c "make || echo '⚠ Test build skipped (optional)'"
+          bash -c "echo 'Tests are now built-in to kernel'"
     
-    - name: Run integration tests
+    - name: Run test suite
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/workspace \
           -w /workspace \
           thunderos-build:latest \
-          bash -c "cd tests && chmod +x *.sh && ./test_qemu.sh"
-    
-    - name: Run syscall tests
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/workspace \
-          -w /workspace \
-          thunderos-build:latest \
-          bash -c "cd tests && ./test_syscalls.sh"
-    
-    - name: Run user mode tests
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/workspace \
-          -w /workspace \
-          thunderos-build:latest \
-          bash -c "cd tests && ./test_user_mode.sh"
-    
-    - name: Run quick user tests
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/workspace \
-          -w /workspace \
-          thunderos-build:latest \
-          bash -c "cd tests && ./test_user_quick.sh"
+          bash -c "make test"
     
     - name: Check for build warnings
       run: |
@@ -158,11 +134,8 @@ jobs:
         path: |
           qemu_output.log
           build_warnings.log
-          tests/test_output.log
-          tests/thunderos_qemu_output.txt
-          tests/thunderos_test_output.txt
-          tests/thunderos_user_mode_output.txt
-          tests/thunderos_quick_test_output.txt
+          tests/outputs/boot_test_output.txt
+          tests/outputs/integration_test_output.txt
         retention-days: 7
     
     - name: Report success
