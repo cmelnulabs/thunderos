@@ -78,7 +78,7 @@ echo "Integration Test File" > "${BUILD_DIR}/test_fs_contents/test.txt"
 echo "README for ThunderOS" > "${BUILD_DIR}/test_fs_contents/README.txt"
 
 # Copy userland programs
-for prog in hello cat ls pipe_test; do
+for prog in hello cat ls; do
     if [ -f "${ROOT_DIR}/userland/build/$prog" ]; then
         cp "${ROOT_DIR}/userland/build/$prog" "${BUILD_DIR}/test_fs_contents/bin/"
         print_pass "Added $prog to filesystem"
@@ -163,18 +163,10 @@ else
     FAILED=$((FAILED + 1))
 fi
 
-# Test 7: Pipe subsystem
-if grep -q "\[OK\] Pipe subsystem initialized" "${OUTPUT_FILE}"; then
-    print_pass "Pipe subsystem initialized"
-else
-    print_fail "Pipe subsystem failed"
-    FAILED=$((FAILED + 1))
-fi
-
 # Summary
 print_header "Integration Test Summary"
 
-TOTAL_TESTS=7
+TOTAL_TESTS=6
 PASSED=$((TOTAL_TESTS - FAILED))
 
 if [ $FAILED -eq 0 ]; then

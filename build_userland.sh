@@ -3,7 +3,7 @@
 
 set -e
 
-CROSS_COMPILE=riscv64-linux-gnu-
+CROSS_COMPILE=riscv64-unknown-elf-
 CC="${CROSS_COMPILE}gcc"
 LD="${CROSS_COMPILE}ld"
 OBJCOPY="${CROSS_COMPILE}objcopy"

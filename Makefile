@@ -121,7 +121,6 @@ $(FS_IMG): userland
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "⚠ cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "⚠ ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "⚠ hello not built"
-	@cp userland/build/pipe_test $(BUILD_DIR)/testfs/bin/pipe_test 2>/dev/null || echo "⚠ pipe_test not built"
 	@if command -v mkfs.ext2 >/dev/null 2>&1; then \
 		mkfs.ext2 -F -q -d $(BUILD_DIR)/testfs $(FS_IMG) $(FS_SIZE); \
 		rm -rf $(BUILD_DIR)/testfs; \
