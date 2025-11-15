@@ -702,7 +702,12 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     // Set sstatus for user mode return:
     // SPIE=1 (enable interrupts after sret)
     // SPP=0 (return to user mode, not supervisor)
-    proc->trap_frame->sstatus = (1 << 5);  // SPIE=1, SPP=0
+    // We need to preserve other bits from current sstatus, only modify SPP and SPIE
+    unsigned long sstatus;
+    asm volatile("csrr %0, sstatus" : "=r"(sstatus));
+    sstatus &= ~(1 << 8);  // Clear SPP (bit 8) = return to user mode
+    sstatus |= (1 << 5);   // Set SPIE (bit 5) = enable interrupts after sret
+    proc->trap_frame->sstatus = sstatus;
     
     // Setup kernel context for initial context switch
     kmemset(&proc->context, 0, sizeof(struct context));

@@ -10,3 +10,5 @@ build/
 tests/*_output.txt
 tests/*.log
 tests/outputs/
+test_output.txt
+*_output.txt
