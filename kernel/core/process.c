@@ -757,30 +757,6 @@ void user_mode_entry_wrapper(void) {
     uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
     __asm__ volatile("csrw sscratch, %0" :: "r"(kernel_sp));
     
-    // DEBUG: Verify sscratch was set
-    uintptr_t verify_sscratch;
-    __asm__ volatile("csrr %0, sscratch" : "=r"(verify_sscratch));
-    hal_uart_puts("[DEBUG] sscratch set to: 0x");
-    char buf[20];
-    for (int i = 15; i >= 0; i--) {
-        int nibble = (verify_sscratch >> (i * 4)) & 0xF;
-        buf[15 - i] = nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
-    }
-    buf[16] = '\n';
-    buf[17] = '\0';
-    hal_uart_puts(buf);
-    
-    // DEBUG: Check trap_frame->sp value
-    hal_uart_puts("[DEBUG] trap_frame->sp = 0x");
-    uintptr_t tf_sp = proc->trap_frame->sp;
-    for (int i = 15; i >= 0; i--) {
-        int nibble = (tf_sp >> (i * 4)) & 0xF;
-        buf[15 - i] = nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
-    }
-    buf[16] = '\n';
-    buf[17] = '\0';
-    hal_uart_puts(buf);
-    
     // Enter user mode - never returns (continues in user code or via trap)
     user_return(proc->trap_frame);
     

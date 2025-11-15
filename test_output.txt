@@ -189,4 +189,4 @@ ThunderOS> cat /hello.txt
 Hello from ext2!
 ThunderOS> exit
 Goodbye!
-ThunderOS> qemu-system-riscv64: terminating on signal 15 from pid 37240 (timeout)
+ThunderOS> qemu-system-riscv64: terminating on signal 15 from pid 38149 (timeout)
