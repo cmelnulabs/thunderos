@@ -128,6 +128,14 @@ void tlb_flush(uintptr_t vaddr);
 page_table_t *get_kernel_page_table(void);
 
 /**
+ * Switch to kernel page table
+ * 
+ * Switches the active page table back to the kernel page table.
+ * Useful when no user process is running.
+ */
+void switch_to_kernel_page_table(void);
+
+/**
  * Create a new page table for a user process
  * 
  * Creates a new page table with kernel mappings but no user mappings.

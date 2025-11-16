@@ -159,9 +159,8 @@ restore_to_kernel:
 
 restore_to_user:
     # Returning to user mode - setup stack swap and restore state
-    # Put kernel stack pointer in sscratch for next trap entry
-    addi t0, sp, 272
-    csrw sscratch, t0
+    # sscratch should already contain kernel stack top from user_mode_entry_wrapper
+    # DO NOT modify sscratch here - it's already correct!
     
     # Restore exception program counter and status for user mode
     ld t0, 248(sp)
