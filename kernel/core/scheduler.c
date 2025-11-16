@@ -149,10 +149,10 @@ void context_switch(struct process *old, struct process *new) {
     // Set current process
     process_set_current(new);
     
-    // TODO: Switch page tables if different
-    // if (old && old->page_table != new->page_table) {
-    //     switch_page_table(new->page_table);
-    // }
+    // Switch page tables if different
+    if (old && old->page_table != new->page_table) {
+        switch_page_table(new->page_table);
+    }
     
     // Perform low-level context switch
     if (old) {
@@ -207,6 +207,12 @@ void schedule(void) {
                 next = current;
             } else {
                 // Idle - no process to run
+                // If current process is not running (zombie, etc.), switch back to kernel page table
+                if (current && current->state != PROC_RUNNING) {
+                    extern void switch_to_kernel_page_table(void);
+                    switch_to_kernel_page_table();
+                    process_set_current(NULL);
+                }
                 // Re-enable interrupts and halt
                 interrupt_restore(old_state);
                 return;

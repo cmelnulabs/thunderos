@@ -174,6 +174,14 @@ page_table_t *get_kernel_page_table(void) {
 }
 
 /**
+ * Switch to kernel page table
+ * Useful when no user process is running
+ */
+void switch_to_kernel_page_table(void) {
+    switch_page_table(&kernel_page_table);
+}
+
+/**
  * Enable paging by setting satp register
  */
 static void enable_paging(page_table_t *root) {

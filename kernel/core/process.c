@@ -321,11 +321,12 @@ void process_exit(int exit_code) {
     
     lock_release(&process_lock);
     
-    // Yield to another process (never returns)
-    process_yield();
-    
-    // Should never reach here
+    // Keep yielding until scheduler finds another process
+    // This process is now a zombie and should never run again
     while (1) {
+        process_yield();
+        // If we get here, there's no other process to run
+        // Just wait for interrupts (shouldn't happen in practice)
         __asm__ volatile("wfi");
     }
 }
@@ -567,7 +568,16 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     // Set sstatus for user mode return:
     // SPIE=1 (enable interrupts after sret)
     // SPP=0 (return to user mode, not supervisor)
-    proc->trap_frame->sstatus = (1 << 5);  // SPIE=1, SPP=0
+    // SIE=0 (disable interrupts in supervisor mode during transition)
+    // SUM=1 (allow supervisor to access user memory during transition)
+    // We need to preserve other bits from current sstatus, only modify SPP, SPIE, SIE, SUM
+    unsigned long sstatus;
+    asm volatile("csrr %0, sstatus" : "=r"(sstatus));
+    sstatus &= ~(1 << 8);   // Clear SPP (bit 8) = return to user mode
+    sstatus &= ~(1 << 1);   // Clear SIE (bit 1) = disable interrupts during user_return
+    sstatus |= (1 << 5);    // Set SPIE (bit 5) = enable interrupts after sret
+    sstatus |= (1UL << 18); // Set SUM (bit 18) = allow supervisor access to user memory
+    proc->trap_frame->sstatus = sstatus;
     
     // Setup kernel context for initial context switch
     kmemset(&proc->context, 0, sizeof(struct context));
@@ -690,7 +700,7 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
         return NULL;
     }
     
-    // Zero trap frame
+        // Zero trap frame
     kmemset(proc->trap_frame, 0, sizeof(struct trap_frame));
     
     // Set entry point to the ELF entry address
@@ -702,11 +712,15 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     // Set sstatus for user mode return:
     // SPIE=1 (enable interrupts after sret)
     // SPP=0 (return to user mode, not supervisor)
-    // We need to preserve other bits from current sstatus, only modify SPP and SPIE
+    // SIE=0 (disable interrupts in supervisor mode during transition)
+    // SUM=1 (allow supervisor to access user memory during transition)
+    // We need to preserve other bits from current sstatus, only modify SPP, SPIE, SIE, SUM
     unsigned long sstatus;
     asm volatile("csrr %0, sstatus" : "=r"(sstatus));
-    sstatus &= ~(1 << 8);  // Clear SPP (bit 8) = return to user mode
-    sstatus |= (1 << 5);   // Set SPIE (bit 5) = enable interrupts after sret
+    sstatus &= ~(1 << 8);   // Clear SPP (bit 8) = return to user mode
+    sstatus &= ~(1 << 1);   // Clear SIE (bit 1) = disable interrupts during user_return
+    sstatus |= (1 << 5);    // Set SPIE (bit 5) = enable interrupts after sret
+    sstatus |= (1UL << 18); // Set SUM (bit 18) = allow supervisor access to user memory
     proc->trap_frame->sstatus = sstatus;
     
     // Setup kernel context for initial context switch
@@ -757,8 +771,13 @@ void user_mode_entry_wrapper(void) {
     uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
     __asm__ volatile("csrw sscratch, %0" :: "r"(kernel_sp));
     
-    // Enter user mode - never returns (continues in user code or via trap)
-    user_return(proc->trap_frame);
+    // Enter user mode using specialized entry function
+    // This avoids the problem of loading sp before sret in user_return()
+    extern void enter_user_mode_asm(unsigned long user_sp, unsigned long entry, unsigned long sstatus_val);
+    enter_user_mode_asm(proc->trap_frame->sp, proc->trap_frame->sepc, proc->trap_frame->sstatus);
+    
+    // Should never reach here
+    kernel_panic("Returned from enter_user_mode_asm!");
     
     // Should never reach here
     kernel_panic("user_mode_entry_wrapper: user_return returned");
