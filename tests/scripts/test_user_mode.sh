@@ -9,7 +9,15 @@ WORKSPACE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$WORKSPACE_DIR"
 
 # QEMU 10.1.2+ required for SSTC extension support
-QEMU_BIN="${QEMU_BIN:-/tmp/qemu-10.1.2/build/qemu-system-riscv64}"
+# Try system QEMU first, then custom build
+if command -v qemu-system-riscv64 >/dev/null 2>&1; then
+    QEMU_BIN="${QEMU_BIN:-qemu-system-riscv64}"
+elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then
+    QEMU_BIN="/tmp/qemu-10.1.2/build/qemu-system-riscv64"
+else
+    echo "ERROR: qemu-system-riscv64 not found"
+    exit 1
+fi
 
 echo "==================================="
 echo "  User Mode Execution Test"
