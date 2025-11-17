@@ -118,7 +118,7 @@ timeout $((QEMU_TIMEOUT + 2)) "${QEMU_BIN}" \
     -m 128M \
     -nographic \
     -serial mon:stdio \
-    -bios default \
+    -bios none \
     -kernel "${BUILD_DIR}/thunderos.elf" \
     -global virtio-mmio.force-legacy=false \
     -drive file="${DISK_IMAGE}",if=none,format=raw,id=hd0 \
