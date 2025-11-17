@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y \
     libslirp-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python dependencies for QEMU build
+RUN pip3 install tomli
+
 # Download and install RISC-V GNU toolchain (bare-metal)
 RUN cd /tmp && \
     wget -q https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2024.04.12/riscv64-elf-ubuntu-22.04-gcc-nightly-2024.04.12-nightly.tar.gz && \
