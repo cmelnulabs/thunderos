@@ -280,7 +280,7 @@ Build targets:
 QEMU Configuration
 ------------------
 
-ThunderOS targets the ``virt`` machine in QEMU:
+ThunderOS requires QEMU 10.1.2+ and targets the ``virt`` machine:
 
 .. code-block:: bash
 
@@ -289,7 +289,7 @@ ThunderOS targets the ``virt`` machine in QEMU:
      -m 128M \            # 128MB RAM
      -nographic \         # No GUI, use terminal
      -serial mon:stdio \  # Serial to stdout
-     -bios default \      # Use built-in OpenSBI
+     -bios none \         # No firmware (kernel includes M-mode code)
      -kernel thunderos.elf
 
 The ``virt`` machine provides:
@@ -298,8 +298,8 @@ The ``virt`` machine provides:
 * RAM at 0x80000000
 * UART at 0x10000000
 * PLIC at 0x0C000000
-* CLINT at 0x02000000
-* VirtIO devices (for future use)
+* ACLINT at 0x02000000
+* VirtIO devices (block storage, etc.)
 
 Future Architecture
 -------------------

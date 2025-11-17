@@ -5,7 +5,7 @@ FROM ubuntu:22.04
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install base dependencies and RISC-V toolchain
+# Install base dependencies and build tools
 RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
@@ -14,8 +14,12 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     xz-utils \
-    qemu-system-misc \
     e2fsprogs \
+    ninja-build \
+    pkg-config \
+    libglib2.0-dev \
+    libpixman-1-dev \
+    libslirp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and install RISC-V GNU toolchain (bare-metal)
@@ -24,8 +28,19 @@ RUN cd /tmp && \
     tar xzf riscv64-elf-ubuntu-22.04-gcc-nightly-2024.04.12-nightly.tar.gz -C /opt && \
     rm riscv64-elf-ubuntu-22.04-gcc-nightly-2024.04.12-nightly.tar.gz
 
-# Add toolchain to PATH
-ENV PATH="/opt/riscv/bin:${PATH}"
+# Build QEMU 10.1.2 with RISC-V support and SSTC extension
+RUN cd /tmp && \
+    wget -q https://download.qemu.org/qemu-10.1.2.tar.xz && \
+    tar xJf qemu-10.1.2.tar.xz && \
+    cd qemu-10.1.2 && \
+    ./configure --target-list=riscv64-softmmu --prefix=/opt/qemu && \
+    make -j$(nproc) && \
+    make install && \
+    cd /tmp && \
+    rm -rf qemu-10.1.2 qemu-10.1.2.tar.xz
+
+# Add toolchain and QEMU to PATH
+ENV PATH="/opt/riscv/bin:/opt/qemu/bin:${PATH}"
 
 # Verify installations
 RUN riscv64-unknown-elf-gcc --version && \

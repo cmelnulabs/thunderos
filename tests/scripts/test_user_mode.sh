@@ -8,6 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$WORKSPACE_DIR"
 
+# QEMU 10.1.2+ required for SSTC extension support
+QEMU_BIN="${QEMU_BIN:-/tmp/qemu-10.1.2/build/qemu-system-riscv64}"
+
 echo "==================================="
 echo "  User Mode Execution Test"
 echo "==================================="
@@ -38,7 +41,7 @@ echo "Running QEMU tests..."
     echo "cat /hello.txt"
     sleep 2
     echo "exit"
-} | timeout 20 qemu-system-riscv64 \
+} | timeout 20 "${QEMU_BIN}" \
     -machine virt \
     -m 128M \
     -nographic \

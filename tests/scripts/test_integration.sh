@@ -17,6 +17,9 @@ OUTPUT_DIR="${SCRIPT_DIR}/../outputs"
 OUTPUT_FILE="${OUTPUT_DIR}/integration_test_output.txt"
 QEMU_TIMEOUT=8
 
+# QEMU 10.1.2+ required for SSTC extension support
+QEMU_BIN="${QEMU_BIN:-/tmp/qemu-10.1.2/build/qemu-system-riscv64}"
+
 # Create output directory if it doesn't exist
 mkdir -p "${OUTPUT_DIR}"
 
@@ -102,7 +105,7 @@ rm -rf "${BUILD_DIR}/test_fs_contents"
 # Run QEMU
 print_test "Running full integration test (${QEMU_TIMEOUT}s timeout)"
 
-timeout $((QEMU_TIMEOUT + 2)) qemu-system-riscv64 \
+timeout $((QEMU_TIMEOUT + 2)) "${QEMU_BIN}" \
     -machine virt \
     -m 128M \
     -nographic \

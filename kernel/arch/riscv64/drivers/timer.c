@@ -49,6 +49,31 @@ static inline unsigned long read_time(void) {
 }
 
 /**
+ * Check if SSTC extension is available
+ * 
+ * SSTC (Supervisor-mode Timer Compare) allows S-mode to directly
+ * program timer interrupts via the stimecmp CSR, without SBI calls.
+ * 
+ * Since we're running our own M-mode code (not OpenSBI), SSTC is
+ * already enabled in start.c via menvcfg.STCE
+ */
+static inline int has_sstc(void) {
+    // SSTC is enabled by our M-mode start.c code
+    return 1;  // Always use SSTC (no SBI available)
+}
+
+/**
+ * Set timer using SSTC extension (direct stimecmp write)
+ * 
+ * Writing to stimecmp (0x14D) clears the pending interrupt automatically
+ * and sets the next timer compare value.
+ */
+static inline void sstc_set_timer(unsigned long stime_value) {
+    // Write to stimecmp CSR - this clears pending interrupt and sets next compare value
+    asm volatile("csrw 0x14D, %0" :: "r"(stime_value));
+}
+
+/**
  * Initialize timer hardware and start periodic interrupts
  */
 void hal_timer_init(unsigned long interval_us) {
@@ -58,21 +83,33 @@ void hal_timer_init(unsigned long interval_us) {
     // Calculate ticks for the desired interval
     unsigned long interval_ticks = (TIMER_FREQ * interval_us) / 1000000;
     
-    // Set first timer interrupt using SBI
+    // Set first timer interrupt
     unsigned long current_time = read_time();
-    sbi_set_timer(current_time + interval_ticks);
+    unsigned long next_time = current_time + interval_ticks;
+    
+    hal_uart_puts("[TIMER] Initialized\n");
+    
+    // Try SSTC first (newer, more efficient)
+    if (has_sstc()) {
+        hal_uart_puts("[TIMER] Using SSTC extension for timer\n");
+        sstc_set_timer(next_time);
+    } else {
+        // This path won't be reached since we always have SSTC
+        hal_uart_puts("[TIMER] Using SBI for timer\n");
+        sbi_set_timer(next_time);
+    }
     
     // Enable timer interrupts in sie (supervisor interrupt enable)
+    // NOTE: M-mode initialized sie with timer interrupts DISABLED
+    // We enable them here once we've programmed stimecmp
     unsigned long sie;
     asm volatile("csrr %0, sie" : "=r"(sie));
     sie |= (1 << 5);  // STIE - Supervisor Timer Interrupt Enable
     asm volatile("csrw sie, %0" :: "r"(sie));
     
-    // Enable interrupts globally in sstatus
-    unsigned long sstatus;
-    asm volatile("csrr %0, sstatus" : "=r"(sstatus));
-    sstatus |= (1 << 1);  // SIE - Supervisor Interrupt Enable
-    asm volatile("csrw sstatus, %0" :: "r"(sstatus));
+    // NOTE: Do NOT enable global interrupts here (sstatus.SIE)
+    // That's already done by interrupt_enable() in main.c
+    // We just needed to enable timer-specific interrupts in sie
     
     // Print initialization message
     hal_uart_puts("Timer initialized (interval: ");
@@ -105,7 +142,14 @@ unsigned long hal_timer_get_ticks(void) {
 void hal_timer_set_next(unsigned long interval_us) {
     unsigned long interval_ticks = (TIMER_FREQ * interval_us) / 1000000;
     unsigned long current_time = read_time();
-    sbi_set_timer(current_time + interval_ticks);
+    unsigned long next_time = current_time + interval_ticks;
+    
+    // Use SSTC if available, otherwise use SBI
+    if (has_sstc()) {
+        sstc_set_timer(next_time);
+    } else {
+        sbi_set_timer(next_time);
+    }
 }
 
 /**

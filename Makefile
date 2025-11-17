@@ -32,7 +32,7 @@ endif
 LDFLAGS := -nostdlib -T kernel/arch/riscv64/kernel.ld
 
 # Source files
-BOOT_SOURCES := $(wildcard $(BOOT_DIR)/*.S)
+BOOT_SOURCES := $(wildcard $(BOOT_DIR)/*.S) $(wildcard $(BOOT_DIR)/*.c)
 KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/core/*.c) \
                     $(wildcard $(KERNEL_DIR)/utils/*.c) \
@@ -58,7 +58,8 @@ TEST_ASM_OBJS :=
 KERNEL_ASM_SOURCES := $(sort $(KERNEL_ASM_SOURCES))
 
 # Object files
-BOOT_OBJS := $(patsubst $(BOOT_DIR)/%.S,$(BUILD_DIR)/boot/%.o,$(BOOT_SOURCES))
+BOOT_OBJS := $(patsubst $(BOOT_DIR)/%.S,$(BUILD_DIR)/boot/%.o,$(filter %.S,$(BOOT_SOURCES))) \
+             $(patsubst $(BOOT_DIR)/%.c,$(BUILD_DIR)/boot/%.o,$(filter %.c,$(BOOT_SOURCES)))
 KERNEL_C_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C_SOURCES))
 KERNEL_ASM_OBJS := $(patsubst %.S,$(BUILD_DIR)/%.o,$(KERNEL_ASM_SOURCES))
 
@@ -69,10 +70,10 @@ ALL_OBJS := $(sort $(BOOT_OBJS) $(KERNEL_C_OBJS) $(KERNEL_ASM_OBJS) $(TEST_ASM_O
 KERNEL_ELF := $(BUILD_DIR)/thunderos.elf
 KERNEL_BIN := $(BUILD_DIR)/thunderos.bin
 
-# QEMU options
-QEMU := qemu-system-riscv64
+# QEMU options (use -bios none to run our own M-mode code, not OpenSBI)
+QEMU := /tmp/qemu-10.1.2/build/qemu-system-riscv64
 QEMU_FLAGS := -machine virt -m 128M -nographic -serial mon:stdio
-QEMU_FLAGS += -bios default
+QEMU_FLAGS += -bios none
 
 # Filesystem image
 FS_IMG := $(BUILD_DIR)/fs.img

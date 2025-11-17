@@ -76,7 +76,7 @@ Prerequisites
 ~~~~~~~~~~~~~
 
 * RISC-V GCC toolchain (``riscv64-unknown-elf-gcc``)
-* QEMU with RISC-V support (``qemu-system-riscv64``)
+* QEMU 10.1.2+ with RISC-V support (``qemu-system-riscv64``)
 * GNU Make
 * Basic knowledge of C and assembly
 

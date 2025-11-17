@@ -107,17 +107,17 @@ Manual Testing
 Running QEMU Directly
 ~~~~~~~~~~~~~~~~~~~~~
 
-For interactive testing:
+For manual testing (requires QEMU 10.1.2+):
 
 .. code-block:: bash
 
    qemu-system-riscv64 \
-       -machine virt \
-       -m 128M \
-       -nographic \
-       -serial mon:stdio \
-       -bios default \
-       -kernel build/thunderos.elf
+     -machine virt \
+     -m 128M \
+     -nographic \
+     -serial mon:stdio \
+     -bios none \
+     -kernel build/thunderos.elf
 
 Press ``Ctrl+A`` followed by ``X`` to exit QEMU.
 
@@ -293,17 +293,20 @@ QEMU Doesn't Start
 
 **Error:** ``qemu-system-riscv64: command not found``
 
-**Solution:** Install QEMU with RISC-V support:
+**Solution:** ThunderOS requires QEMU 10.1.2+ with RISC-V support. You may need to build from source:
 
 .. code-block:: bash
 
-   # Ubuntu/Debian
-   sudo apt-get install qemu-system-riscv64
-   
-   # macOS
-   brew install qemu
+   # Build QEMU 10.1.2 from source
+   wget https://download.qemu.org/qemu-10.1.2.tar.xz
+   tar xJf qemu-10.1.2.tar.xz
+   cd qemu-10.1.2
+   ./configure --target-list=riscv64-softmmu --prefix=/tmp/qemu-10.1.2
+   make -j$(nproc)
+   make install
 
-Test Hangs
+   # Or on macOS (may not have latest version)
+   brew install qemuTest Hangs
 ~~~~~~~~~~
 
 **Issue:** Test doesn't exit after timeout
