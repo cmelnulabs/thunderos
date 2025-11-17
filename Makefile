@@ -142,6 +142,13 @@ test:
 qemu: $(KERNEL_ELF) $(FS_IMG)
 	@echo "Running ThunderOS with ext2 filesystem..."
 	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		QEMU_VERSION=$$(qemu-system-riscv64 --version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1); \
+		QEMU_MAJOR=$$(echo $$QEMU_VERSION | cut -d. -f1); \
+		if [ "$$QEMU_MAJOR" -lt 10 ]; then \
+			echo "WARNING: QEMU $$QEMU_VERSION detected. ThunderOS requires QEMU 10.1.2+"; \
+			echo "Please build and run in Docker, or install QEMU 10.1.2+"; \
+			exit 1; \
+		fi; \
 		qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
