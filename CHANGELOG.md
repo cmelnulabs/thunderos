@@ -5,6 +5,37 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - QEMU 10.1.2 Upgrade
+
+### Changed
+- **QEMU Requirement**: Upgraded from QEMU 6.2.0 to QEMU 10.1.2
+  - Replaced OpenSBI with custom M-mode initialization
+  - Boot process: QEMU `-bios none` → M-mode (entry.S/start.c) → S-mode (kernel_main)
+  - ISA Extensions: Added SSTC (Supervisor-mode Timer Compare), svadu, sdtrig, zicboz, zicbom
+- **M-mode Implementation**: Added custom M-mode initialization (boot/entry.S, boot/start.c)
+  - Replaces OpenSBI completely
+  - Kernel entry point moved from 0x80200000 to 0x80000000
+  - Configures medeleg, mideleg, PMP, and SSTC extension
+- **Timer Driver**: Enabled SSTC extension support
+  - Direct `stimecmp` CSR writes for timer programming
+  - Eliminates SBI ecalls for timer operations
+  - Improved timer interrupt latency
+- **Interrupt Controller**: Disabled legacy CLINT initialization
+  - QEMU 10.1.2 uses ACLINT with different memory layout
+  - PLIC remains compatible and functional
+- **Build System**:
+  - Makefile: Updated QEMU path to `/tmp/qemu-10.1.2/build/qemu-system-riscv64`
+  - Makefile: Changed from `-bios default` to `-bios none`
+  - Linker script: Entry point changed to `_entry` (M-mode)
+  - Boot sources: Now includes both .S and .c files from boot/
+- **Documentation**: Updated requirements to specify QEMU 10.1.2+
+
+### Technical Details
+- **Boot Flow**: QEMU starts at 0x80000000 (M-mode) → entry.S sets up stack → start.c configures CSRs → mret to kernel_main (S-mode)
+- **SSTC Extension**: Enabled via menvcfg.STCE in M-mode, allows direct stimecmp writes
+- **Delegation**: mideleg=0xffff, medeleg=0xffff (all interrupts/exceptions to S-mode)
+- **PMP**: All memory accessible to S-mode (pmpaddr0=0x3fffffffffffff, pmpcfg0=0xf)
+
 ## [0.4.0] - 2025-11-11 - "Persistence"
 
 ### Overview

@@ -68,7 +68,8 @@ void interrupt_init(void)
     plic_init();
     
     /* Initialize CLINT (Core-Local Interruptor) */
-    clint_init();
+    // NOTE: CLINT init disabled for QEMU 10.1.2 with ACLINT - different memory layout
+    // clint_init();
     
     /* Configure default priorities for all interrupts */
     configure_default_priorities();

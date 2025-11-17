@@ -32,7 +32,7 @@ endif
 LDFLAGS := -nostdlib -T kernel/arch/riscv64/kernel.ld
 
 # Source files
-BOOT_SOURCES := $(wildcard $(BOOT_DIR)/*.S)
+BOOT_SOURCES := $(wildcard $(BOOT_DIR)/*.S) $(wildcard $(BOOT_DIR)/*.c)
 KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/core/*.c) \
                     $(wildcard $(KERNEL_DIR)/utils/*.c) \
@@ -58,7 +58,8 @@ TEST_ASM_OBJS :=
 KERNEL_ASM_SOURCES := $(sort $(KERNEL_ASM_SOURCES))
 
 # Object files
-BOOT_OBJS := $(patsubst $(BOOT_DIR)/%.S,$(BUILD_DIR)/boot/%.o,$(BOOT_SOURCES))
+BOOT_OBJS := $(patsubst $(BOOT_DIR)/%.S,$(BUILD_DIR)/boot/%.o,$(filter %.S,$(BOOT_SOURCES))) \
+             $(patsubst $(BOOT_DIR)/%.c,$(BUILD_DIR)/boot/%.o,$(filter %.c,$(BOOT_SOURCES)))
 KERNEL_C_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C_SOURCES))
 KERNEL_ASM_OBJS := $(patsubst %.S,$(BUILD_DIR)/%.o,$(KERNEL_ASM_SOURCES))
 
@@ -69,10 +70,9 @@ ALL_OBJS := $(sort $(BOOT_OBJS) $(KERNEL_C_OBJS) $(KERNEL_ASM_OBJS) $(TEST_ASM_O
 KERNEL_ELF := $(BUILD_DIR)/thunderos.elf
 KERNEL_BIN := $(BUILD_DIR)/thunderos.bin
 
-# QEMU options
-QEMU := qemu-system-riscv64
+# QEMU flags for -bios none (run our own M-mode code, not OpenSBI)
 QEMU_FLAGS := -machine virt -m 128M -nographic -serial mon:stdio
-QEMU_FLAGS += -bios default
+QEMU_FLAGS += -bios none
 
 # Filesystem image
 FS_IMG := $(BUILD_DIR)/fs.img
@@ -141,13 +141,37 @@ test:
 
 qemu: $(KERNEL_ELF) $(FS_IMG)
 	@echo "Running ThunderOS with ext2 filesystem..."
-	$(QEMU) $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
-		-global virtio-mmio.force-legacy=false \
-		-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
-		-device virtio-blk-device,drive=hd0
+	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		QEMU_VERSION=$$(qemu-system-riscv64 --version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1); \
+		QEMU_MAJOR=$$(echo $$QEMU_VERSION | cut -d. -f1); \
+		if [ "$$QEMU_MAJOR" -lt 10 ]; then \
+			echo "WARNING: QEMU $$QEMU_VERSION detected. ThunderOS requires QEMU 10.1.2+"; \
+			echo "Please build and run in Docker, or install QEMU 10.1.2+"; \
+			exit 1; \
+		fi; \
+		qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0; \
+	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		/tmp/qemu-10.1.2/build/qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0; \
+	else \
+		echo "ERROR: qemu-system-riscv64 not found. Please install QEMU 10.1.2+"; \
+		exit 1; \
+	fi
 
 debug: $(KERNEL_ELF)
-	$(QEMU) $(QEMU_FLAGS) -kernel $(KERNEL_ELF) -s -S
+	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) -s -S; \
+	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		/tmp/qemu-10.1.2/build/qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) -s -S; \
+	else \
+		echo "ERROR: qemu-system-riscv64 not found"; \
+		exit 1; \
+	fi
 
 dump: $(KERNEL_ELF)
 	$(OBJDUMP) -d $< > $(BUILD_DIR)/thunderos.dump

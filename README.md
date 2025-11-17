@@ -142,12 +142,15 @@ Programs are compiled as RISC-V ELF64 executables and can be loaded from the ext
 
 - **QEMU virt machine**: Tested and working ✓
 
-## Dependencies
+## Requirements
 
-- **Toolchain**: riscv64-unknown-elf-gcc (GCC for RISC-V)
-- **Emulator**: QEMU 5.0+ with RISC-V support
-- **Firmware**: OpenSBI (provided by QEMU)
-- **Documentation** (optional): Sphinx 4.0+
+- RISC-V GNU Toolchain (`riscv64-unknown-elf-gcc`)
+- QEMU 10.1.2+ RISC-V System Emulator (`qemu-system-riscv64`)
+  - OpenSBI 1.5.1+ with SSTC extension support
+  - ACLINT timer device
+- Make
+- Standard Unix utilities (bash, sed, etc.)
+- For building QEMU: ninja, glib-2.0, pixman, slirp
 
 ## License
 

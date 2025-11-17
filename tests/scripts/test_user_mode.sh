@@ -8,6 +8,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$WORKSPACE_DIR"
 
+# QEMU 10.1.2+ required for SSTC extension support
+# Try system QEMU first, then custom build
+if command -v qemu-system-riscv64 >/dev/null 2>&1; then
+    QEMU_BIN="${QEMU_BIN:-qemu-system-riscv64}"
+elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then
+    QEMU_BIN="/tmp/qemu-10.1.2/build/qemu-system-riscv64"
+else
+    echo "ERROR: qemu-system-riscv64 not found"
+    exit 1
+fi
+
 echo "==================================="
 echo "  User Mode Execution Test"
 echo "==================================="
@@ -38,12 +49,12 @@ echo "Running QEMU tests..."
     echo "cat /hello.txt"
     sleep 2
     echo "exit"
-} | timeout 20 qemu-system-riscv64 \
+} | timeout 20 "${QEMU_BIN}" \
     -machine virt \
     -m 128M \
     -nographic \
     -serial mon:stdio \
-    -bios default \
+    -bios none \
     -kernel build/thunderos.elf \
     -global virtio-mmio.force-legacy=false \
     -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \

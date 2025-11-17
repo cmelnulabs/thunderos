@@ -17,6 +17,17 @@ OUTPUT_DIR="${SCRIPT_DIR}/../outputs"
 OUTPUT_FILE="${OUTPUT_DIR}/integration_test_output.txt"
 QEMU_TIMEOUT=8
 
+# QEMU 10.1.2+ required for SSTC extension support
+# Try system QEMU first, then custom build
+if command -v qemu-system-riscv64 >/dev/null 2>&1; then
+    QEMU_BIN="${QEMU_BIN:-qemu-system-riscv64}"
+elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then
+    QEMU_BIN="/tmp/qemu-10.1.2/build/qemu-system-riscv64"
+else
+    echo "ERROR: qemu-system-riscv64 not found"
+    exit 1
+fi
+
 # Create output directory if it doesn't exist
 mkdir -p "${OUTPUT_DIR}"
 
@@ -102,12 +113,12 @@ rm -rf "${BUILD_DIR}/test_fs_contents"
 # Run QEMU
 print_test "Running full integration test (${QEMU_TIMEOUT}s timeout)"
 
-timeout $((QEMU_TIMEOUT + 2)) qemu-system-riscv64 \
+timeout $((QEMU_TIMEOUT + 2)) "${QEMU_BIN}" \
     -machine virt \
     -m 128M \
     -nographic \
     -serial mon:stdio \
-    -bios default \
+    -bios none \
     -kernel "${BUILD_DIR}/thunderos.elf" \
     -global virtio-mmio.force-legacy=false \
     -drive file="${DISK_IMAGE}",if=none,format=raw,id=hd0 \

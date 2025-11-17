@@ -518,13 +518,13 @@ ThunderOS includes comprehensive errno tests that validate error handling across
    mkfs.ext2 -F -q -d testfs ext2-disk.img 10M
    cd ..
    
-   # Run with QEMU (IMPORTANT: use virtio-mmio.force-legacy=false)
+   # Run with QEMU 10.1.2+ (IMPORTANT: use virtio-mmio.force-legacy=false)
    qemu-system-riscv64 \
        -machine virt \
        -m 128M \
        -nographic \
        -serial mon:stdio \
-       -bios default \
+       -bios none \
        -kernel build/thunderos.elf \
        -global virtio-mmio.force-legacy=false \
        -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \

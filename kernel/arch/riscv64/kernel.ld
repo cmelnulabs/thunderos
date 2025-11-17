@@ -1,19 +1,22 @@
 /*
  * Linker script for ThunderOS kernel
  * RISC-V 64-bit
+ * 
+ * With -bios none, QEMU starts execution at 0x80000000 in M-mode
  */
 
 OUTPUT_ARCH(riscv)
-ENTRY(_start)
+ENTRY(_entry)
 
 SECTIONS
 {
-    /* Kernel starts at 0x80200000 (OpenSBI loads here) */
-    . = 0x80200000;
+    /* Kernel starts at 0x80000000 (QEMU -bios none entry point) */
+    . = 0x80000000;
     
     .text : {
         PROVIDE(_text_start = .);
-        *(.text.boot)
+        *(.text.entry)     /* M-mode entry from entry.S */
+        *(.text.boot)      /* S-mode boot from boot.S */
         *(.text .text.*)
         PROVIDE(_text_end = .);
     }
