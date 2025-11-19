@@ -162,11 +162,8 @@ static void handle_interrupt(struct trap_frame *tf __attribute__((unused)), unsi
     
     switch (cause) {
         case IRQ_S_TIMER:
-            // Handle timer interrupt
+            // Handle timer interrupt (scheduler is called inside)
             hal_timer_handle_interrupt();
-            // Call scheduler for preemptive multitasking
-            extern void schedule(void);
-            schedule();
             break;
         case IRQ_S_SOFT:
             hal_uart_puts("Software interrupt\n");

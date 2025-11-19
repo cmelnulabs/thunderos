@@ -114,6 +114,8 @@ restore_to_kernel:
     ld t0, 248(sp)
     csrw sepc, t0
     ld t0, 256(sp)
+    # CRITICAL FIX: Set SPIE=1 to re-enable interrupts after sret
+    ori t0, t0, (1 << 5)
     csrw sstatus, t0
     
     # Restore general-purpose registers
@@ -166,6 +168,8 @@ restore_to_user:
     ld t0, 248(sp)
     csrw sepc, t0
     ld t0, 256(sp)
+    # CRITICAL FIX: Set SPIE=1 to re-enable interrupts after sret
+    ori t0, t0, (1 << 5)
     csrw sstatus, t0
     
     # Restore general-purpose registers
