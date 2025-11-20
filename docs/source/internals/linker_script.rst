@@ -70,6 +70,68 @@ Source Code
 Detailed Explanation
 --------------------
 
+Program Headers (Memory Protection)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: ld
+
+   PHDRS
+   {
+       text PT_LOAD FLAGS(5);  /* R + X = 5 */
+       data PT_LOAD FLAGS(6);  /* R + W = 6 */
+   }
+
+**Purpose:**
+   * Create separate ELF program headers for different memory regions
+   * Enable W^X (Write XOR Execute) memory protection
+   * Prevent code execution from writable memory
+
+**Program Header Types:**
+
+* **text segment**: Read + Execute (FLAGS = 5)
+  
+  - Contains ``.text`` (code) and ``.rodata`` (constants)
+  - Cannot be written to at runtime
+  - Can be executed
+
+* **data segment**: Read + Write (FLAGS = 6)
+  
+  - Contains ``.data`` (initialized data) and ``.bss`` (zero-initialized)
+  - Can be written to at runtime
+  - Cannot be executed
+
+**Flag Values:**
+
+.. code-block:: text
+
+   PF_X (Execute) = 1
+   PF_W (Write)   = 2
+   PF_R (Read)    = 4
+   
+   R + X = 4 + 1 = 5
+   R + W = 4 + 2 = 6
+
+**Security Benefits:**
+
+- Prevents code injection attacks (can't write to executable memory)
+- Prevents data execution attacks (can't execute writable memory)
+- Follows principle of least privilege
+- Standard practice for modern operating systems
+
+**Verification:**
+
+.. code-block:: bash
+
+   $ riscv64-unknown-elf-readelf -l build/thunderos.elf
+   
+   Program Headers:
+     Type      Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+     LOAD      0x001000 0x0000000080000000 0x0000000080000000 0x019295 0x019295 R E 0x1000
+     LOAD      0x01b000 0x000000008001a000 0x000000008001a000 0x0000d4 0x012830 RW  0x1000
+
+First segment (R E): Code and read-only data
+Second segment (RW): Read-write data
+
 Header Directives
 ~~~~~~~~~~~~~~~~~
 
@@ -126,33 +188,37 @@ Text Section
 
    .text : {
        PROVIDE(_text_start = .);
-       *(.text.boot)
+       *(.text.entry)     /* M-mode entry */
+       *(.text.boot)      /* S-mode boot */
        *(.text .text.*)
        PROVIDE(_text_end = .);
-   }
+   } :text
 
 **Purpose:** Executable code
 
 **Components:**
 
-* ``*(.text.boot)`` - Bootloader code (must be first!)
+* ``*(.text.entry)`` - M-mode entry point from entry.S
+* ``*(.text.boot)`` - S-mode bootloader code from boot.S
 * ``*(.text .text.*)`` - All other code sections
 * ``PROVIDE(_text_start/_text_end)`` - Symbol markers for debugging
+* ``:text`` - Assign to text program header (R+X permissions)
 
 **Ordering Matters:**
-   * ``.text.boot`` MUST come first
-   * Contains ``_start`` entry point
-   * First instruction executed after firmware
+   * ``.text.entry`` MUST come first (M-mode entry)
+   * ``.text.boot`` follows (S-mode initialization)
+   * Contains ``_entry`` entry point
+   * First instruction executed after QEMU starts
 
 **Example Contents:**
 
 .. code-block:: text
 
    _text_start:
-   0x80200000:  _start (boot.S)
-   0x80200100:  kernel_main (main.c)
-   0x80200200:  uart_init (uart.c)
-   0x80200300:  uart_putc (uart.c)
+   0x80000000:  _entry (entry.S, M-mode)
+   0x80000100:  _start (boot.S, S-mode)
+   0x80000200:  kernel_main (main.c)
+   0x80000300:  uart_init (uart.c)
    ...
    _text_end:
 
@@ -165,9 +231,11 @@ Read-Only Data Section
        PROVIDE(_rodata_start = .);
        *(.rodata .rodata.*)
        PROVIDE(_rodata_end = .);
-   }
+   } :text
 
 **Purpose:** Constant data (strings, const variables)
+
+**Assignment:** ``:text`` - Same segment as code (R+X, no write permission)
 
 **Example Contents:**
 
@@ -177,10 +245,29 @@ Read-Only Data Section
    const char *msg = "ThunderOS";  // Pointer in .data, string in .rodata
    const int MAX = 100;            // Value in .rodata
 
-**Memory Protection (Future):**
-   * Mark as read-only in MMU
-   * Writes trigger page fault
-   * Protects from accidental modification
+**Memory Protection:**
+   * Part of read-only, executable segment
+   * Hardware enforced (no writes allowed)
+   * Attempts to write trigger exception
+
+Page Alignment for Data
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: ld
+
+   . = ALIGN(4096);
+
+**Purpose:** Align to page boundary before data sections
+
+**Why Needed:**
+   * Data segment has different permissions (R+W vs R+X)
+   * MMU/page tables work on 4KB page granularity
+   * Separate LOAD segments must start on page boundaries
+
+**Effect:**
+   * Pads between .rodata and .data if needed
+   * Ensures clean separation for memory protection
+   * May waste some space but necessary for security
 
 Data Section
 ~~~~~~~~~~~~
@@ -191,9 +278,11 @@ Data Section
        PROVIDE(_data_start = .);
        *(.data .data.*)
        PROVIDE(_data_end = .);
-   }
+   } :data
 
 **Purpose:** Initialized global/static variables
+
+**Assignment:** ``:data`` - Assign to data program header (R+W permissions)
 
 **Example Contents:**
 
@@ -217,9 +306,11 @@ BSS Section
        *(.bss .bss.*)
        *(COMMON)
        PROVIDE(_bss_end = .);
-   }
+   } :data
 
-**Purpose:** Uninitialized global/static variables
+**Purpose:** Zero-initialized variables
+
+**Assignment:** ``:data`` - Same segment as .data (R+W permissions)
 
 **BSS = Block Started by Symbol (historical)**
 

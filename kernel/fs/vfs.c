@@ -15,38 +15,6 @@ static vfs_file_t g_file_table[VFS_MAX_OPEN_FILES];
 static vfs_filesystem_t *g_root_fs = NULL;
 
 /**
- * String length
- */
-static uint32_t strlen(const char *str) {
-    uint32_t len = 0;
-    while (str[len] != '\0') {
-        len++;
-    }
-    return len;
-}
-
-/**
- * String copy
- */
-static void strcpy(char *dst, const char *src) {
-    while (*src) {
-        *dst++ = *src++;
-    }
-    *dst = '\0';
-}
-
-/**
- * String comparison
- */
-static int strcmp(const char *s1, const char *s2) {
-    while (*s1 && (*s1 == *s2)) {
-        s1++;
-        s2++;
-    }
-    return *(unsigned char *)s1 - *(unsigned char *)s2;
-}
-
-/**
  * Initialize VFS
  */
 int vfs_init(void) {
