@@ -29,8 +29,10 @@
 #define SYS_SIGNAL      21  // Set signal handler
 #define SYS_SIGACTION   22  // Advanced signal handling
 #define SYS_SIGRETURN   23  // Return from signal handler
+#define SYS_MMAP        24  // Map memory
+#define SYS_MUNMAP      25  // Unmap memory
 
-#define SYSCALL_COUNT   24
+#define SYSCALL_COUNT   26
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -73,5 +75,7 @@ uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]);
 uint64_t sys_signal(int signum, void (*handler)(int));
 uint64_t sys_sigaction(int signum, const void *act, void *oldact);
 uint64_t sys_sigreturn(void);
+uint64_t sys_mmap(void *addr, size_t length, int prot, int flags, int fd, uint64_t offset);
+uint64_t sys_munmap(void *addr, size_t length);
 
 #endif // SYSCALL_H

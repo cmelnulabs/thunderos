@@ -5,6 +5,10 @@ FROM ubuntu:22.04
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Set locale for Sphinx documentation builds
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8
+
 # Install base dependencies and build tools
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -22,8 +26,8 @@ RUN apt-get update && apt-get install -y \
     libslirp-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies for QEMU build
-RUN pip3 install tomli
+# Install Python dependencies for QEMU build and documentation
+RUN pip3 install tomli sphinx sphinx_rtd_theme
 
 # Download and install RISC-V GNU toolchain (bare-metal)
 RUN cd /tmp && \

@@ -16,6 +16,7 @@ This section documents the internal implementation details of ThunderOS.
    pmm
    kmalloc
    paging
+   memory
    dma
    barrier
    kstring
@@ -25,7 +26,6 @@ This section documents the internal implementation details of ThunderOS.
    signals
    testing_framework
    linker_script
-   memory_layout
    registers
    virtio_block
    ext2_filesystem
@@ -78,6 +78,9 @@ Component Status
    * - :doc:`paging`
      - ✓ Done
      - Virtual memory with Sv39 paging (identity mapping)
+   * - :doc:`memory`
+     - ✓ Done (v0.4.0)
+     - Complete memory management: layout, isolation, VMAs, and safety
    * - :doc:`dma`
      - ✓ Done (v0.3.0)
      - DMA allocator for physically contiguous memory

@@ -141,6 +141,9 @@ void process_free(struct process *proc) {
     
     lock_acquire(&process_lock);
     
+    // Clean up VMAs first
+    process_cleanup_vmas(proc);
+    
     // Free allocated memory regions
     if (proc->kernel_stack) {
         kfree((void *)proc->kernel_stack);
@@ -484,11 +487,135 @@ void process_dump(void) {
 
 /**
  * Fork the current process
- * TODO: Implement fork
+ * 
+ * Creates a copy of the current process with complete memory isolation.
+ * Copies page table, VMAs, and process state.
+ * 
+ * @return Child PID in parent, 0 in child, -1 on error
  */
 pid_t process_fork(void) {
-    hal_uart_puts("process_fork: not yet implemented\n");
-    return -1;
+    struct process *parent = process_current();
+    if (!parent) {
+        hal_uart_puts("process_fork: no current process\n");
+        return -1;
+    }
+    
+    // Allocate new process structure
+    struct process *child = alloc_process();
+    if (!child) {
+        hal_uart_puts("process_fork: process table full\n");
+        return -1;
+    }
+    
+    // Assign new PID
+    child->pid = alloc_pid();
+    
+    // Copy basic process info
+    kstrcpy(child->name, parent->name);
+    child->state = PROC_READY;
+    child->parent = parent;
+    child->cpu_time = 0;
+    child->priority = parent->priority;
+    child->exit_code = 0;
+    child->errno_value = 0;
+    
+    // Allocate kernel stack for child
+    child->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
+    if (!child->kernel_stack) {
+        hal_uart_puts("process_fork: failed to allocate kernel stack\n");
+        process_free(child);
+        return -1;
+    }
+    
+    // Set up memory isolation for child
+    if (process_setup_memory_isolation(child) != 0) {
+        hal_uart_puts("process_fork: failed to setup memory isolation\n");
+        process_free(child);
+        return -1;
+    }
+    
+    // Create new page table for child
+    child->page_table = create_user_page_table();
+    if (!child->page_table) {
+        hal_uart_puts("process_fork: failed to create page table\n");
+        process_free(child);
+        return -1;
+    }
+    
+    // Copy VMAs from parent to child
+    vm_area_t *parent_vma = parent->vm_areas;
+    while (parent_vma) {
+        // Add VMA to child
+        if (process_add_vma(child, parent_vma->start, parent_vma->end, parent_vma->flags) != 0) {
+            hal_uart_puts("process_fork: failed to copy VMA\n");
+            process_free(child);
+            return -1;
+        }
+        
+        // Copy physical pages for this VMA
+        for (uint64_t addr = parent_vma->start; addr < parent_vma->end; addr += PAGE_SIZE) {
+            uintptr_t parent_paddr;
+            if (virt_to_phys(parent->page_table, addr, &parent_paddr) == 0) {
+                // Allocate new physical page for child
+                uintptr_t child_paddr = pmm_alloc_page();
+                if (!child_paddr) {
+                    hal_uart_puts("process_fork: failed to allocate page\n");
+                    process_free(child);
+                    return -1;
+                }
+                
+                // Copy page contents
+                kmemcpy((void *)child_paddr, (void *)parent_paddr, PAGE_SIZE);
+                
+                // Convert VM flags to PTE flags
+                uint64_t pte_flags = PTE_V;
+                if (parent_vma->flags & VM_READ) pte_flags |= PTE_R;
+                if (parent_vma->flags & VM_WRITE) pte_flags |= PTE_W;
+                if (parent_vma->flags & VM_EXEC) pte_flags |= PTE_X;
+                if (parent_vma->flags & VM_USER) pte_flags |= PTE_U;
+                
+                // Map page in child's page table
+                if (map_page(child->page_table, addr, child_paddr, pte_flags) != 0) {
+                    hal_uart_puts("process_fork: failed to map page\n");
+                    pmm_free_page(child_paddr);
+                    process_free(child);
+                    return -1;
+                }
+            }
+        }
+        
+        parent_vma = parent_vma->next;
+    }
+    
+    // Copy heap information
+    child->heap_start = parent->heap_start;
+    child->heap_end = parent->heap_end;
+    child->user_stack = parent->user_stack;
+    
+    // Allocate and copy trap frame
+    child->trap_frame = (struct trap_frame *)kmalloc(sizeof(struct trap_frame));
+    if (!child->trap_frame) {
+        hal_uart_puts("process_fork: failed to allocate trap frame\n");
+        process_free(child);
+        return -1;
+    }
+    kmemcpy(child->trap_frame, parent->trap_frame, sizeof(struct trap_frame));
+    
+    // Set return value to 0 in child (distinguish from parent)
+    child->trap_frame->a0 = 0;
+    
+    // Copy kernel context
+    kmemcpy(&child->context, &parent->context, sizeof(struct context));
+    
+    // Set up child's kernel stack pointer
+    child->context.sp = child->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    
+    // Add child to scheduler
+    child->state = PROC_READY;
+    scheduler_enqueue(child);
+    
+    // Return child PID to parent
+    return child->pid;
 }
 
 /**
@@ -536,8 +663,22 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
         return NULL;
     }
     
+    // Set up memory isolation (VMA tracking and heap)
+    if (process_setup_memory_isolation(proc) != 0) {
+        process_free(proc);
+        return NULL;
+    }
+    
     // Map user code at standard location with executable permissions
     if (map_user_code(proc->page_table, USER_CODE_BASE, user_code, code_size) != 0) {
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Add VMA for code segment
+    uint64_t code_pages = (code_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    uint64_t code_end = USER_CODE_BASE + (code_pages * PAGE_SIZE);
+    if (process_add_vma(proc, USER_CODE_BASE, code_end, VM_READ | VM_EXEC | VM_USER) != 0) {
         process_free(proc);
         return NULL;
     }
@@ -545,6 +686,12 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     // Map user stack at standard location with read-write permissions
     uintptr_t user_stack_base = USER_STACK_TOP - USER_STACK_SIZE;
     if (map_user_memory(proc->page_table, user_stack_base, 0, USER_STACK_SIZE, 1) != 0) {
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Add VMA for stack segment
+    if (process_add_vma(proc, user_stack_base, USER_STACK_TOP, VM_READ | VM_WRITE | VM_USER | VM_GROWSDOWN) != 0) {
         process_free(proc);
         return NULL;
     }
@@ -792,4 +939,240 @@ void user_mode_entry_wrapper(void) {
     
     // Should never reach here
     kernel_panic("user_mode_entry_wrapper: user_return returned");
+}
+
+/**
+ * Set up memory isolation for a process
+ * 
+ * Initializes VMA list and heap boundaries for complete memory isolation.
+ * Called during process creation.
+ * 
+ * @param proc Process to setup
+ * @return 0 on success, -1 on failure
+ */
+int process_setup_memory_isolation(struct process *proc) {
+    if (!proc) {
+        return -1;
+    }
+    
+    // Initialize VMA list as empty
+    proc->vm_areas = NULL;
+    
+    // Initialize heap boundaries (heap starts above code and data)
+    proc->heap_start = USER_HEAP_BASE;
+    proc->heap_end = USER_HEAP_BASE;
+    
+    return 0;
+}
+
+/**
+ * Find VMA containing an address
+ * 
+ * Searches the process's VMA list for a region containing the given address.
+ * 
+ * @param proc Process to search
+ * @param addr Virtual address to find
+ * @return Pointer to VMA if found, NULL otherwise
+ */
+vm_area_t *process_find_vma(struct process *proc, uint64_t addr) {
+    if (!proc) {
+        return NULL;
+    }
+    
+    vm_area_t *vma = proc->vm_areas;
+    while (vma) {
+        if (addr >= vma->start && addr < vma->end) {
+            return vma;
+        }
+        vma = vma->next;
+    }
+    
+    return NULL;
+}
+
+/**
+ * Add a VMA to process address space
+ * 
+ * Creates a new VMA and adds it to the process's VMA list.
+ * 
+ * @param proc Process to add VMA to
+ * @param start Start address (inclusive)
+ * @param end End address (exclusive)
+ * @param flags Protection flags (VM_READ, VM_WRITE, VM_EXEC, VM_USER)
+ * @return 0 on success, -1 on failure
+ */
+int process_add_vma(struct process *proc, uint64_t start, uint64_t end, uint32_t flags) {
+    if (!proc || start >= end) {
+        return -1;
+    }
+    
+    // Allocate new VMA structure
+    vm_area_t *vma = (vm_area_t *)kmalloc(sizeof(vm_area_t));
+    if (!vma) {
+        return -1;
+    }
+    
+    // Initialize VMA
+    vma->start = start;
+    vma->end = end;
+    vma->flags = flags;
+    
+    // Add to front of list
+    vma->next = proc->vm_areas;
+    proc->vm_areas = vma;
+    
+    return 0;
+}
+
+/**
+ * Remove a VMA from process address space
+ * 
+ * Removes and frees a VMA from the process's VMA list.
+ * 
+ * @param proc Process to remove VMA from
+ * @param vma VMA to remove
+ */
+void process_remove_vma(struct process *proc, vm_area_t *vma) {
+    if (!proc || !vma) {
+        return;
+    }
+    
+    // Find and unlink from list
+    vm_area_t **prev = &proc->vm_areas;
+    while (*prev) {
+        if (*prev == vma) {
+            *prev = vma->next;
+            kfree(vma);
+            return;
+        }
+        prev = &(*prev)->next;
+    }
+}
+
+/**
+ * Clean up all VMAs for a process
+ * 
+ * Frees all VMA structures in the process's VMA list.
+ * Called during process cleanup.
+ * 
+ * @param proc Process to cleanup
+ */
+void process_cleanup_vmas(struct process *proc) {
+    if (!proc) {
+        return;
+    }
+    
+    vm_area_t *vma = proc->vm_areas;
+    while (vma) {
+        vm_area_t *next = vma->next;
+        kfree(vma);
+        vma = next;
+    }
+    
+    proc->vm_areas = NULL;
+}
+
+/**
+ * Map a memory region in process address space
+ * 
+ * Allocates physical pages and maps them into the process's virtual address space.
+ * Also creates a VMA to track the mapping.
+ * 
+ * @param proc Process to map in
+ * @param vaddr Virtual address to start mapping (must be page-aligned)
+ * @param size Size in bytes
+ * @param flags Protection flags (VM_READ, VM_WRITE, VM_EXEC, VM_USER)
+ * @return 0 on success, -1 on failure
+ */
+int process_map_region(struct process *proc, uint64_t vaddr, uint64_t size, uint32_t flags) {
+    if (!proc || !proc->page_table || size == 0) {
+        return -1;
+    }
+    
+    // Align to page boundaries
+    uint64_t start = vaddr & ~(PAGE_SIZE - 1);
+    uint64_t end = (vaddr + size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    
+    // Convert VM flags to PTE flags
+    uint64_t pte_flags = PTE_V;
+    if (flags & VM_READ) pte_flags |= PTE_R;
+    if (flags & VM_WRITE) pte_flags |= PTE_W;
+    if (flags & VM_EXEC) pte_flags |= PTE_X;
+    if (flags & VM_USER) pte_flags |= PTE_U;
+    
+    // Allocate and map each page
+    for (uint64_t addr = start; addr < end; addr += PAGE_SIZE) {
+        uintptr_t phys_page = pmm_alloc_page();
+        if (!phys_page) {
+            // TODO: Cleanup already mapped pages
+            return -1;
+        }
+        
+        // Zero the page
+        kmemset((void *)phys_page, 0, PAGE_SIZE);
+        
+        // Map the page
+        if (map_page(proc->page_table, addr, phys_page, pte_flags) != 0) {
+            pmm_free_page(phys_page);
+            // TODO: Cleanup already mapped pages
+            return -1;
+        }
+    }
+    
+    // Add VMA to track this region
+    if (process_add_vma(proc, start, end, flags) != 0) {
+        // TODO: Cleanup mapped pages
+        return -1;
+    }
+    
+    return 0;
+}
+
+/**
+ * Validate user pointer against process VMAs
+ * 
+ * Checks if a user-space pointer is valid for the specified access type.
+ * Ensures the pointer falls within a mapped VMA with appropriate permissions.
+ * 
+ * @param proc Process to validate for
+ * @param ptr Pointer to validate
+ * @param size Size of memory region
+ * @param required_flags Flags that must be set (e.g., VM_WRITE for write access)
+ * @return 1 if valid, 0 if invalid
+ */
+int process_validate_user_ptr(struct process *proc, const void *ptr, size_t size, uint32_t required_flags) {
+    if (!proc || !ptr || size == 0) {
+        return 0;
+    }
+    
+    uint64_t start = (uint64_t)ptr;
+    uint64_t end = start + size;
+    
+    // Check for kernel space addresses
+    if (start >= KERNEL_VIRT_BASE || end >= KERNEL_VIRT_BASE) {
+        return 0;  // Trying to access kernel memory
+    }
+    
+    // Check for overflow
+    if (end < start) {
+        return 0;
+    }
+    
+    // Find VMA containing start address
+    vm_area_t *vma = process_find_vma(proc, start);
+    if (!vma) {
+        return 0;  // Start address not mapped
+    }
+    
+    // Check if entire range is within VMA
+    if (end > vma->end) {
+        return 0;  // Range extends beyond VMA
+    }
+    
+    // Check permissions
+    if ((vma->flags & required_flags) != required_flags) {
+        return 0;  // Missing required permissions
+    }
+    
+    return 1;
 }

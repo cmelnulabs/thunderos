@@ -562,5 +562,5 @@ See Also
 --------
 
 * :doc:`bootloader` - Uses _bss_start/_bss_end symbols
-* :doc:`memory_layout` - Detailed memory map
+* :doc:`memory` - Complete memory management and layout
 * `GNU ld Manual <https://sourceware.org/binutils/docs/ld/>`_

@@ -171,24 +171,53 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.5.0 - "Communication"
+## Version 0.5.0 - "Communication" 🚧 IN PROGRESS
 
-**Focus:** Inter-process communication and networking
+**Status:** In Development (started November 20, 2025)
+
+**Focus:** Inter-process communication and process signaling
+
+### Completed Features
+- ✅ Signal infrastructure
+  - ✅ Signal mask per process (pending, blocked)
+  - ✅ Signal handler registration (user-space function pointers)
+  - ✅ Signal delivery during trap handler (before return to user mode)
+- ✅ Core signals implementation
+  - ✅ SIGKILL - Terminate process (cannot be caught)
+  - ✅ SIGTERM - Graceful termination request (can be handled)
+  - ✅ SIGCHLD - Child process state change notification
+  - ✅ SIGSTOP - Stop/pause process (cannot be caught)
+  - ✅ SIGCONT - Continue stopped process
+  - ✅ SIGUSR1, SIGUSR2 - User-defined signals
+- ✅ System calls
+  - ✅ `sys_kill(pid, signal)` - Send signal to process
+  - ✅ `sys_signal(signum, handler)` - Register signal handler
+  - ✅ `sys_sigaction(signum, act, oldact)` - Advanced signal handling (stub)
+  - ✅ `sys_sigreturn()` - Return from signal handler (stub)
+- ✅ Process integration
+  - ✅ Signal delivery via trap frame modification
+  - ✅ Signal handling before return to user mode
+  - ✅ SIGCHLD sent to parent on child exit
+  - ✅ Signal handlers execute in user space
+- ✅ Test program
+  - ✅ `signal_test` - Validates signal delivery and handling
 
 ### Planned Features
 - [ ] Pipes for IPC
 - [ ] Shared memory support
-- [ ] Signals (SIGKILL, SIGTERM, SIGUSR1, etc.)
 - [ ] VirtIO network driver
 - [ ] Basic TCP/IP stack (port lwIP or custom)
 - [ ] Socket API (socket, bind, listen, connect, send, recv)
 - [ ] Simple network utilities (ping, wget)
 
 **Release Criteria:**
-- Processes can communicate via pipes
-- Basic networking works (ping, simple HTTP)
-- Can download files from network
-- Signals handled correctly
+- ✅ Processes can send and receive signals
+- ✅ SIGKILL terminates processes reliably
+- ✅ SIGCHLD notifies parent of child termination
+- ✅ Signal handlers execute in user space
+- [ ] Processes can communicate via pipes
+- [ ] Basic networking works (ping, simple HTTP)
+- [ ] Can download files from network
 
 ---
 

@@ -26,5 +26,5 @@ ThunderOS will use **Sv39** (future implementation).
 See Also
 --------
 
-* :doc:`../internals/memory_layout` - Physical memory layout
+* :doc:`../internals/memory` - Complete memory management and layout
 * Official RISC-V Privileged Specification - Virtual Memory chapter
