@@ -5,6 +5,7 @@
  */
 
 #include "kernel/syscall.h"
+#include "mm/paging.h"
 #include "kernel/process.h"
 #include "hal/hal_uart.h"
 #include "kernel/scheduler.h"
@@ -13,6 +14,15 @@
 #include "fs/vfs.h"
 #include <stdint.h>
 #include <stddef.h>
+
+// Memory protection flags for mmap
+#define PROT_READ   0x1
+#define PROT_WRITE  0x2
+#define PROT_EXEC   0x4
+
+// Mapping flags for mmap
+#define MAP_PRIVATE     0x02
+#define MAP_ANONYMOUS   0x20
 
 // Constants
 #define KERNEL_SPACE_START 0x8000000000000000UL
@@ -26,21 +36,24 @@
 static int is_valid_user_pointer(const void *pointer, size_t length);
 
 /**
- * is_valid_user_pointer - Validate user-space pointer
+ * is_valid_user_pointer - Validate user-space pointer with memory isolation
  * 
- * Performs basic validation to ensure pointer is safe to dereference.
- * Checks for NULL, kernel space addresses, and overflow.
+ * Performs comprehensive validation using process VMAs to ensure pointer
+ * is within a mapped memory region with appropriate permissions.
  * 
  * @param pointer User-space pointer to validate
  * @param length Length of memory region in bytes
  * @return 1 if valid, 0 if invalid
  */
 static int is_valid_user_pointer(const void *pointer, size_t length) {
-    uintptr_t address = (uintptr_t)pointer;
+    struct process *proc = process_current();
     
-    if (pointer == NULL) {
+    if (!proc || !pointer || length == 0) {
         return 0;
     }
+    
+    // Basic validation
+    uintptr_t address = (uintptr_t)pointer;
     
     // User addresses must be in lower half (below kernel space)
     if (address >= KERNEL_SPACE_START) {
@@ -53,7 +66,8 @@ static int is_valid_user_pointer(const void *pointer, size_t length) {
         return 0;
     }
     
-    return 1;
+    // Validate against process VMAs (memory isolation check)
+    return process_validate_user_ptr(proc, pointer, length, VM_USER);
 }
 
 /**
@@ -141,16 +155,77 @@ uint64_t sys_getpid(void) {
 }
 
 /**
- * sys_sbrk - Adjust heap size
+ * sys_sbrk - Adjust heap size with memory isolation
+ * 
+ * Implements heap expansion/contraction with complete memory isolation.
+ * Allocates physical pages, maps them into process address space, and
+ * updates VMA tracking.
  * 
  * @param heap_increment Bytes to add to heap (can be negative)
- * @return Previous heap end, or -1 on error
+ * @return Previous heap end on success, or -1 on error
  */
 uint64_t sys_sbrk(int heap_increment) {
-    (void)heap_increment;  // Suppress unused parameter warning
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
     
-    // Not implemented yet - requires per-process heap management
-    return SYSCALL_ERROR;
+    uint64_t old_brk = proc->heap_end;
+    
+    // If increment is zero, just return current brk
+    if (heap_increment == 0) {
+        return old_brk;
+    }
+    
+    uint64_t new_brk = old_brk + heap_increment;
+    
+    // Validate new break is within reasonable bounds
+    if (new_brk < proc->heap_start) {
+        return SYSCALL_ERROR;  // Can't shrink below heap start
+    }
+    
+    // Don't let heap grow into stack (leave safety margin)
+    uint64_t stack_bottom = USER_STACK_TOP - USER_STACK_SIZE;
+    if (new_brk >= stack_bottom - (1024 * 1024)) {  // 1MB safety margin
+        return SYSCALL_ERROR;
+    }
+    
+    // Expanding heap
+    if (heap_increment > 0) {
+        // Calculate pages needed
+        uint64_t old_page = (old_brk + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        uint64_t new_page = (new_brk + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        
+        // Map new pages if crossing page boundary
+        if (new_page > old_page) {
+            if (process_map_region(proc, old_page, new_page - old_page, 
+                                 VM_READ | VM_WRITE | VM_USER) != 0) {
+                return SYSCALL_ERROR;
+            }
+        }
+    }
+    // Shrinking heap
+    else {
+        // Calculate pages to unmap
+        uint64_t new_page = (new_brk + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        uint64_t old_page = (old_brk + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        
+        // Unmap pages if crossing page boundary
+        for (uint64_t addr = new_page; addr < old_page; addr += PAGE_SIZE) {
+            unmap_page(proc->page_table, addr);
+        }
+        
+        // Update VMA for heap
+        vm_area_t *heap_vma = process_find_vma(proc, proc->heap_start);
+        if (heap_vma && heap_vma->start == proc->heap_start) {
+            heap_vma->end = new_page;
+        }
+    }
+    
+    // Update heap end
+    proc->heap_end = new_brk;
+    
+    return old_brk;
 }
 
 /**
@@ -304,7 +379,8 @@ uint64_t sys_close(int fd) {
 /**
  * sys_read - Read data from a file descriptor
  * 
- * Enhanced version that supports both stdin and file descriptors
+ * Enhanced version with memory isolation validation.
+ * Validates buffer is in mapped memory with write permissions.
  * 
  * @param file_descriptor File descriptor
  * @param buffer Buffer to read into
@@ -312,7 +388,10 @@ uint64_t sys_close(int fd) {
  * @return Number of bytes read, or -1 on error
  */
 uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
-    if (!is_valid_user_pointer(buffer, byte_count)) {
+    struct process *proc = process_current();
+    
+    // Validate user buffer with write permission (we're writing to it)
+    if (!process_validate_user_ptr(proc, buffer, byte_count, VM_WRITE | VM_USER)) {
         return SYSCALL_ERROR;
     }
     
@@ -338,7 +417,8 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
 /**
  * sys_write - Write data to a file descriptor
  * 
- * Enhanced version that supports both stdout/stderr and file descriptors
+ * Enhanced version with memory isolation validation.
+ * Validates buffer is in mapped memory with read permissions.
  * 
  * @param file_descriptor File descriptor
  * @param buffer Buffer to write from
@@ -346,7 +426,10 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
  * @return Number of bytes written, or -1 on error
  */
 uint64_t sys_write(int file_descriptor, const char *buffer, size_t byte_count) {
-    if (!is_valid_user_pointer(buffer, byte_count)) {
+    struct process *proc = process_current();
+    
+    // Validate user buffer with read permission (we're reading from it)
+    if (!process_validate_user_ptr(proc, buffer, byte_count, VM_READ | VM_USER)) {
         return SYSCALL_ERROR;
     }
     
@@ -523,6 +606,94 @@ uint64_t sys_rmdir(const char *path) {
 }
 
 /**
+ * sys_mmap - Map memory into process address space
+ * 
+ * Simplified mmap implementation for memory isolation.
+ * 
+ * @param addr Hint address (0 = kernel chooses)
+ * @param length Length of mapping in bytes
+ * @param prot Protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
+ * @param flags Mapping flags (MAP_PRIVATE, MAP_ANONYMOUS, etc.)
+ * @param fd File descriptor (ignored if MAP_ANONYMOUS)
+ * @param offset File offset (ignored if MAP_ANONYMOUS)
+ * @return Mapped address on success, -1 on error
+ */
+uint64_t sys_mmap(void *addr, size_t length, int prot, int flags, int fd, uint64_t offset) {
+    struct process *proc = process_current();
+    if (!proc || length == 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    (void)fd;      // TODO: Implement file-backed mappings
+    (void)offset;  // TODO: Implement file offset
+    (void)flags;   // TODO: Handle MAP_SHARED vs MAP_PRIVATE
+    
+    // Determine mapping address
+    uint64_t map_addr;
+    if (addr) {
+        map_addr = (uint64_t)addr;
+    } else {
+        // Find free space in user address space (simple allocator)
+        map_addr = USER_MMAP_START;
+        
+        // Search for free region
+        vm_area_t *vma = proc->vm_areas;
+        while (vma) {
+            if (map_addr >= vma->start && map_addr < vma->end) {
+                map_addr = vma->end;
+            }
+            vma = vma->next;
+        }
+    }
+    
+    // Convert protection flags
+    uint32_t vm_flags = VM_USER;
+    if (prot & PROT_READ) vm_flags |= VM_READ;
+    if (prot & PROT_WRITE) vm_flags |= VM_WRITE;
+    if (prot & PROT_EXEC) vm_flags |= VM_EXEC;
+    
+    // Map the region
+    if (process_map_region(proc, map_addr, length, vm_flags) != 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    return map_addr;
+}
+
+/**
+ * sys_munmap - Unmap memory from process address space
+ * 
+ * @param addr Address to unmap (must be page-aligned)
+ * @param length Length of mapping in bytes
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_munmap(void *addr, size_t length) {
+    struct process *proc = process_current();
+    if (!proc || !addr || length == 0) {
+        return SYSCALL_ERROR;
+    }
+    
+    uint64_t start = (uint64_t)addr & ~(PAGE_SIZE - 1);
+    uint64_t end = ((uint64_t)addr + length + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    
+    // Find and remove VMA
+    vm_area_t *vma = process_find_vma(proc, start);
+    if (!vma || vma->start != start) {
+        return SYSCALL_ERROR;  // Address not start of mapping
+    }
+    
+    // Unmap all pages in the region
+    for (uint64_t page = start; page < end; page += PAGE_SIZE) {
+        unmap_page(proc->page_table, page);
+    }
+    
+    // Remove VMA
+    process_remove_vma(proc, vma);
+    
+    return SYSCALL_SUCCESS;
+}
+
+/**
  * sys_execve - Execute program from filesystem
  * 
  * @param path Path to executable
@@ -654,6 +825,15 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_EXECVE:
             return_value = sys_execve((const char *)argument0, (const char **)argument1, (const char **)argument2);
+            break;
+            
+        case SYS_MMAP:
+            return_value = sys_mmap((void *)argument0, (size_t)argument1, (int)argument2, 
+                                   (int)argument3, (int)argument4, (uint64_t)argument5);
+            break;
+            
+        case SYS_MUNMAP:
+            return_value = sys_munmap((void *)argument0, (size_t)argument1);
             break;
             
         case SYS_FORK:

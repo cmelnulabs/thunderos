@@ -34,6 +34,7 @@ ext2_fs_t g_test_ext2_fs;
 // Built-in test functions (only compiled if ENABLE_KERNEL_TESTS is set)
 extern void test_memory_management(void);
 extern void test_elf_all(void);
+extern void run_memory_isolation_tests(void);
 #endif
 
 // Demo process functions
@@ -196,6 +197,11 @@ void kernel_main(void) {
     
     // Initialize scheduler
     scheduler_init();
+    
+#ifdef ENABLE_KERNEL_TESTS
+    // Run memory isolation tests (after process system is initialized)
+    run_memory_isolation_tests();
+#endif
     
     // Skip demo processes - going straight to interactive shell
     /*

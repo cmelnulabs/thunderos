@@ -301,7 +301,12 @@ static void free_page_table_recursive(page_table_t *pt, int level) {
     
     // For non-leaf levels, recursively free child page tables
     if (level > 0) {
-        for (int i = 0; i < PT_ENTRIES; i++) {
+        // At level 2 (top level), only free user space entries (VPN[2] = 0-1)
+        // Kernel space entries (VPN[2] = 2-511) are shared with kernel page table
+        // and must NOT be freed
+        int end_index = (level == 2) ? 2 : PT_ENTRIES;
+        
+        for (int i = 0; i < end_index; i++) {
             pte_t pte = pt->entries[i];
             
             // Skip invalid entries

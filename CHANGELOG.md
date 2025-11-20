@@ -5,7 +5,63 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - QEMU 10.1.2 Upgrade
+## [Unreleased]
+
+### Added
+
+#### Memory Isolation (`kernel/core/process.c`, `kernel/core/syscall.c`, `kernel/mm/paging.c`)
+- **Per-Process Memory Isolation**: Complete memory isolation between processes
+  - Separate page tables for each process (kernel entries shared by reference)
+  - Virtual Memory Areas (VMAs) tracking regions and permissions
+  - Isolated heap management with safety margins
+  - Pointer validation before kernel access
+- **Virtual Memory Areas (VMAs)**:
+  - `vm_area_t` structure with start/end addresses and permission flags
+  - VMA flags: `VM_READ`, `VM_WRITE`, `VM_EXEC`, `VM_USER`, `VM_SHARED`, `VM_GROWSDOWN`
+  - Linked list of VMAs per process
+  - Functions: `process_add_vma()`, `process_find_vma()`, `process_remove_vma()`
+- **Memory Management Functions**:
+  - `process_setup_memory_isolation()` - Initialize memory isolation for process
+  - `process_cleanup_memory_isolation()` - Clean up VMAs and page tables
+  - `process_map_region()` - Map memory region with permissions
+  - `process_validate_user_ptr()` - Validate user pointers before kernel access
+- **Enhanced System Calls**:
+  - `sys_brk()` - Expand/shrink process heap with collision detection
+  - `sys_mmap()` - Map memory into address space (anonymous only)
+  - `sys_munmap()` - Unmap memory regions
+- **Process Forking**:
+  - `process_fork()` - Create child with complete memory copy
+  - Duplicates page table, VMAs, and physical pages
+  - Isolated address spaces for parent and child
+- **Page Table Management**:
+  - `create_user_page_table()` - Create isolated page table with shared kernel mappings
+  - `free_page_table()` - Free user page table (only user entries, not shared kernel entries)
+  - Critical fix: Only free VPN[2]=0-1 at top level to avoid corrupting shared kernel structures
+- **Address Space Layout**:
+  - User code: `0x00400000` (4MB base)
+  - User heap: `0x10000000` (256MB base)
+  - mmap region: `0x40000000` (1GB base)
+  - User stack: `0x7FFFF000` (1MB, grows down)
+  - Kernel space: `0x80000000+` (shared across processes)
+- **Safety Features**:
+  - Null pointer guard (0x00000000-0x003FFFFF unmapped)
+  - Heap-stack safety margin (minimum 1MB gap)
+  - Permission checks on all user memory access
+  - NX (no-execute) on data and stack pages
+- **Testing**:
+  - 15 comprehensive tests in `tests/unit/test_memory_isolation.c`
+  - All tests passing: isolated page tables, VMAs, permissions, heap boundaries
+  - Process isolation validated
+
+#### Documentation Improvements
+- **Unified Memory Documentation**: Created comprehensive `docs/source/internals/memory.rst`
+  - Merged `memory_layout.rst` and `memory_isolation.rst` into single unified document
+  - Covers physical layout, virtual memory, and isolation in logical flow
+  - 22KB comprehensive guide with diagrams, code examples, and references
+- **Dockerfile Enhancements**:
+  - Added Sphinx and sphinx_rtd_theme for documentation builds
+  - Added locale settings (LC_ALL=C.UTF-8, LANG=C.UTF-8) for Sphinx compatibility
+  - Documentation builds now work in dev container
 
 ### Changed
 - **QEMU Requirement**: Upgraded from QEMU 6.2.0 to QEMU 10.1.2
