@@ -6,6 +6,7 @@
 #include "kernel/scheduler.h"
 #include "kernel/kstring.h"
 #include "kernel/panic.h"
+#include "kernel/signal.h"
 #include "mm/pmm.h"
 #include "mm/kmalloc.h"
 #include "mm/paging.h"
@@ -325,7 +326,7 @@ void process_exit(int exit_code) {
     // Send SIGCHLD to parent if it exists
     if (proc->parent) {
         extern int signal_send(struct process *target, int signum);
-        signal_send(proc->parent, 17);  // SIGCHLD
+        signal_send(proc->parent, SIGCHLD);
     }
     
     // Remove from scheduler to prevent re-execution
