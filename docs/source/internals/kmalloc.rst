@@ -862,6 +862,6 @@ See Also
 --------
 
 * :doc:`pmm` - Physical Memory Manager (underlying allocator)
-* :doc:`memory_layout` - Physical memory layout
+* :doc:`memory` - Complete memory management and layout
 * :doc:`kstring` - Helper functions using kmalloc
 * :doc:`../riscv/memory_model` - RISC-V virtual memory

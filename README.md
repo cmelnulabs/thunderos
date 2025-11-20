@@ -12,6 +12,7 @@ A RISC-V operating system focused on AI acceleration and educational use.
 - ✅ Virtual Filesystem (VFS) abstraction layer
 - ✅ ELF64 loader for executing programs from disk
 - ✅ Interactive shell with ls, cat, and program execution
+- ✅ **Memory isolation** - Per-process page tables, VMAs, isolated heaps
 - 🚧 **Next**: Inter-process communication and networking (v0.5.0)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.

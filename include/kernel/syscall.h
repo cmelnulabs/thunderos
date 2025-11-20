@@ -26,8 +26,10 @@
 #define SYS_UNLINK      18  // Remove file
 #define SYS_RMDIR       19  // Remove directory
 #define SYS_EXECVE      20  // Execute program from file
+#define SYS_MMAP        21  // Map memory
+#define SYS_MUNMAP      22  // Unmap memory
 
-#define SYSCALL_COUNT   21
+#define SYSCALL_COUNT   23
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -67,5 +69,7 @@ uint64_t sys_mkdir(const char *path, int mode);
 uint64_t sys_unlink(const char *path);
 uint64_t sys_rmdir(const char *path);
 uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]);
+uint64_t sys_mmap(void *addr, size_t length, int prot, int flags, int fd, uint64_t offset);
+uint64_t sys_munmap(void *addr, size_t length);
 
 #endif // SYSCALL_H

@@ -46,7 +46,8 @@ KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
 # Add test sources if enabled
 ifeq ($(ENABLE_TESTS),1)
     KERNEL_C_SOURCES += tests/unit/test_memory_mgmt.c \
-                        tests/unit/test_elf.c
+                        tests/unit/test_elf.c \
+                        tests/unit/test_memory_isolation.c
 endif
 
 KERNEL_ASM_SOURCES := $(wildcard $(KERNEL_DIR)/arch/riscv64/*.S)

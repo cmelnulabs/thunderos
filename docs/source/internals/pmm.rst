@@ -919,6 +919,6 @@ See Also
 --------
 
 * :doc:`kmalloc` - Kernel heap allocator (built on PMM)
-* :doc:`memory_layout` - Physical memory layout
+* :doc:`memory` - Complete memory management and layout
 * :doc:`../riscv/memory_model` - RISC-V memory model
 * :doc:`hal_timer` - Similar HAL abstraction pattern

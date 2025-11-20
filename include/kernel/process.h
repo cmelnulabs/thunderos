@@ -47,6 +47,22 @@ typedef int32_t pid_t;
 #define USER_HEAP_BASE    0x0000000000100000  // User heap base (future)
 #define USER_MMAP_START   0x40000000     // Memory mapped region (1GB)
 
+// Memory protection flags for VMAs
+#define VM_READ     0x01  // Readable
+#define VM_WRITE    0x02  // Writable
+#define VM_EXEC     0x04  // Executable
+#define VM_USER     0x08  // User accessible
+#define VM_SHARED   0x10  // Shared mapping
+#define VM_GROWSDOWN 0x20 // Stack segment (grows downward)
+
+// Virtual memory area - tracks mapped memory regions
+typedef struct vm_area {
+    uint64_t start;           // Start virtual address (inclusive)
+    uint64_t end;             // End virtual address (exclusive)
+    uint32_t flags;           // Protection flags (VM_READ, VM_WRITE, etc.)
+    struct vm_area *next;     // Next VMA in list
+} vm_area_t;
+
 // Process context - saved during context switch
 struct context {
     unsigned long ra;   // Return address
@@ -71,10 +87,13 @@ struct process {
     proc_state_t state;                 // Process state
     char name[PROC_NAME_LEN];           // Process name
     
-    // Memory management
-    page_table_t *page_table;           // Virtual memory page table
+    // Memory management - ISOLATION CRITICAL
+    page_table_t *page_table;           // Virtual memory page table (isolated per-process)
     uintptr_t kernel_stack;             // Kernel stack base
     uintptr_t user_stack;               // User stack base (virtual)
+    vm_area_t *vm_areas;                // List of mapped virtual memory areas
+    uint64_t heap_start;                // Heap start address
+    uint64_t heap_end;                  // Current heap end (brk)
     
     // Saved context (for context switching)
     struct context context;             // Kernel context
@@ -275,5 +294,72 @@ void process_setup_args(struct process *proc, const char *argv[], int argc);
  * @param proc Process to mark as ready
  */
 void process_ready(struct process *proc);
+
+/**
+ * Set up memory isolation for a process
+ * 
+ * Initializes VMA list and heap boundaries.
+ * 
+ * @param proc Process to setup
+ * @return 0 on success, -1 on failure
+ */
+int process_setup_memory_isolation(struct process *proc);
+
+/**
+ * Map a memory region in process address space
+ * 
+ * @param proc Process to map in
+ * @param vaddr Virtual address to map
+ * @param size Size in bytes
+ * @param flags Protection flags (VM_READ, VM_WRITE, VM_EXEC, VM_USER)
+ * @return 0 on success, -1 on failure
+ */
+int process_map_region(struct process *proc, uint64_t vaddr, uint64_t size, uint32_t flags);
+
+/**
+ * Find VMA containing an address
+ * 
+ * @param proc Process to search
+ * @param addr Virtual address to find
+ * @return Pointer to VMA, or NULL if not found
+ */
+vm_area_t *process_find_vma(struct process *proc, uint64_t addr);
+
+/**
+ * Add a VMA to process address space
+ * 
+ * @param proc Process to add VMA to
+ * @param start Start address (inclusive)
+ * @param end End address (exclusive)
+ * @param flags Protection flags
+ * @return 0 on success, -1 on failure
+ */
+int process_add_vma(struct process *proc, uint64_t start, uint64_t end, uint32_t flags);
+
+/**
+ * Remove a VMA from process address space
+ * 
+ * @param proc Process to remove VMA from
+ * @param vma VMA to remove
+ */
+void process_remove_vma(struct process *proc, vm_area_t *vma);
+
+/**
+ * Clean up all VMAs for a process
+ * 
+ * @param proc Process to cleanup
+ */
+void process_cleanup_vmas(struct process *proc);
+
+/**
+ * Validate user pointer against process VMAs
+ * 
+ * @param proc Process to validate for
+ * @param ptr Pointer to validate
+ * @param size Size of memory region
+ * @param required_flags Flags that must be set (e.g., VM_WRITE for write access)
+ * @return 1 if valid, 0 if invalid
+ */
+int process_validate_user_ptr(struct process *proc, const void *ptr, size_t size, uint32_t required_flags);
 
 #endif // PROCESS_H
