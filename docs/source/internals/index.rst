@@ -23,6 +23,7 @@ This section documents the internal implementation details of ThunderOS.
    errno
    process_management
    user_mode
+   signals
    testing_framework
    linker_script
    registers
@@ -95,6 +96,9 @@ Component Status
    * - :doc:`user_mode`
      - ✓ Done
      - User mode support with privilege transitions and memory isolation
+   * - :doc:`signals`
+     - ✓ Done (v0.5.0)
+     - POSIX-style signal handling for IPC and process control
    * - :doc:`testing_framework`
      - ✓ Done
      - KUnit-inspired testing framework for kernel

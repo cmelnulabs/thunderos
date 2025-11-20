@@ -287,6 +287,10 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->exit_code = 0;
     proc->errno_value = 0;
     
+    // Initialize signals
+    extern void signal_init_process(struct process *proc);
+    signal_init_process(proc);
+    
     // Mark as ready and add to scheduler
     proc->state = PROC_READY;
     scheduler_enqueue(proc);
@@ -317,6 +321,12 @@ void process_exit(int exit_code) {
     // Mark as zombie and record exit code
     proc->state = PROC_ZOMBIE;
     proc->exit_code = exit_code;
+    
+    // Send SIGCHLD to parent if it exists
+    if (proc->parent) {
+        extern int signal_send(struct process *target, int signum);
+        signal_send(proc->parent, 17);  // SIGCHLD
+    }
     
     // Remove from scheduler to prevent re-execution
     extern void scheduler_dequeue(struct process *proc);
@@ -799,9 +809,10 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
         uintptr_t vaddr = code_base + (i * PAGE_SIZE);
         uintptr_t paddr = (uintptr_t)code_mem + (i * PAGE_SIZE);
         
-        // Map as user-readable, executable
+        // Map as user-readable, writable, and executable
+        // TODO: Use proper segment permissions from ELF (R/W/X per segment)
         if (map_page(proc->page_table, vaddr, paddr, 
-                           PTE_V | PTE_R | PTE_X | PTE_U) != 0) {
+                           PTE_V | PTE_R | PTE_W | PTE_X | PTE_U) != 0) {
             free_page_table(proc->page_table);
             kfree((void *)proc->kernel_stack);
             process_free(proc);

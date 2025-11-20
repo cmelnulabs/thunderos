@@ -7,6 +7,8 @@
 #include "kernel/syscall.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
+#include "kernel/signal.h"
+#include "kernel/errno.h"
 #include "hal/hal_uart.h"
 #include "kernel/scheduler.h"
 #include "kernel/panic.h"
@@ -275,20 +277,31 @@ uint64_t sys_getppid(void) {
  * sys_kill - Send signal to process
  * 
  * @param pid Target process ID
- * @param signal Signal number (ignored for now)
+ * @param signum Signal number
  * @return 0 on success, -1 on error
  */
-uint64_t sys_kill(int pid, int signal) {
-    (void)signal;  // Signals not implemented yet
-    
-    if (pid <= 0) {
+uint64_t sys_kill(int pid, int signum) {
+    if (pid <= 0 || signum < 0) {
+        set_errno(THUNDEROS_EINVAL);
         return SYSCALL_ERROR;
     }
     
-    // Find process by PID and terminate it
-    // TODO: Implement process_find_by_pid() and proper signal handling
-    // For now, just return error
-    return SYSCALL_ERROR;
+    // Find process by PID
+    struct process *target = process_get(pid);
+    if (!target) {
+        set_errno(THUNDEROS_ESRCH);  // No such process
+        return SYSCALL_ERROR;
+    }
+    
+    // Send the signal
+    extern int signal_send(struct process *proc, int signum);
+    if (signal_send(target, signum) < 0) {
+        // errno already set by signal_send
+        return SYSCALL_ERROR;
+    }
+    
+    clear_errno();
+    return SYSCALL_SUCCESS;
 }
 
 /**
@@ -827,6 +840,18 @@ uint64_t syscall_handler(uint64_t syscall_number,
             return_value = sys_execve((const char *)argument0, (const char **)argument1, (const char **)argument2);
             break;
             
+        case SYS_SIGNAL:
+            return_value = sys_signal((int)argument0, (void (*)(int))argument1);
+            break;
+            
+        case SYS_SIGACTION:
+            return_value = sys_sigaction((int)argument0, (const void *)argument1, (void *)argument2);
+            break;
+            
+        case SYS_SIGRETURN:
+            return_value = sys_sigreturn();
+            break;
+            
         case SYS_MMAP:
             return_value = sys_mmap((void *)argument0, (size_t)argument1, (int)argument2, 
                                    (int)argument3, (int)argument4, (uint64_t)argument5);
@@ -848,4 +873,58 @@ uint64_t syscall_handler(uint64_t syscall_number,
     }
     
     return return_value;
+}
+
+/**
+ * sys_signal - Set signal handler
+ * 
+ * @param signum Signal number
+ * @param handler Signal handler function pointer
+ * @return Previous handler, or -1 on error
+ */
+uint64_t sys_signal(int signum, void (*handler)(int)) {
+    struct process *current = process_current();
+    if (!current) {
+        set_errno(THUNDEROS_ESRCH);  // No current process
+        return SYSCALL_ERROR;
+    }
+    
+    void *old_handler = signal_set_handler(current, signum, handler);
+    if (old_handler == SIG_ERR) {
+        // errno already set by signal_set_handler
+        return SYSCALL_ERROR;
+    }
+    
+    clear_errno();
+    return (uint64_t)old_handler;
+}
+
+/**
+ * sys_sigaction - Advanced signal handling
+ * 
+ * @param signum Signal number
+ * @param act New action (can be NULL)
+ * @param oldact Old action storage (can be NULL)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_sigaction(int signum, const void *act, void *oldact) {
+    (void)signum;
+    (void)act;
+    (void)oldact;
+    
+    // TODO: Implement full sigaction support
+    set_errno(THUNDEROS_ENOSYS);  // Function not implemented
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_sigreturn - Return from signal handler
+ * 
+ * @return Never returns (or -1 on error)
+ */
+uint64_t sys_sigreturn(void) {
+    // TODO: Implement signal handler return
+    // This will restore the process state from before the signal handler
+    set_errno(THUNDEROS_ENOSYS);  // Function not implemented
+    return SYSCALL_ERROR;
 }

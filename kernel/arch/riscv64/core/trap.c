@@ -7,6 +7,7 @@
 #include "hal/hal_timer.h"
 #include "kernel/syscall.h"
 #include "kernel/process.h"
+#include "kernel/signal.h"
 #include "kernel/kstring.h"
 
 /* Forward declaration for external interrupt handler */
@@ -190,6 +191,16 @@ void trap_handler(struct trap_frame *tf) {
     } else {
         // Synchronous trap (exception)
         handle_exception(tf, cause);
+    }
+    
+    // Deliver pending signals before returning to user mode
+    struct process *current = process_current();
+    if (current) {
+        // Deliver any pending signals, passing the trap frame so signal
+        // handler can modify it to redirect execution
+        signal_deliver_with_frame(current, tf);
+    } else {
+        hal_uart_puts("[Trap] No current process\n");
     }
 }
 

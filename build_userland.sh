@@ -37,4 +37,10 @@ ${CC} ${CFLAGS} -c "${USERLAND_DIR}/hello.c" -o "${BUILD_DIR}/hello.o"
 ${LD} ${LDFLAGS} -Ttext=0xf000 "${BUILD_DIR}/hello.o" -o "${BUILD_DIR}/hello"
 ${OBJCOPY} -O binary "${BUILD_DIR}/hello" "${BUILD_DIR}/hello.bin"
 
+# Build signal_test
+echo "Building signal_test..."
+${CC} ${CFLAGS} -c "${USERLAND_DIR}/signal_test.c" -o "${BUILD_DIR}/signal_test.o"
+${LD} ${LDFLAGS} -Ttext=0xf000 "${BUILD_DIR}/signal_test.o" -o "${BUILD_DIR}/signal_test"
+${OBJCOPY} -O binary "${BUILD_DIR}/signal_test" "${BUILD_DIR}/signal_test.bin"
+
 echo "Userland programs built successfully!"
