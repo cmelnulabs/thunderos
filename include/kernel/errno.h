@@ -51,6 +51,7 @@
 #define THUNDEROS_EFBIG       27  /* File too large */
 #define THUNDEROS_ENOSPC      28  /* No space left on device */
 #define THUNDEROS_ESPIPE      29  /* Illegal seek */
+#define THUNDEROS_ENOSYS      38  /* Function not implemented */
 
 /* ========== Filesystem Errors (30-49) ========== */
 #define THUNDEROS_EFS_CORRUPT 30  /* Filesystem corruption detected */

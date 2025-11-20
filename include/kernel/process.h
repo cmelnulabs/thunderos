@@ -13,6 +13,12 @@
 #include "trap.h"
 #include "mm/paging.h"
 
+// Forward declaration
+typedef uint64_t sigset_t;
+typedef void (*sighandler_t)(int);
+
+#define NSIG 32
+
 // Process states
 typedef enum {
     PROC_UNUSED = 0,    // Process slot is unused
@@ -92,6 +98,11 @@ struct process {
     
     // Error handling
     int errno_value;                    // Per-process error number (errno)
+    
+    // Signal handling
+    sigset_t pending_signals;           // Pending signals (bitmask)
+    sigset_t blocked_signals;           // Blocked signals (bitmask)
+    sighandler_t signal_handlers[NSIG]; // Signal handler functions
 };
 
 /**
