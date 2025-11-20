@@ -12,6 +12,7 @@ A RISC-V operating system focused on AI acceleration and educational use.
 - ✅ Virtual Filesystem (VFS) abstraction layer
 - ✅ ELF64 loader for executing programs from disk
 - ✅ Interactive shell with ls, cat, and program execution
+- ✅ **Memory isolation** - Per-process page tables, VMAs, isolated heaps
 - 🚧 **Next**: Inter-process communication and networking (v0.5.0)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.
@@ -28,30 +29,18 @@ make clean && make
 make qemu
 ```
 
-### Running with Filesystem
-```bash
-# Create a disk image with ext2 filesystem
-./build_disk.sh
-
-# Run with VirtIO block device
-make qemu-disk
-```
-
-The OS will mount the ext2 filesystem and you can interact with files using shell commands.
+The OS will automatically build the filesystem image and start QEMU with VirtIO block device support.
 
 ### Automated Testing
 ```bash
-# Run comprehensive syscall tests
-tests/test_syscalls.sh
+# Run all tests
+make test
 
-# Run user-mode tests
-tests/test_user_mode.sh
-
-# Run quick validation
-tests/test_user_quick.sh
-
-# Run all tests (see tests/README.md)
-cd tests && ./test_*.sh
+# Individual test scripts
+cd tests/scripts
+./test_boot.sh
+./test_integration.sh
+./test_user_mode.sh
 ```
 
 ### Debugging
@@ -107,24 +96,25 @@ See [docs/source/development/code_quality.rst](docs/source/development/code_qual
 The project includes an automated test suite:
 
 ```bash
-# Run memory management tests
+# Run all tests
 make test
 
-# Run syscall tests
-./tests/test_syscalls.sh
-
-# Run quick validation
-./tests/test_user_quick.sh
+# Or manually run individual tests
+cd tests/scripts
+./test_boot.sh          # Boot sequence validation
+./test_integration.sh   # Full integration tests
+./test_user_mode.sh     # User mode and syscalls
 ```
 
 Test suite validates:
-- ✓ DMA allocator (contiguous allocation, zeroing)
+- ✓ Memory management (PMM, kmalloc, paging, DMA)
+- ✓ Memory isolation (per-process page tables, VMAs, heap safety)
 - ✓ Address translation (virt↔phys)
 - ✓ Memory barriers (fence instructions)
-- ✓ Kernel initialization
+- ✓ Kernel initialization and boot sequence
 - ✓ Process creation and scheduling
-- ✓ User-space syscalls
-- ✓ Memory protection
+- ✓ User-space syscalls (brk, mmap, munmap, fork)
+- ✓ Memory protection and isolation
 - ✓ VirtIO block device I/O
 - ✓ ext2 filesystem operations
 - ✓ ELF program loading and execution
