@@ -38,4 +38,3 @@ ${LD} ${LDFLAGS} -Ttext=0xf000 "${BUILD_DIR}/hello.o" -o "${BUILD_DIR}/hello"
 ${OBJCOPY} -O binary "${BUILD_DIR}/hello" "${BUILD_DIR}/hello.bin"
 
 echo "Userland programs built successfully!"
-ls -lh "${BUILD_DIR}/"

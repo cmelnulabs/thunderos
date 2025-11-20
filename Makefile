@@ -1,5 +1,15 @@
 # ThunderOS Makefile
 
+# Color output
+BOLD := \033[1m
+RESET := \033[0m
+GREEN := \033[32m
+BLUE := \033[34m
+YELLOW := \033[33m
+RED := \033[31m
+CYAN := \033[36m
+MAGENTA := \033[35m
+
 # Toolchain
 CROSS_COMPILE ?= riscv64-unknown-elf-
 CC := $(CROSS_COMPILE)gcc
@@ -81,72 +91,107 @@ FS_SIZE := 10M
 .PHONY: all clean qemu debug fs userland test
 
 all: $(KERNEL_ELF) $(KERNEL_BIN)
+	@echo ""
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(GREEN)  ThunderOS Build Complete!$(RESET)"
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)ELF:$(RESET) $(KERNEL_ELF)"
+	@echo "  $(CYAN)BIN:$(RESET) $(KERNEL_BIN)"
+	@echo ""
+	@echo "  $(YELLOW)Run with:$(RESET) make qemu"
+	@echo "  $(YELLOW)Debug:$(RESET)    make debug"
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
 
 $(KERNEL_ELF): $(ALL_OBJS)
+	@echo "$(BOLD)$(BLUE)[LINK]$(RESET) $@"
 	@mkdir -p $(dir $@)
-	$(LD) $(LDFLAGS) -o $@ $(ALL_OBJS)
-	@echo "Built: $@"
+	@$(LD) $(LDFLAGS) -o $@ $(ALL_OBJS)
 
 $(KERNEL_BIN): $(KERNEL_ELF)
-	$(OBJCOPY) -O binary $< $@
-	@echo "Built: $@"
+	@echo "$(BOLD)$(BLUE)[BIN]$(RESET)  $@"
+	@$(OBJCOPY) -O binary $< $@
 
 # Compile C sources
 $(BUILD_DIR)/%.o: %.c
+	@echo "$(BOLD)$(CYAN)[CC]$(RESET)   $<"
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile test assembly programs
 $(BUILD_DIR)/tests/%.o: tests/%.S
+	@echo "$(BOLD)$(CYAN)[AS]$(RESET)   $<"
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile assembly sources
 $(BUILD_DIR)/%.o: %.S
+	@echo "$(BOLD)$(CYAN)[AS]$(RESET)   $<"
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BUILD_DIR)
+	@echo "$(BOLD)$(RED)[CLEAN]$(RESET) Removing build artifacts..."
+	@rm -rf $(BUILD_DIR)
+	@echo "$(GREEN)✓ Clean complete$(RESET)"
 
 # Create ext2 filesystem image
 fs: $(FS_IMG)
 
 $(FS_IMG): userland
-	@echo "Creating ext2 filesystem image ($(FS_SIZE))..."
+	@echo ""
+	@echo "$(BOLD)$(MAGENTA)[FS]$(RESET) Creating ext2 filesystem ($(FS_SIZE))..."
 	@rm -rf $(BUILD_DIR)/testfs
 	@mkdir -p $(BUILD_DIR)/testfs/bin
 	@echo "Hello from ThunderOS ext2 filesystem!" > $(BUILD_DIR)/testfs/test.txt
 	@echo "This is a sample file for testing." > $(BUILD_DIR)/testfs/README.txt
-	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "⚠ cat not built"
-	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "⚠ ls not built"
-	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "⚠ hello not built"
+	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
+	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
+	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"
 	@if command -v mkfs.ext2 >/dev/null 2>&1; then \
-		mkfs.ext2 -F -q -d $(BUILD_DIR)/testfs $(FS_IMG) $(FS_SIZE); \
+		mkfs.ext2 -F -q -d $(BUILD_DIR)/testfs $(FS_IMG) $(FS_SIZE) 2>&1 | grep -v "^mke2fs" | grep -v "^Creating" | grep -v "^Allocating" | grep -v "^Writing" | grep -v "^Copying" || true; \
 		rm -rf $(BUILD_DIR)/testfs; \
-		echo "✓ Filesystem created: $(FS_IMG)"; \
+		echo "$(GREEN)✓ Filesystem created:$(RESET) $(FS_IMG)"; \
 	else \
-		echo "ERROR: mkfs.ext2 not found. Install e2fsprogs: sudo apt-get install e2fsprogs"; \
+		echo "$(RED)✗ ERROR:$(RESET) mkfs.ext2 not found. Install e2fsprogs"; \
 		exit 1; \
 	fi
+	@echo ""
 
 userland:
-	@echo "Building userland programs..."
+	@echo ""
+	@echo "$(BOLD)$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(BLUE)  Building Userland Programs$(RESET)"
+	@echo "$(BOLD)$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@chmod +x build_userland.sh
 	@./build_userland.sh
+	@echo "$(BOLD)$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
 
 test:
-	@echo "Running ThunderOS test suite..."
+	@echo ""
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(CYAN)  Running ThunderOS Test Suite$(RESET)"
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@cd tests/scripts && bash run_all_tests.sh
+	@echo ""
 
 qemu: $(KERNEL_ELF) $(FS_IMG)
-	@echo "Running ThunderOS with ext2 filesystem..."
+	@echo ""
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(GREEN)  Starting ThunderOS in QEMU$(RESET)"
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
 		QEMU_VERSION=$$(qemu-system-riscv64 --version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1); \
 		QEMU_MAJOR=$$(echo $$QEMU_VERSION | cut -d. -f1); \
+		echo "  $(CYAN)QEMU Version:$(RESET) $$QEMU_VERSION"; \
+		echo "  $(CYAN)Machine:$(RESET)      virt (128M RAM)"; \
+		echo "  $(CYAN)Filesystem:$(RESET)   $(FS_IMG)"; \
+		echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+		echo ""; \
 		if [ "$$QEMU_MAJOR" -lt 10 ]; then \
-			echo "WARNING: QEMU $$QEMU_VERSION detected. ThunderOS requires QEMU 10.1.2+"; \
-			echo "Please build and run in Docker, or install QEMU 10.1.2+"; \
+			echo "$(RED)✗ WARNING:$(RESET) QEMU $$QEMU_VERSION detected. ThunderOS requires QEMU 10.1.2+"; \
+			echo "$(YELLOW)Please build and run in Docker, or install QEMU 10.1.2+$(RESET)"; \
 			exit 1; \
 		fi; \
 		qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
@@ -154,25 +199,40 @@ qemu: $(KERNEL_ELF) $(FS_IMG)
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
 			-device virtio-blk-device,drive=hd0; \
 	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		echo "  $(CYAN)QEMU:$(RESET)         /tmp/qemu-10.1.2/build/qemu-system-riscv64"; \
+		echo "  $(CYAN)Machine:$(RESET)      virt (128M RAM)"; \
+		echo "  $(CYAN)Filesystem:$(RESET)   $(FS_IMG)"; \
+		echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"; \
+		echo ""; \
 		/tmp/qemu-10.1.2/build/qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
 			-device virtio-blk-device,drive=hd0; \
 	else \
-		echo "ERROR: qemu-system-riscv64 not found. Please install QEMU 10.1.2+"; \
+		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found. Please install QEMU 10.1.2+"; \
 		exit 1; \
 	fi
 
 debug: $(KERNEL_ELF)
+	@echo ""
+	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(YELLOW)  Debug Mode - Waiting for GDB$(RESET)"
+	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)GDB Server:$(RESET) localhost:1234"
+	@echo "  $(CYAN)Command:$(RESET)    riscv64-unknown-elf-gdb $(KERNEL_ELF)"
+	@echo "  $(CYAN)Connect:$(RESET)    (gdb) target remote :1234"
+	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
 	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
 		qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) -s -S; \
 	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
 		/tmp/qemu-10.1.2/build/qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) -s -S; \
 	else \
-		echo "ERROR: qemu-system-riscv64 not found"; \
+		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
 		exit 1; \
 	fi
 
 dump: $(KERNEL_ELF)
-	$(OBJDUMP) -d $< > $(BUILD_DIR)/thunderos.dump
-	@echo "Disassembly saved to $(BUILD_DIR)/thunderos.dump"
+	@echo "$(BOLD)$(BLUE)[DUMP]$(RESET) Generating disassembly..."
+	@$(OBJDUMP) -d $< > $(BUILD_DIR)/thunderos.dump
+	@echo "$(GREEN)✓ Disassembly saved:$(RESET) $(BUILD_DIR)/thunderos.dump"
