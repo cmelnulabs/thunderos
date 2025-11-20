@@ -736,7 +736,7 @@ uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
     int result = elf_load_exec(path, argv, argc);
     
     // If we get here, exec failed
-    return (result < 0) ? SYSCALL_ERROR : result;
+    return (result < 0) ? SYSCALL_ERROR : (uint64_t)result;
 }
 
 /**
