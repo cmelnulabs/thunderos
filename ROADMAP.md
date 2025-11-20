@@ -171,24 +171,67 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.5.0 - "Communication"
+## Version 0.5.0 - "Communication" 🚧 IN PROGRESS
 
-**Focus:** Inter-process communication and networking
+**Status:** In Development (started November 20, 2025)
+
+**Focus:** Inter-process communication and process signaling
 
 ### Planned Features
-- [ ] Pipes for IPC
-- [ ] Shared memory support
-- [ ] Signals (SIGKILL, SIGTERM, SIGUSR1, etc.)
+
+#### Signals (Foundation - Phase 1)
+- [ ] Signal infrastructure
+  - [ ] Signal mask per process
+  - [ ] Signal pending queue
+  - [ ] Signal handler registration (user-space function pointers)
+  - [ ] Signal delivery during context switch
+- [ ] Core signals implementation
+  - [ ] SIGKILL - Terminate process (cannot be caught)
+  - [ ] SIGTERM - Graceful termination request (can be handled)
+  - [ ] SIGCHLD - Child process state change notification
+  - [ ] SIGSTOP - Stop/pause process (cannot be caught)
+  - [ ] SIGCONT - Continue stopped process
+- [ ] System calls
+  - [ ] `sys_kill(pid, signal)` - Send signal to process
+  - [ ] `sys_signal(signum, handler)` - Register signal handler
+  - [ ] `sys_sigaction(signum, act, oldact)` - Advanced signal handling
+  - [ ] `sys_sigreturn()` - Return from signal handler
+- [ ] Process integration
+  - [ ] Signal delivery on timer interrupt
+  - [ ] Signal handling in trap handler
+  - [ ] Zombie process cleanup via SIGCHLD
+  - [ ] Graceful process termination
+- [ ] Shell commands
+  - [ ] `kill` command - Send signals to processes
+  - [ ] `ps` command - Show process status
+
+#### Pipes (Phase 2)
+- [ ] Pipe infrastructure
+- [ ] Pipe creation and management
+- [ ] Read/write operations
+- [ ] SIGPIPE signal integration
+
+#### Networking (Phase 3)
 - [ ] VirtIO network driver
 - [ ] Basic TCP/IP stack (port lwIP or custom)
 - [ ] Socket API (socket, bind, listen, connect, send, recv)
 - [ ] Simple network utilities (ping, wget)
 
+#### Shared Memory (Optional - Phase 4)
+- [ ] Shared memory support
+- [ ] IPC optimization
+
 **Release Criteria:**
+- Processes can send and receive signals
+- SIGKILL terminates processes reliably
+- SIGCHLD notifies parent of child termination
+- Signal handlers execute in user space
 - Processes can communicate via pipes
 - Basic networking works (ping, simple HTTP)
-- Can download files from network
-- Signals handled correctly
+- All signal and IPC tests pass
+
+**Rationale:**
+Signals are the foundation for all IPC mechanisms. They enable graceful process termination (SIGTERM vs SIGKILL), parent notification when child exits (SIGCHLD for proper waitpid), and job control (SIGSTOP/SIGCONT). Pipes require SIGPIPE for broken pipe handling. Building signals first unblocks all other communication features.
 
 ---
 
