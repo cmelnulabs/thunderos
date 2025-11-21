@@ -42,6 +42,7 @@
 /* File types */
 #define VFS_TYPE_FILE      1
 #define VFS_TYPE_DIRECTORY 2
+#define VFS_TYPE_PIPE      3
 
 /* Forward declarations */
 struct vfs_node;
@@ -110,10 +111,12 @@ typedef struct vfs_filesystem {
  * File descriptor - tracks open file state
  */
 typedef struct {
-    vfs_node_t *node;                  /* File node */
+    vfs_node_t *node;                  /* File node (NULL for pipes) */
     uint32_t flags;                    /* Open flags */
     uint32_t pos;                      /* Current file position */
     int in_use;                        /* 1 if FD is allocated */
+    void *pipe;                        /* Pipe pointer (if VFS_TYPE_PIPE) */
+    uint32_t type;                     /* File type (VFS_TYPE_FILE, VFS_TYPE_PIPE, etc.) */
 } vfs_file_t;
 
 /* VFS initialization */
@@ -145,5 +148,8 @@ vfs_file_t *vfs_get_file(int fd);
 /* Helper functions */
 int vfs_stat(const char *path, uint32_t *size, uint32_t *type);
 int vfs_exists(const char *path);
+
+/* Pipe support */
+int vfs_create_pipe(int pipefd[2]);
 
 #endif /* VFS_H */

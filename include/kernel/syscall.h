@@ -36,8 +36,9 @@
 #define SYS_SIGRETURN   23  // Return from signal handler
 #define SYS_MMAP        24  // Map memory
 #define SYS_MUNMAP      25  // Unmap memory
+#define SYS_PIPE        26  // Create pipe
 
-#define SYSCALL_COUNT   26
+#define SYSCALL_COUNT   27
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -82,5 +83,6 @@ uint64_t sys_sigaction(int signum, const void *act, void *oldact);
 uint64_t sys_sigreturn(void);
 uint64_t sys_mmap(void *addr, size_t length, int prot, int flags, int fd, uint64_t offset);
 uint64_t sys_munmap(void *addr, size_t length);
+uint64_t sys_pipe(int pipefd[2]);
 
 #endif // SYSCALL_H

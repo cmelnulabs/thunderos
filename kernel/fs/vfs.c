@@ -6,6 +6,7 @@
 #include "../../include/hal/hal_uart.h"
 #include "../../include/mm/kmalloc.h"
 #include "../../include/kernel/errno.h"
+#include "../../include/kernel/pipe.h"
 #include <stddef.h>
 
 /* Global file descriptor table (per-process would be better, but global for now) */
@@ -24,6 +25,8 @@ int vfs_init(void) {
         g_file_table[i].flags = 0;
         g_file_table[i].pos = 0;
         g_file_table[i].in_use = 0;
+        g_file_table[i].pipe = NULL;
+        g_file_table[i].type = VFS_TYPE_FILE;
     }
     
     /* Reserve stdin/stdout/stderr */
@@ -64,6 +67,8 @@ int vfs_alloc_fd(void) {
             g_file_table[i].node = NULL;
             g_file_table[i].pos = 0;
             g_file_table[i].flags = 0;
+            g_file_table[i].pipe = NULL;
+            g_file_table[i].type = VFS_TYPE_FILE;
             return i;
         }
     }
@@ -80,6 +85,8 @@ void vfs_free_fd(int fd) {
         g_file_table[fd].node = NULL;
         g_file_table[fd].pos = 0;
         g_file_table[fd].flags = 0;
+        g_file_table[fd].pipe = NULL;
+        g_file_table[fd].type = VFS_TYPE_FILE;
     }
 }
 
@@ -264,6 +271,23 @@ int vfs_close(int fd) {
         return -1;
     }
     
+    /* Handle pipe close */
+    if (file->type == VFS_TYPE_PIPE && file->pipe) {
+        pipe_t *pipe = (pipe_t*)file->pipe;
+        
+        /* Close appropriate end based on flags */
+        if (file->flags & O_RDONLY) {
+            pipe_close_read(pipe);
+        } else if (file->flags & O_WRONLY) {
+            pipe_close_write(pipe);
+        }
+        
+        /* Free pipe if both ends closed */
+        if (pipe_can_free(pipe)) {
+            pipe_free(pipe);
+        }
+    }
+    
     /* Call filesystem close if available */
     if (file->node && file->node->ops && file->node->ops->close) {
         file->node->ops->close(file->node);
@@ -280,9 +304,22 @@ int vfs_close(int fd) {
  */
 int vfs_read(int fd, void *buffer, uint32_t size) {
     vfs_file_t *file = vfs_get_file(fd);
-    if (!file || !file->node) {
+    if (!file) {
         /* errno already set by vfs_get_file */
         return -1;
+    }
+    
+    /* Handle pipe read */
+    if (file->type == VFS_TYPE_PIPE) {
+        if (!file->pipe) {
+            RETURN_ERRNO(THUNDEROS_EINVAL);
+        }
+        return pipe_read((pipe_t*)file->pipe, buffer, size);
+    }
+    
+    /* Regular file read */
+    if (!file->node) {
+        RETURN_ERRNO(THUNDEROS_EBADF);
     }
     
     /* Check if opened for reading */
@@ -311,9 +348,22 @@ int vfs_read(int fd, void *buffer, uint32_t size) {
  */
 int vfs_write(int fd, const void *buffer, uint32_t size) {
     vfs_file_t *file = vfs_get_file(fd);
-    if (!file || !file->node) {
+    if (!file) {
         /* errno already set by vfs_get_file */
         return -1;
+    }
+    
+    /* Handle pipe write */
+    if (file->type == VFS_TYPE_PIPE) {
+        if (!file->pipe) {
+            RETURN_ERRNO(THUNDEROS_EINVAL);
+        }
+        return pipe_write((pipe_t*)file->pipe, buffer, size);
+    }
+    
+    /* Regular file write */
+    if (!file->node) {
+        RETURN_ERRNO(THUNDEROS_EBADF);
     }
     
     /* Check if opened for writing */
@@ -484,4 +534,64 @@ int vfs_stat(const char *path, uint32_t *size, uint32_t *type) {
 int vfs_exists(const char *path) {
     vfs_node_t *node = vfs_resolve_path(path);
     return node != NULL;
+}
+
+/**
+ * Create a pipe and return two file descriptors
+ * 
+ * Creates an anonymous pipe for inter-process communication.
+ * pipefd[0] is the read end, pipefd[1] is the write end.
+ * 
+ * @param pipefd Array of 2 integers to store file descriptors
+ * @return 0 on success, -1 on error
+ */
+int vfs_create_pipe(int pipefd[2]) {
+    if (!pipefd) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    /* Create the pipe */
+    pipe_t *pipe = pipe_create();
+    if (!pipe) {
+        /* errno already set by pipe_create */
+        return -1;
+    }
+    
+    /* Allocate read file descriptor */
+    int read_fd = vfs_alloc_fd();
+    if (read_fd < 0) {
+        pipe_free(pipe);
+        /* errno already set by vfs_alloc_fd */
+        return -1;
+    }
+    
+    /* Allocate write file descriptor */
+    int write_fd = vfs_alloc_fd();
+    if (write_fd < 0) {
+        vfs_free_fd(read_fd);
+        pipe_free(pipe);
+        /* errno already set by vfs_alloc_fd */
+        return -1;
+    }
+    
+    /* Set up read end (pipefd[0]) */
+    g_file_table[read_fd].pipe = pipe;
+    g_file_table[read_fd].type = VFS_TYPE_PIPE;
+    g_file_table[read_fd].flags = O_RDONLY;
+    g_file_table[read_fd].node = NULL;
+    g_file_table[read_fd].pos = 0;
+    
+    /* Set up write end (pipefd[1]) */
+    g_file_table[write_fd].pipe = pipe;
+    g_file_table[write_fd].type = VFS_TYPE_PIPE;
+    g_file_table[write_fd].flags = O_WRONLY;
+    g_file_table[write_fd].node = NULL;
+    g_file_table[write_fd].pos = 0;
+    
+    /* Return file descriptors */
+    pipefd[0] = read_fd;
+    pipefd[1] = write_fd;
+    
+    clear_errno();
+    return 0;
 }

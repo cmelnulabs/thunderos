@@ -30,6 +30,7 @@ This section documents the internal implementation details of ThunderOS.
    virtio_block
    ext2_filesystem
    vfs
+   pipes
    elf_loader
    hal/index
 
