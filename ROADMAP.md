@@ -220,11 +220,11 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
   - ✅ `pipe_test` - Tests pipe communication between processes
   - ✅ `fork_test` - Tests process forking
 
-### Planned Features (for v0.5.0)
-- [ ] Documentation updates (syscalls.rst, process management docs)
-- [ ] Clean up debug output from fork implementation
-- [ ] CHANGELOG.md entry for v0.5.0
-- [ ] Final testing and validation
+### Completed Features (for v0.5.0)
+- ✅ Documentation updates (syscalls.rst, process management docs)
+- ✅ Clean up debug output from fork implementation
+- ✅ CHANGELOG.md entry for v0.5.0
+- ✅ Final testing and validation
 
 ### Testing Completed
 - ✅ Signals delivered and handled correctly
@@ -245,9 +245,9 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - ✅ Signal handlers execute in user space
 - ✅ Processes can communicate via pipes
 - ✅ Fork system call works reliably
-- [ ] Documentation complete
-- [ ] Debug output cleaned up
-- [ ] CHANGELOG.md updated
+- ✅ Documentation complete
+- ✅ Debug output cleaned up
+- ✅ CHANGELOG.md updated
 
 ---
 
