@@ -11,95 +11,171 @@ Run the automated test suite:
 .. code-block:: bash
 
    cd /path/to/thunderos
-   tests/test_syscalls.sh
+   make test
+
+Or run individual test scripts:
+
+.. code-block:: bash
+
+   # All tests
+   tests/scripts/run_all_tests.sh
+   
+   # Individual test suites
+   tests/scripts/test_boot.sh
+   tests/scripts/test_integration.sh
+   tests/scripts/test_user_mode.sh
 
 Expected output:
 
 .. code-block:: text
 
-   [*] Building kernel...
-   [✓] Build successful
-   [✓] Kernel ELF found
-   [*] Running QEMU test...
-   ...
-   [✓] All critical tests passed!
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Running ThunderOS Test Suite
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
+   [*] Running boot tests...
+   ✓ Boot test passed
+   
+   [*] Running integration tests...
+   ✓ Integration test passed
+   
+   [*] Running user mode tests...
+   ✓ User mode test passed
+   
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Test Suite Complete: 3/3 passed
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Test Framework Overview
 -----------------------
 
-ThunderOS includes multiple automated test scripts in the ``tests/`` directory:
+ThunderOS includes comprehensive automated testing in the ``tests/`` directory:
 
-**Integration Tests:**
+**Test Structure:**
 
-- ``test_qemu.sh`` - Basic QEMU boot and kernel functionality
-- ``test_syscalls.sh`` - Comprehensive syscall testing (6 automated checks)
-- ``test_user_mode.sh`` - User-mode process execution and privilege separation
-- ``test_user_quick.sh`` - Fast user-mode validation (4 checks)
+.. code-block:: text
 
-**Unit Tests:**
+   tests/
+   ├── framework/          # KUnit-inspired test framework
+   │   ├── kunit.h        # Test macros and assertions
+   │   └── kunit.c        # Test runner implementation
+   ├── unit/              # Unit tests (built into kernel)
+   │   ├── test_memory_mgmt.c      # Memory management (PMM, kmalloc, DMA)
+   │   ├── test_memory_isolation.c # Process isolation (15 tests)
+   │   └── test_elf.c              # ELF loader validation
+   ├── scripts/           # Automated test scripts
+   │   ├── run_all_tests.sh       # Master test runner
+   │   ├── test_boot.sh           # Basic boot validation
+   │   ├── test_integration.sh    # Full system integration
+   │   └── test_user_mode.sh      # User-space testing
+   └── outputs/           # Test result logs
 
-- ``test_trap.c`` - Trap handler unit tests
-- ``test_timer.c`` - Timer interrupt unit tests
-- ``test_paging.c`` - Memory paging unit tests
+**Unit Tests (Kernel-Embedded):**
+
+ThunderOS uses kernel-embedded unit tests that run at boot when ``ENABLE_KERNEL_TESTS=1`` (default):
+
+1. **test_memory_mgmt.c** (10 tests):
+   - Physical memory manager (PMM) allocation/deallocation
+   - Kernel heap allocator (kmalloc/kfree)
+   - DMA allocator for device I/O
+   - Page alignment and zeroing
+
+2. **test_memory_isolation.c** (15 tests):
+   - Per-process page tables
+   - Virtual Memory Areas (VMAs)
+   - Process heap isolation (sys_brk)
+   - Memory protection enforcement
+   - Fork memory copying
+
+3. **test_elf.c** (8 tests):
+   - ELF header validation
+   - Architecture verification (EM_RISCV)
+   - Program header parsing
+   - Segment loading
+   - Entry point validation
+
+**Integration Tests (Shell Scripts):**
+
+Automated QEMU-based tests verify end-to-end functionality:
+
+- ``test_boot.sh`` - Kernel boots, memory tests pass, drivers initialize
+- ``test_integration.sh`` - VirtIO, ext2, shell, file operations
+- ``test_user_mode.sh`` - User processes, syscalls, signals
 
 **Features:**
 
 - Clean compilation (``make clean && make``)
-- QEMU execution with configurable timeouts
-- Output capture to ``tests/*.txt`` files
+- QEMU execution with automatic timeout detection
+- Output capture to ``tests/outputs/*.txt`` files
 - Automated validation checks with color-coded results
-- CI/CD integration via GitHub Actions
+- CI/CD integration via GitHub Actions (``make test``)
 
 Test Output Analysis
 --------------------
 
-Test results are saved to ``tests/*.txt`` files:
+Test results are saved to ``tests/outputs/`` directory:
 
 .. code-block:: bash
 
    # View test outputs
-   ls tests/*.txt
+   ls tests/outputs/
    
-   # View last 50 lines of syscall test
-   tail -50 tests/thunderos_test_output.txt
+   # View boot test results
+   cat tests/outputs/boot_test_output.txt
+   
+   # View integration test results
+   cat tests/outputs/integration_test_output.txt
+   
+   # Search for specific patterns
+   grep "PASS\|FAIL" tests/outputs/boot_test_output.txt
+   grep "ext2" tests/outputs/integration_test_output.txt
 
-   # Search for specific strings
-   grep "Process A" tests/thunderos_test_output.txt
-   grep "User process" tests/thunderos_test_output.txt
+Expected Boot Test Output
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Expected Process Output
-~~~~~~~~~~~~~~~~~~~~~~~
-
-**Kernel Boot Phase:**
+**Unit Tests at Boot:**
 
 .. code-block:: text
 
-   OpenSBI v0.9
-   ...
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Running ThunderOS Unit Tests
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
+   [Memory Management Tests]
+   ✓ PASS: PMM allocation
+   ✓ PASS: PMM deallocation
+   ✓ PASS: kmalloc basic
+   ✓ PASS: kmalloc large
+   ✓ PASS: DMA allocation
+   ✓ PASS: DMA alignment
+   ✓ PASS: DMA zeroing
+   
+   [Memory Isolation Tests]
+   ✓ PASS: Isolated page table
+   ✓ PASS: VMA tracking
+   ✓ PASS: Heap isolation (brk)
+   ✓ PASS: Fork memory copy
+   ✓ PASS: Process cleanup
+   
+   [ELF Loader Tests]
+   ✓ PASS: ELF magic validation
+   ✓ PASS: Architecture check (EM_RISCV)
+   ✓ PASS: Executable type (ET_EXEC)
+   
+   Tests: 33 passed, 0 failed
+
+**Kernel Initialization:**
+
+.. code-block:: text
+
    [OK] UART initialized
+   [OK] Physical Memory Manager initialized
+   [OK] Kernel heap initialized
+   [OK] Paging enabled (Sv39)
    [OK] Interrupt subsystem initialized
-   Trap handler initialized
    [OK] Timer interrupts enabled
-
-**Process Creation:**
-
-.. code-block:: text
-
-   [OK] Created Process A (PID 1)
-   [OK] Created Process B (PID 2)
-   [OK] Created Process C (PID 3)
-   [OK] Created user process (PID 4)
-
-**Multitasking:**
-
-.. code-block:: text
-
-   [Process A] Running... iteration 0
-   [Process B] Hello from B! count = 0
-   [Process C] Task C executing... #0
-   [Process A] Running... iteration 1
-   [Process B] Hello from B! count = 1
-   ...
+   [OK] VirtIO block device initialized
+   [OK] ext2 filesystem mounted at /
 
 Manual Testing
 --------------
@@ -107,19 +183,49 @@ Manual Testing
 Running QEMU Directly
 ~~~~~~~~~~~~~~~~~~~~~
 
-For manual testing (requires QEMU 10.1.2+):
+For manual testing with VirtIO and ext2 filesystem (requires QEMU 10.1.2+):
 
 .. code-block:: bash
 
+   # Build kernel and filesystem
+   make clean && make
+   make fs
+   
+   # Run with VirtIO block device
    qemu-system-riscv64 \
      -machine virt \
      -m 128M \
      -nographic \
      -serial mon:stdio \
      -bios none \
-     -kernel build/thunderos.elf
+     -kernel build/thunderos.elf \
+     -global virtio-mmio.force-legacy=false \
+     -drive file=build/fs.img,if=none,format=raw,id=hd0 \
+     -device virtio-blk-device,drive=hd0
+
+.. warning::
+   **CRITICAL:** Always include ``-global virtio-mmio.force-legacy=false``
+   
+   Without this flag, VirtIO I/O will timeout and the filesystem won't mount!
 
 Press ``Ctrl+A`` followed by ``X`` to exit QEMU.
+
+**Interactive Shell:**
+
+Once booted, you can use the interactive shell:
+
+.. code-block:: text
+
+   thunderos> ls
+   test.txt
+   README.txt
+   bin/
+   
+   thunderos> cat test.txt
+   Hello from ThunderOS ext2 filesystem!
+   
+   thunderos> cat /bin/hello
+   (executes hello program from filesystem)
 
 Debugging with GDB
 ~~~~~~~~~~~~~~~~~~
@@ -152,68 +258,74 @@ Useful GDB Commands:
 User-Space Testing
 -------------------
 
-Testing sys_write()
-~~~~~~~~~~~~~~~~~~~
+Testing User Programs
+~~~~~~~~~~~~~~~~~~~~~
 
-The ``tests/user_hello.c`` program demonstrates user-space syscalls:
-
-.. code-block:: c
-
-   void user_main(void) {
-       print_string("=================================\n");
-       print_string("ThunderOS User Space Hello World\n");
-       print_string("=================================\n\n");
-       
-       print_string("Process Information:\n");
-       print_string("  Current PID:  ");
-       print_int(getpid());
-       print_string("\n");
-       
-       exit(0);
-   }
-
-**Testing Output:**
-
-The program runs as PID 4 and produces console output through ``sys_write()``.
-
-Look for output like:
+ThunderOS can execute ELF binaries from the ext2 filesystem. User programs are in ``userland/``:
 
 .. code-block:: text
 
-   =================================
-   ThunderOS User Space Hello World
-   =================================
+   userland/
+   ├── cat.c           # File concatenation utility
+   ├── ls.c            # Directory listing
+   ├── hello.c         # Hello world demo
+   ├── signal_test.c   # Signal handling test
+   └── build/          # Compiled binaries
+
+**Building Userland:**
+
+.. code-block:: bash
+
+   ./build_userland.sh
+
+**Running from Shell:**
+
+.. code-block:: text
+
+   thunderos> cat /test.txt
+   Hello from ThunderOS ext2 filesystem!
    
-   Process Information:
-     Current PID:  4
-     Parent PID:   0
-     System time:  0s
+   thunderos> /bin/hello
+   (program executes and prints output)
 
-Testing sys_getpid()
-~~~~~~~~~~~~~~~~~~~~
+Testing System Calls
+~~~~~~~~~~~~~~~~~~~~~
 
-Verify process IDs are correct:
+User programs test the syscall interface:
 
-.. code-block:: bash
+**Available Syscalls (13 implemented):**
 
-   # Run test and search for PID output
-   ./test_syscalls.sh 2>&1 | grep "PID"
+.. code-block:: c
 
-Expected PIDs:
-- Kernel processes: 0 (init), 1-3 (demo processes)
-- User process: 4
+   SYS_EXIT    = 0   // Exit process
+   SYS_WRITE   = 1   // Write to file descriptor
+   SYS_READ    = 2   // Read from file descriptor
+   SYS_OPEN    = 13  // Open file
+   SYS_CLOSE   = 14  // Close file descriptor
+   SYS_GETPID  = 3   // Get process ID
+   SYS_FORK    = 4   // Fork process
+   SYS_EXECVE  = 11  // Execute program
+   SYS_WAITPID = 7   // Wait for child
+   SYS_BRK     = 8   // Expand heap
+   SYS_KILL    = 11  // Send signal
+   SYS_SIGNAL  = 21  // Install signal handler
 
-Testing sys_exit()
-~~~~~~~~~~~~~~~~~~
+**Example Test (signal_test.c):**
 
-Verify user programs exit cleanly:
+.. code-block:: c
 
-.. code-block:: bash
-
-   # Run test and check for exit messages
-   tail -100 /tmp/thunderos_test_output.txt | grep -i "exit\|terminating"
-
-The user program (PID 4) should exit without crashing the kernel.
+   // Install signal handler
+   signal(SIGUSR1, sigusr1_handler);
+   
+   // Send signal to self
+   int pid = getpid();
+   kill(pid, SIGUSR1);
+   
+   // Handler should be called
+   delay(DELAY_LONG);
+   if (signal_received == 1) {
+       print("✓ SIGUSR1 delivered successfully\n");
+   }
 
 Syscall Validation Checklist
 -----------------------------
@@ -263,18 +375,168 @@ After running tests, verify:
 Troubleshooting
 ---------------
 
-Test Fails to Compile
-~~~~~~~~~~~~~~~~~~~~~
+Common Test Failures
+~~~~~~~~~~~~~~~~~~~~
 
-**Error:** ``make: command not found``
+**VirtIO Timeout / ext2 Mount Failure**
 
-**Solution:** Ensure you're in the ThunderOS directory and have the build environment setup.
+Symptom:
+
+.. code-block:: text
+
+   [FAIL] Failed to mount ext2 filesystem
+   virtio_blk_do_request: Timeout waiting for device
+
+**Cause:** Missing QEMU flag ``-global virtio-mmio.force-legacy=false``
+
+**Fix:** Always use this flag. Modern VirtIO mode is required for I/O operations.
+
+**Correct QEMU command:**
 
 .. code-block:: bash
 
-   cd /home/christian/Proyectos/thunderos
-   make clean
-   make
+   qemu-system-riscv64 \
+     -machine virt \
+     -m 128M \
+     -nographic \
+     -serial mon:stdio \
+     -bios none \
+     -kernel build/thunderos.elf \
+     -global virtio-mmio.force-legacy=false \
+     -drive file=build/fs.img,if=none,format=raw,id=hd0 \
+     -device virtio-blk-device,drive=hd0
+
+---
+
+**Unit Tests Fail at Boot**
+
+Symptom: Tests marked as FAIL during kernel initialization
+
+**Debugging steps:**
+
+1. Check which test failed:
+
+   .. code-block:: text
+
+      ✗ FAIL: PMM allocation
+   
+2. Enable debug output in test file (``tests/unit/test_*.c``)
+
+3. Review test expectations vs actual behavior
+
+4. Use ``kprintf()`` to trace execution
+
+---
+
+**Memory Allocation Failures**
+
+Symptom:
+
+.. code-block:: text
+
+   [ERROR] kmalloc failed: Out of memory
+   ✗ FAIL: kmalloc basic
+
+**Possible causes:**
+
+- Physical memory exhausted (increase ``-m 128M`` in QEMU)
+- Memory leak in previous test
+- Bitmap corruption in PMM
+
+**Debug approach:**
+
+.. code-block:: c
+
+   kprintf("[DEBUG] PMM: %d pages free\n", pmm_get_free_pages());
+   kprintf("[DEBUG] Requesting %d bytes\n", size);
+
+---
+
+**Test Script Hangs**
+
+Symptom: Test script doesn't complete, QEMU process hangs
+
+**Causes:**
+
+1. Infinite loop in kernel code
+2. Deadlock in scheduler
+3. Waiting for I/O that never completes
+
+**Fix:**
+
+- Add timeout to test script (already included in ``run_all_tests.sh``)
+- Use ``timeout 30s qemu-system-riscv64 ...`` for manual runs
+- Check for missing ``schedule()`` calls in blocking operations
+
+Manual termination:
+
+.. code-block:: bash
+
+   # Press Ctrl+C or kill QEMU
+   ps aux | grep qemu
+   kill <PID>
+
+---
+
+**Shell Doesn't Appear**
+
+Symptom: Kernel boots but no ``thunderos>`` prompt
+
+**Checks:**
+
+1. Verify shell process created:
+
+   .. code-block:: text
+
+      [OK] Created shell process (PID 5)
+
+2. Check if shell is scheduled:
+
+   .. code-block:: c
+
+      // In scheduler.c
+      kprintf("[DEBUG] Switching to PID %d\n", next->pid);
+
+3. Verify UART is working:
+
+   .. code-block:: c
+
+      kprintf("Test output\n");  // Should appear before shell
+
+---
+
+**File Operations Fail**
+
+Symptom: ``cat`` or ``ls`` commands return errors
+
+**Debugging:**
+
+1. Check filesystem mounted:
+
+   .. code-block:: text
+
+      [OK] ext2 filesystem mounted at /
+
+2. Verify test files exist in filesystem image:
+
+   .. code-block:: bash
+
+      # View filesystem contents
+      debugfs build/fs.img -R 'ls -l'
+
+3. Check VFS error codes:
+
+   .. code-block:: text
+
+      thunderos> cat /missing.txt
+      cat: /missing.txt: ENOENT (No such file or directory)
+
+4. Review ext2 error handling (see ``docs/source/internals/ext2_filesystem.rst``)
+
+---
+
+Build and Environment Issues
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Error:** Cross-compiler not found
 
@@ -285,117 +547,106 @@ Test Fails to Compile
    # Check toolchain
    which riscv64-unknown-elf-gcc
    
-   # If not found, install or add to PATH
+   # If not found, add to PATH
    export PATH=$PATH:/opt/riscv/bin
 
-QEMU Doesn't Start
-~~~~~~~~~~~~~~~~~~~
+**Error:** QEMU not found
 
-**Error:** ``qemu-system-riscv64: command not found``
-
-**Solution:** ThunderOS requires QEMU 10.1.2+ with RISC-V support. You may need to build from source:
+**Solution:** ThunderOS requires QEMU 10.1.2+ with RISC-V support:
 
 .. code-block:: bash
 
-   # Build QEMU 10.1.2 from source
+   # Check version
+   qemu-system-riscv64 --version
+   
+   # Build from source if needed
    wget https://download.qemu.org/qemu-10.1.2.tar.xz
    tar xJf qemu-10.1.2.tar.xz
    cd qemu-10.1.2
-   ./configure --target-list=riscv64-softmmu --prefix=/tmp/qemu-10.1.2
+   ./configure --target-list=riscv64-softmmu
    make -j$(nproc)
-   make install
+   sudo make install
 
-   # Or on macOS (may not have latest version)
-   brew install qemuTest Hangs
-~~~~~~~~~~
+**Error:** ``make: command not found``
 
-**Issue:** Test doesn't exit after timeout
-
-**Solution:** The timeout should trigger automatically. If not:
-
-1. Press ``Ctrl+C`` in terminal
-2. Check QEMU process:
-
-   .. code-block:: bash
-
-      ps aux | grep qemu
-      kill <PID>
-
-3. Check output file:
-
-   .. code-block:: bash
-
-      tail tests/thunderos_test_output.txt
-
-QEMU Crashes
-~~~~~~~~~~~~
-
-**Error:** ``Segmentation fault in QEMU``
-
-**Possible causes:**
-- Invalid kernel binary
-- Memory corruption in kernel
-- Infinite loop in trap handler
-
-**Debugging steps:**
-
-1. Check build output for warnings
-2. Run with GDB for exact location
-3. Review recent changes to trap.c or process.c
-
-Performance Testing
--------------------
-
-Measuring Syscall Latency
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Add timing measurements in user programs:
-
-.. code-block:: c
-
-   uint64_t start = gettime();
-   write(STDOUT_FD, "test", 4);
-   uint64_t end = gettime();
-   
-   print_string("Syscall latency: ");
-   print_int(end - start);
-   print_string("ms\n");
-
-Expected latency: < 1ms on QEMU
-
-Measuring Context Switch Overhead
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Use the scheduler statistics:
+**Solution:** Ensure you're in the ThunderOS directory:
 
 .. code-block:: bash
 
-   # Build and run, then measure process interleaving frequency
-   ./test_syscalls.sh 2>&1 | grep "Process" | wc -l
-
-Higher interleaving = faster context switches
+   cd /workspace
+   make clean && make
 
 Continuous Integration
 ----------------------
 
-For CI/CD pipelines:
+Automated Testing in CI/CD
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ThunderOS uses GitHub Actions for automated testing. The workflow runs on:
+
+- Push to ``main``, ``dev/*``, ``feature/*``, ``release/*`` branches
+- Pull requests to ``main`` and ``dev/*`` branches
+
+**CI Workflow (``.github/workflows/ci.yml``):**
+
+.. code-block:: yaml
+
+   name: ThunderOS CI
+   
+   on:
+     push:
+       branches: [main, dev/*, feature/*, release/*]
+     pull_request:
+       branches: [main, dev/*]
+   
+   jobs:
+     build-and-test:
+       runs-on: ubuntu-latest
+       steps:
+         - name: Checkout code
+           uses: actions/checkout@v3
+         
+         - name: Build kernel
+           run: make clean && make
+         
+         - name: Run tests
+           run: make test
+         
+         - name: Upload test artifacts
+           uses: actions/upload-artifact@v3
+           with:
+             name: test-results
+             path: tests/outputs/
+
+**Running Tests Locally:**
 
 .. code-block:: bash
 
-   #!/bin/bash
-   set -e
+   # Same command as CI
+   make test
    
-   cd /home/christian/Proyectos/thunderos
-   tests/test_syscalls.sh
-   
-   # Check for expected keywords
-   grep -q "All critical tests passed" tests/thunderos_test_output.txt
-   
-   echo "CI test passed!"
+   # Or run scripts directly
+   tests/scripts/run_all_tests.sh
 
-The GitHub Actions workflow (``.github/workflows/ci.yml``) runs all test scripts automatically on:
+**Expected CI Output:**
 
-- Push to main, dev/*, feature/*, release/* branches
-- Pull requests to main and dev/* branches
+.. code-block:: text
+
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Running ThunderOS Test Suite
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
+   [*] Running boot tests...
+   ✓ Boot test passed
+   
+   [*] Running integration tests...
+   ✓ Integration test passed
+   
+   [*] Running user mode tests...
+   ✓ User mode test passed
+   
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Test Suite Complete: 3/3 passed
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Test artifacts are uploaded for debugging failed builds.

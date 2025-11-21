@@ -41,9 +41,9 @@ Run in QEMU::
 Current Status
 --------------
 
-**Version 0.2.0 - "User Space"** ✅ RELEASED
+**Version 0.4.0 - "Persistence"** ✅ RELEASED
 
-ThunderOS v0.2.0 "User Space" is now complete with full user-mode support!
+ThunderOS v0.4.0 includes full persistence with VirtIO, ext2, ELF loading, and signal handling!
 
 .. list-table::
    :header-rows: 1
@@ -66,18 +66,28 @@ ThunderOS v0.2.0 "User Space" is now complete with full user-mode support!
      - ✓ Implemented
    * - User Mode (U-mode) Support
      - ✓ Implemented
-   * - System Calls (13 syscalls)
+   * - System Calls (24 syscalls)
      - ✓ Implemented
    * - Privilege Separation
      - ✓ Implemented
    * - Exception Handling
+     - ✓ Implemented
+   * - VirtIO Block Device Driver
+     - ✓ Implemented
+   * - ext2 Filesystem Support
+     - ✓ Implemented
+   * - ELF Binary Loader
+     - ✓ Implemented
+   * - Signal Handling (POSIX-style)
+     - ✓ Implemented
+   * - Process Memory Isolation
      - ✓ Implemented
    * - Automated Testing Framework
      - ✓ Implemented
    * - CI/CD Pipeline (GitHub Actions)
      - ✓ Implemented
    * - AI Accelerators
-     - ⏳ TODO (v0.3.0)
+     - ⏳ TODO (v1.0)
 
 Indices and tables
 ==================

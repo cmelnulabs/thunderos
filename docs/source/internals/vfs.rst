@@ -46,6 +46,50 @@ Key Concepts
 3. **VFS Operations**: Standardized function pointers for filesystem operations
 4. **Path Resolution**: Convert absolute paths to filesystem-specific resources
 
+**VFS Constants:**
+
+.. code-block:: c
+
+    #define VFS_MAX_OPEN_FILES    64    /* Maximum simultaneously open files */
+    #define VFS_MAX_PATH          256   /* Maximum path length for VFS */
+    #define VFS_FD_STDIN          0     /* Standard input file descriptor */
+    #define VFS_FD_STDOUT         1     /* Standard output file descriptor */
+    #define VFS_FD_STDERR         2     /* Standard error file descriptor */
+    #define VFS_FD_FIRST_REGULAR  3     /* First available FD for files */
+    #define VFS_DEFAULT_FILE_MODE 0644  /* Default permissions: rw-r--r-- */
+
+**File Descriptor Allocation:**
+
+File descriptors 0-2 are reserved for standard streams:
+
+- **FD 0 (stdin)**: Standard input (reserved, not yet connected to terminal)
+- **FD 1 (stdout)**: Standard output (reserved, not yet connected to terminal)
+- **FD 2 (stderr)**: Standard error (reserved, not yet connected to terminal)
+
+Regular files are allocated starting from ``VFS_FD_FIRST_REGULAR`` (3):
+
+.. code-block:: c
+
+    int vfs_alloc_fd(void) {
+        for (int i = VFS_FD_FIRST_REGULAR; i < VFS_MAX_OPEN_FILES; i++) {
+            if (!g_file_table[i].in_use) {
+                g_file_table[i].in_use = 1;
+                return i;
+            }
+        }
+        RETURN_ERRNO(THUNDEROS_EMFILE);  // Too many open files
+    }
+
+**Default File Permissions:**
+
+When creating files without explicit mode, VFS uses ``VFS_DEFAULT_FILE_MODE`` (0644):
+
+- **Owner**: Read + Write (rw-)
+- **Group**: Read only (r--)
+- **Others**: Read only (r--)
+
+This follows Unix conventions for secure default permissions.
+
 Data Structures
 ---------------
 

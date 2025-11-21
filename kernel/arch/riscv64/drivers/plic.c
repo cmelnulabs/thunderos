@@ -32,7 +32,7 @@ void plic_init(void)
     }
 
     /* Set all interrupt priorities to 0 (disabled) */
-    for (irq_number = 1; irq_number < 128; irq_number++)
+    for (irq_number = 1; irq_number < PLIC_MAX_IRQ; irq_number++)
     {
         *PLIC_PRIORITY_REG(irq_number) = PLIC_PRIORITY_MIN;
     }
@@ -46,7 +46,7 @@ void plic_init(void)
  */
 void plic_set_priority(uint32_t irq_number, uint32_t priority)
 {
-    if (irq_number == 0 || irq_number >= 128)
+    if (irq_number == 0 || irq_number >= PLIC_MAX_IRQ)
     {
         return;  /* IRQ 0 is reserved, ignore invalid IRQ numbers */
     }

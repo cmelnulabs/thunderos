@@ -384,13 +384,6 @@ Load pages on-demand:
 * Allocate physical page on first access
 * Support swapping to disk (far future)
 
-Performance Optimization
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-* **Huge Pages**: 2 MB or 1 GB pages for large allocations
-* **TLB Shootdown**: Coordinate TLB flushes across multiple CPUs
-* **Page Table Caching**: Reuse freed page table pages
-
 Memory Protection
 ~~~~~~~~~~~~~~~~~
 

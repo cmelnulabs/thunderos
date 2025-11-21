@@ -50,9 +50,10 @@ Once prerequisites are installed:
 
 .. code-block:: bash
 
-   ./build_os.sh       # Build the kernel
-   tests/test_qemu.sh  # Build and test in QEMU
-   ./build_docs.sh     # Build documentation
+   ./build_os.sh           # Build the kernel
+   ./build_userland.sh     # Build user programs
+   make test               # Run all tests
+   ./build_docs.sh         # Build documentation
 
 Compilation
 ~~~~~~~~~~~
@@ -91,10 +92,10 @@ Manual Testing
 
 .. code-block:: bash
 
-   tests/test_user_quick.sh    # Fast validation (3 seconds)
-   tests/test_syscalls.sh      # Comprehensive syscall testing
-   tests/test_user_mode.sh     # User-mode privilege testing
-   tests/test_qemu.sh          # Basic QEMU functionality
+   make test                          # Run full test suite
+   tests/scripts/test_boot.sh         # Boot and unit tests
+   tests/scripts/test_integration.sh  # VirtIO, ext2, shell tests
+   tests/scripts/test_user_mode.sh    # User-space program tests
 
 **Manual Steps**
 
@@ -113,12 +114,11 @@ The CI pipeline:
 
 1. Builds kernel in Docker
 2. Runs QEMU boot test
-3. Executes 4 automated integration tests:
+3. Executes automated integration tests:
    
-   - ``test_qemu.sh`` - Basic functionality
-   - ``test_syscalls.sh`` - Syscall validation
-   - ``test_user_mode.sh`` - User-mode testing
-   - ``test_user_quick.sh`` - Fast validation
+   - ``test_boot.sh`` - Kernel boot and unit tests
+   - ``test_integration.sh`` - VirtIO, ext2, shell functionality
+   - ``test_user_mode.sh`` - User-mode programs and syscalls
 
 4. Verifies boot messages and initialization
 5. Checks for build warnings
@@ -132,7 +132,7 @@ To run similar tests locally:
    # Build and test (mimics CI)
    docker build -t thunderos-build .
    docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build make clean && make
-   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build bash -c "cd tests && ./test_user_quick.sh"
+   docker run --rm -v $(pwd):/workspace -w /workspace thunderos-build make test
 
 
 Debugging

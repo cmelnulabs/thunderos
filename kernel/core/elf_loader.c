@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "kernel/kstring.h"
 #include "kernel/errno.h"
+#include "kernel/elf_loader.h"
 #include "fs/vfs.h"
 #include "kernel/process.h"
 #include "mm/kmalloc.h"
@@ -80,13 +81,13 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     }
     
     /* Verify it's a RISC-V executable */
-    if (ehdr.machine != 0xF3) {  /* EM_RISCV */
+    if (ehdr.machine != EM_RISCV) {
         vfs_close(fd);
         RETURN_ERRNO(THUNDEROS_EELF_ARCH);
     }
     
     /* Verify it's an executable */
-    if (ehdr.type != 2) {  /* ET_EXEC */
+    if (ehdr.type != ET_EXEC) {
         vfs_close(fd);
         RETURN_ERRNO(THUNDEROS_EELF_TYPE);
     }

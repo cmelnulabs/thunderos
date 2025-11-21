@@ -17,6 +17,33 @@ Interface Definition
 
 File: ``include/hal/hal_timer.h``
 
+**Timer Constants:**
+
+.. code-block:: c
+
+    #define TIMER_FREQ_HZ  10000000  /* Timer frequency: 10 MHz */
+    #define TICKS_PER_MS   10000     /* Ticks per millisecond (10M / 1000) */
+
+These constants define the timer's operating frequency on RISC-V:
+
+- **TIMER_FREQ_HZ**: The CPU timer runs at 10 MHz (10,000,000 Hz)
+- **TICKS_PER_MS**: Number of timer ticks in one millisecond (10,000)
+
+**Calculating Intervals:**
+
+.. code-block:: c
+
+    // For microsecond delays:
+    uint64_t ticks = microseconds * (TIMER_FREQ_HZ / 1000000);
+    
+    // For millisecond delays:
+    uint64_t ticks = milliseconds * TICKS_PER_MS;
+    
+    // Example: 100ms interval
+    uint64_t interval = 100 * TICKS_PER_MS;  // 1,000,000 ticks
+
+**Core Functions:**
+
 The timer HAL defines four core functions:
 
 .. code-block:: c

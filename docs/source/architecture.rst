@@ -10,6 +10,9 @@ High-Level Overview
 
                     ┌─────────────────────────────┐
                     │   User Space (v0.2.0+)      │
+                    │  - ELF binaries          ✓  │
+                    │  - Signal handling       ✓  │
+                    │  - Memory isolation      ✓  │
                     └─────────────────────────────┘
                                │ syscalls
                     ┌──────────▼──────────────────┐
@@ -36,7 +39,12 @@ High-Level Overview
                     │  │   Device Drivers     │   │
                     │  │   - UART (HAL)    ✓  │   │
                     │  │   - Timer (HAL)   ✓  │   │
-                    │  │   - AI Accel (TODO)  │   │
+                    │  │   - VirtIO Block  ✓  │   │
+                    │  └──────────────────────┘   │
+                    │  ┌──────────────────────┐   │
+                    │  │   Filesystems        │   │
+                    │  │   - VFS Layer     ✓  │   │
+                    │  │   - ext2          ✓  │   │
                     │  └──────────────────────┘   │
                     │  ┌──────────────────────┐   │
                     │  │   Testing Framework  │   │
@@ -226,18 +234,20 @@ Testing Framework
 * **Files**: ``tests/framework/kunit.{c,h}``
 * **Purpose**: Automated kernel testing
 * **Status**: ✓ Implemented
-* Features:
+Features:
 
-  * KUnit-inspired API
-  * Assertion macros (EXPECT_EQ, EXPECT_NE, etc.)
-  * Test suite organization
-  * Formatted TAP-style output
-  * Separate test kernels for isolation
+* KUnit-inspired API
+* Assertion macros (EXPECT_EQ, EXPECT_NE, etc.)
+* Test suite organization
+* Formatted TAP-style output
+* Kernel-embedded unit tests
 
 Test Suites:
 
-* ``tests/test_trap.c`` - Trap handler tests (4 tests)
-* ``tests/test_timer.c`` - Timer interrupt tests (6 tests)
+* ``tests/unit/test_memory_mgmt.c`` - Memory management tests (10 tests)
+* ``tests/unit/test_memory_isolation.c`` - Process isolation tests (15 tests)
+* ``tests/unit/test_elf.c`` - ELF loader tests (8 tests)
+* ``tests/scripts/run_all_tests.sh`` - Integration test runner
 
 See :doc:`internals/testing_framework` for details.
 

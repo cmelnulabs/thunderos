@@ -7,6 +7,7 @@
 #include "kernel/kstring.h"
 #include "kernel/panic.h"
 #include "kernel/signal.h"
+#include "kernel/errno.h"
 #include "mm/pmm.h"
 #include "mm/kmalloc.h"
 #include "mm/paging.h"
@@ -498,14 +499,14 @@ pid_t process_fork(void) {
     struct process *parent = process_current();
     if (!parent) {
         hal_uart_puts("process_fork: no current process\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Allocate new process structure
     struct process *child = alloc_process();
     if (!child) {
         hal_uart_puts("process_fork: process table full\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EAGAIN);
     }
     
     // Assign new PID
@@ -525,13 +526,14 @@ pid_t process_fork(void) {
     if (!child->kernel_stack) {
         hal_uart_puts("process_fork: failed to allocate kernel stack\n");
         process_free(child);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     // Set up memory isolation for child
     if (process_setup_memory_isolation(child) != 0) {
         hal_uart_puts("process_fork: failed to setup memory isolation\n");
         process_free(child);
+        /* errno already set by process_setup_memory_isolation */
         return -1;
     }
     
@@ -540,7 +542,7 @@ pid_t process_fork(void) {
     if (!child->page_table) {
         hal_uart_puts("process_fork: failed to create page table\n");
         process_free(child);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     // Copy VMAs from parent to child
@@ -550,6 +552,7 @@ pid_t process_fork(void) {
         if (process_add_vma(child, parent_vma->start, parent_vma->end, parent_vma->flags) != 0) {
             hal_uart_puts("process_fork: failed to copy VMA\n");
             process_free(child);
+            /* errno already set by process_add_vma */
             return -1;
         }
         
@@ -562,7 +565,7 @@ pid_t process_fork(void) {
                 if (!child_paddr) {
                     hal_uart_puts("process_fork: failed to allocate page\n");
                     process_free(child);
-                    return -1;
+                    RETURN_ERRNO(THUNDEROS_ENOMEM);
                 }
                 
                 // Copy page contents
@@ -580,6 +583,7 @@ pid_t process_fork(void) {
                     hal_uart_puts("process_fork: failed to map page\n");
                     pmm_free_page(child_paddr);
                     process_free(child);
+                    /* errno already set by map_page */
                     return -1;
                 }
             }
@@ -598,7 +602,7 @@ pid_t process_fork(void) {
     if (!child->trap_frame) {
         hal_uart_puts("process_fork: failed to allocate trap frame\n");
         process_free(child);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     kmemcpy(child->trap_frame, parent->trap_frame, sizeof(struct trap_frame));
     
@@ -953,7 +957,7 @@ void user_mode_entry_wrapper(void) {
  */
 int process_setup_memory_isolation(struct process *proc) {
     if (!proc) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Initialize VMA list as empty
@@ -1004,13 +1008,13 @@ vm_area_t *process_find_vma(struct process *proc, uint64_t addr) {
  */
 int process_add_vma(struct process *proc, uint64_t start, uint64_t end, uint32_t flags) {
     if (!proc || start >= end) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Allocate new VMA structure
     vm_area_t *vma = (vm_area_t *)kmalloc(sizeof(vm_area_t));
     if (!vma) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     // Initialize VMA
@@ -1087,7 +1091,7 @@ void process_cleanup_vmas(struct process *proc) {
  */
 int process_map_region(struct process *proc, uint64_t vaddr, uint64_t size, uint32_t flags) {
     if (!proc || !proc->page_table || size == 0) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Align to page boundaries
@@ -1106,7 +1110,7 @@ int process_map_region(struct process *proc, uint64_t vaddr, uint64_t size, uint
         uintptr_t phys_page = pmm_alloc_page();
         if (!phys_page) {
             // TODO: Cleanup already mapped pages
-            return -1;
+            RETURN_ERRNO(THUNDEROS_ENOMEM);
         }
         
         // Zero the page
@@ -1116,6 +1120,7 @@ int process_map_region(struct process *proc, uint64_t vaddr, uint64_t size, uint
         if (map_page(proc->page_table, addr, phys_page, pte_flags) != 0) {
             pmm_free_page(phys_page);
             // TODO: Cleanup already mapped pages
+            /* errno already set by map_page */
             return -1;
         }
     }
@@ -1123,6 +1128,7 @@ int process_map_region(struct process *proc, uint64_t vaddr, uint64_t size, uint
     // Add VMA to track this region
     if (process_add_vma(proc, start, end, flags) != 0) {
         // TODO: Cleanup mapped pages
+        /* errno already set by process_add_vma */
         return -1;
     }
     

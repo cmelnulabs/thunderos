@@ -110,14 +110,16 @@ Or run automated tests:
 
 .. code-block:: bash
 
-   # Quick validation
-   tests/test_user_quick.sh
-
-   # Comprehensive testing
-   tests/test_syscalls.sh
-
-   # Full test suite
-   cd tests && ./test_*.sh
+   # Run full test suite
+   make test
+   
+   # Or run individual test scripts
+   tests/scripts/test_boot.sh
+   tests/scripts/test_integration.sh
+   tests/scripts/test_user_mode.sh
+   
+   # Or run all tests
+   tests/scripts/run_all_tests.sh
 
 Building Documentation
 ~~~~~~~~~~~~~~~~~~~~~~

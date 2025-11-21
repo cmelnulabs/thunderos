@@ -102,6 +102,68 @@ The superblock contains global filesystem metadata:
 - ``s_first_ino``: First usable inode (typically 11)
 - ``s_inode_size``: Size of inode structure (typically 128 or 256 bytes)
 
+Error Handling
+~~~~~~~~~~~~~~
+
+The ext2 implementation uses ThunderOS's errno system for error reporting. All ext2 functions that can fail set ``errno`` with specific error codes before returning.
+
+**ext2-Specific Error Codes:**
+
+.. code-block:: c
+
+    #define THUNDEROS_EFS_CORRUPT   30  /* Filesystem corruption detected */
+    #define THUNDEROS_EFS_INVAL     31  /* Invalid filesystem structure */
+    #define THUNDEROS_EFS_BADBLK    32  /* Invalid block number */
+    #define THUNDEROS_EFS_NOINODE   33  /* No free inodes available */
+    #define THUNDEROS_EFS_NOBLK     34  /* No free blocks available */
+    #define THUNDEROS_EFS_BADINO    35  /* Invalid inode number */
+    #define THUNDEROS_EFS_NOTMNT    41  /* Filesystem not mounted */
+
+**Common Error Conditions:**
+
+1. **Invalid inode number** (``THUNDEROS_EFS_BADINO``):
+   - Inode number must be >= 1 and <= ``s_inodes_count``
+   - Inode 0 is reserved and never valid
+   - Inodes 1-10 are system-reserved
+
+2. **Invalid block number** (``THUNDEROS_EFS_BADBLK``):
+   - Block number must be >= ``s_first_data_block``
+   - Block number must be < ``s_blocks_count``
+   - Out-of-range blocks indicate filesystem corruption
+
+3. **Filesystem corruption** (``THUNDEROS_EFS_CORRUPT``):
+   - Magic number mismatch (not 0xEF53)
+   - Invalid superblock parameters
+   - Inconsistent block group descriptors
+
+**Example Error Handling:**
+
+.. code-block:: c
+
+    // Reading an inode with validation
+    ext2_inode_t inode;
+    if (ext2_read_inode(fs, inode_num, &inode) < 0) {
+        int err = get_errno();
+        if (err == THUNDEROS_EFS_BADINO) {
+            kprintf("Invalid inode number: %u\n", inode_num);
+        } else if (err == THUNDEROS_EFS_CORRUPT) {
+            kprintf("Filesystem corruption detected\n");
+        }
+        return -1;  // errno already set
+    }
+    
+    // Block allocation
+    uint32_t block = ext2_alloc_block(fs, 0);
+    if (block == 0) {
+        int err = get_errno();
+        if (err == THUNDEROS_EFS_NOBLK) {
+            kprintf("Disk full: no free blocks\n");
+        }
+        return -1;
+    }
+
+See ``docs/source/internals/errno.rst`` for complete errno documentation and best practices.
+
 Inode
 ~~~~~
 
@@ -656,54 +718,6 @@ Block Allocation
         kfree(bitmap);
         return 0;  // No free blocks
     }
-
-Performance Considerations
---------------------------
-
-Block Caching
-~~~~~~~~~~~~~
-
-**Current:** No block cache - every read hits the disk
-
-**Future Improvement:**
-
-.. code-block:: c
-
-    struct block_cache {
-        uint32_t block_num;
-        char data[BLOCK_SIZE];
-        bool dirty;
-        uint64_t last_access;
-    };
-    
-    // LRU cache of recently accessed blocks
-    struct block_cache cache[CACHE_SIZE];
-
-Reduces redundant reads for frequently accessed blocks (e.g., inode table, directories).
-
-Inode Caching
-~~~~~~~~~~~~~
-
-**Current:** Inodes are read from disk for every file operation
-
-**Improvement:** Keep recently used inodes in memory
-
-.. code-block:: c
-
-    struct inode_cache_entry {
-        uint32_t inode_num;
-        struct ext2_inode inode;
-        uint32_t ref_count;
-    };
-
-Batch Operations
-~~~~~~~~~~~~~~~~
-
-Writing multiple blocks can be batched:
-
-.. code-block:: c
-
-    // Instead of write_block() for each block...
     write_blocks(fs, start_block, buffer, num_blocks);
 
 Reduces VirtIO notification overhead.
