@@ -8,6 +8,7 @@
 
 #include "kernel/pipe.h"
 #include "kernel/errno.h"
+#include "kernel/process.h"
 #include "mm/kmalloc.h"
 #include "kernel/kstring.h"
 
@@ -71,14 +72,16 @@ int pipe_read(pipe_t* pipe, void* buffer, size_t count) {
         RETURN_ERRNO(THUNDEROS_EPIPE);
     }
 
-    // If pipe is empty
+    // Wait for data to be available
+    // TODO: Implement proper blocking with wakeup mechanism
+    // For now, return EAGAIN if no data available (non-blocking)
     if (pipe->data_size == 0) {
         // If write end is closed, return EOF
         if (pipe->state == PIPE_WRITE_CLOSED || pipe->write_ref_count == 0) {
             clear_errno();
             return 0;  // EOF
         }
-        // Write end still open, would block
+        // No data and write end still open
         RETURN_ERRNO(THUNDEROS_EAGAIN);
     }
 

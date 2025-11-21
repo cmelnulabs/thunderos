@@ -65,6 +65,9 @@ void scheduler_enqueue(struct process *proc) {
         return;
     }
     
+    int old_count = queue_count;
+    int old_tail = queue_tail;
+    
     ready_queue[queue_tail] = proc;
     queue_tail = (queue_tail + 1) % READY_QUEUE_SIZE;
     queue_count++;
@@ -149,17 +152,16 @@ void context_switch(struct process *old, struct process *new) {
     // Set current process
     process_set_current(new);
     
-    // Switch page tables if different
-    if (old && old->page_table != new->page_table) {
-        switch_page_table(new->page_table);
-    }
-    
     // Perform low-level context switch
     if (old) {
         context_switch_asm(&old->context, &new->context);
     } else {
         context_switch_asm(NULL, &new->context);
     }
+    
+    // NOW switch page tables AFTER context switch completes
+    // This is safe because we're now executing with the new process's kernel stack
+    switch_page_table(new->page_table);
 }
 
 /**

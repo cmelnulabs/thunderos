@@ -38,6 +38,9 @@ static inline void lock_release(volatile int *lock) {
     __sync_lock_release(lock);
 }
 
+// Forward declarations
+static void forked_child_entry(void);
+
 /**
  * Initialize the process management subsystem
  */
@@ -604,16 +607,27 @@ pid_t process_fork(void) {
         process_free(child);
         RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
+    
     kmemcpy(child->trap_frame, parent->trap_frame, sizeof(struct trap_frame));
     
     // Set return value to 0 in child (distinguish from parent)
     child->trap_frame->a0 = 0;
     
-    // Copy kernel context
-    kmemcpy(&child->context, &parent->context, sizeof(struct context));
+    // CRITICAL: Advance sepc past the ecall instruction!
+    // The parent's trap frame still has sepc pointing AT the ecall (not past it)
+    // because the trap handler hasn't returned yet. We need to advance it so
+    // the child returns to the instruction AFTER the ecall.
+    child->trap_frame->sepc += 4;
+    
+    // Initialize child's kernel context for first schedule
+    kmemset(&child->context, 0, sizeof(struct context));
     
     // Set up child's kernel stack pointer
     child->context.sp = child->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    
+    // Set up child to return to user mode on first schedule
+    // Use forked_child_entry which restores all registers from trap frame
+    child->context.ra = (unsigned long)forked_child_entry;
     
     // Add child to scheduler
     child->state = PROC_READY;
@@ -952,6 +966,38 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
  * 
  * Does not return - control goes to user code.
  */
+
+/**
+ * Wrapper for forked child to enter user mode
+ * 
+ * Different from user_mode_entry_wrapper because it needs to restore
+ * ALL registers from trap frame (the parent's state at fork time).
+ */
+void forked_child_entry(void) {
+    struct process *proc = process_current();
+    
+    if (!proc || !proc->trap_frame || !proc->page_table) {
+        kernel_panic("forked_child_entry: invalid process state");
+    }
+    
+    // DON'T switch page table yet - user_return will load registers from trap frame
+    // which needs to be accessible. We'll switch to child's page table when
+    // returning FROM a trap (not when first entering user mode).
+    // The child already has its memory copied, so it should work fine with parent's PT.
+    
+    // NO: switch_page_table(proc->page_table);
+    
+    // Setup sscratch with kernel stack pointer for trap entry
+    uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
+    __asm__ volatile("csrw sscratch, %0" :: "r"(kernel_sp));
+    
+    // Return to user mode using user_return which restores all registers
+    extern void user_return(struct trap_frame *tf);
+    user_return(proc->trap_frame);
+    
+    kernel_panic("forked_child_entry: user_return returned");
+}
+
 void user_mode_entry_wrapper(void) {
     struct process *proc = process_current();
     if (!proc || !proc->trap_frame || !proc->page_table) {
