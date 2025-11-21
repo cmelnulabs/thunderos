@@ -20,6 +20,10 @@
 #define SIGUSR1 10
 #define SIGUSR2 12
 
+// Delay constants (iterations)
+#define DELAY_LONG 1000
+#define DELAY_SHORT 500
+
 // File descriptors
 #define STDOUT_FD 1
 
@@ -117,7 +121,7 @@ int main(void) {
     kill(pid, SIGUSR1);
     
     // Give time for signal delivery
-    delay(1000);
+    delay(DELAY_LONG);
     
     if (signal_received == 1) {
         print("  ✓ SIGUSR1 delivered successfully\n");
@@ -135,7 +139,7 @@ int main(void) {
     signal_received = 0;  // Reset flag
     kill(pid, SIGUSR2);
     
-    delay(1000);
+    delay(DELAY_LONG);
     
     if (signal_received == 2) {
         print("  ✓ SIGUSR2 delivered successfully\n");
@@ -147,11 +151,11 @@ int main(void) {
     print("[TEST 5] Sending multiple SIGUSR1 signals...\n");
     signal_count = 0;
     kill(pid, SIGUSR1);
-    delay(500);
+    delay(DELAY_SHORT);
     kill(pid, SIGUSR1);
-    delay(500);
+    delay(DELAY_SHORT);
     kill(pid, SIGUSR1);
-    delay(500);
+    delay(DELAY_SHORT);
     
     print("  Signal count: ");
     // TODO: Add count printing

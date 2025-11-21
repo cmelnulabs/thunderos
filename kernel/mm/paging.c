@@ -7,6 +7,7 @@
 #include "mm/kmalloc.h"
 #include "hal/hal_uart.h"
 #include "kernel/kstring.h"
+#include "kernel/errno.h"
 
 // Kernel root page table (allocated statically for bootstrap)
 static page_table_t kernel_page_table __attribute__((aligned(PAGE_SIZE)));
@@ -89,20 +90,20 @@ int map_page(page_table_t *page_table, uintptr_t vaddr, uintptr_t paddr, uint64_
     // Check alignment
     if ((vaddr & (PAGE_SIZE - 1)) || (paddr & (PAGE_SIZE - 1))) {
         hal_uart_puts("map_page: address not page-aligned\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Walk page table (create intermediate tables)
     pte_t *pte = walk_page_table(page_table, vaddr, 1);
     if (pte == NULL) {
         hal_uart_puts("map_page: failed to walk page table\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
     // Check if already mapped
     if (*pte & PTE_V) {
         hal_uart_puts("map_page: address already mapped\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EEXIST);
     }
     
     // Create mapping
@@ -118,14 +119,14 @@ int unmap_page(page_table_t *page_table, uintptr_t vaddr) {
     // Check alignment
     if (vaddr & (PAGE_SIZE - 1)) {
         hal_uart_puts("unmap_page: address not page-aligned\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Walk page table (don't create)
     pte_t *pte = walk_page_table(page_table, vaddr, 0);
     if (pte == NULL || !(*pte & PTE_V)) {
         hal_uart_puts("unmap_page: address not mapped\n");
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Clear PTE
@@ -143,7 +144,7 @@ int unmap_page(page_table_t *page_table, uintptr_t vaddr) {
 int virt_to_phys(page_table_t *page_table, uintptr_t vaddr, uintptr_t *paddr) {
     pte_t *pte = walk_page_table(page_table, vaddr, 0);
     if (pte == NULL || !(*pte & PTE_V)) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EFAULT);
     }
     
     // Get physical page number and add offset
@@ -430,7 +431,7 @@ page_table_t *create_user_page_table(void) {
 int map_user_code(page_table_t *page_table, uintptr_t user_vaddr, 
                   void *kernel_code, size_t size) {
     if (!page_table || !kernel_code || size == 0) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Align virtual address down to page boundary
@@ -451,7 +452,7 @@ int map_user_code(page_table_t *page_table, uintptr_t user_vaddr,
         uintptr_t phys_page = pmm_alloc_page();
         if (phys_page == 0) {
             // TODO: Clean up previously allocated pages
-            return -1;
+            RETURN_ERRNO(THUNDEROS_ENOMEM);
         }
         
         // Zero the page first (security: clear any old data)
@@ -490,6 +491,7 @@ int map_user_code(page_table_t *page_table, uintptr_t user_vaddr,
         uintptr_t map_vaddr = vaddr + (i * PAGE_SIZE);
         if (map_page(page_table, map_vaddr, phys_page, PTE_USER_TEXT) != 0) {
             pmm_free_page(phys_page);
+            /* errno already set by map_page */
             return -1;
         }
     }
@@ -513,7 +515,7 @@ int map_user_code(page_table_t *page_table, uintptr_t user_vaddr,
 int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr, 
                     uintptr_t phys_addr, size_t size, int writable) {
     if (!page_table || size == 0) {
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Align virtual address down to page boundary
@@ -535,7 +537,7 @@ int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr,
         // Allocate array to track pages we allocate (for cleanup on failure)
         allocated_pages = (uintptr_t *)kmalloc(num_pages * sizeof(uintptr_t));
         if (!allocated_pages) {
-            return -1;
+            RETURN_ERRNO(THUNDEROS_ENOMEM);
         }
     }
     
@@ -552,7 +554,7 @@ int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr,
                     pmm_free_page(allocated_pages[j]);
                 }
                 kfree(allocated_pages);
-                return -1;
+                RETURN_ERRNO(THUNDEROS_ENOMEM);
             }
             
             // Track this allocation for potential cleanup
@@ -578,6 +580,7 @@ int map_user_memory(page_table_t *page_table, uintptr_t user_vaddr,
                 }
                 kfree(allocated_pages);
             }
+            /* errno already set by map_page */
             return -1;
         }
     }

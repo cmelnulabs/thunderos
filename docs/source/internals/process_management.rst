@@ -72,6 +72,37 @@ Each process has three separate memory regions:
 3. **User Stack**: 1MB allocated via ``kmalloc()``, used for user-mode execution (currently unused in kernel-mode processes)
 4. **Trap Frame**: Allocated separately via ``kmalloc()`` to avoid stack corruption
 
+**Process Memory Constants:**
+
+.. code-block:: c
+
+    #define KERNEL_STACK_SIZE       (16 * 1024)     /* 16KB kernel stack */
+    #define USER_STACK_SIZE         (1024 * 1024)   /* 1MB user stack */
+    #define HEAP_STACK_SAFETY_MARGIN (1024 * 1024)  /* 1MB safety gap */
+
+**Safety Margin:**
+
+The ``HEAP_STACK_SAFETY_MARGIN`` constant ensures that the heap and stack don't collide:
+
+- **Heap grows UP** from ``USER_HEAP_BASE`` (0x40000000)
+- **Stack grows DOWN** from ``USER_STACK_TOP`` (0xFFFFF000)
+- **Minimum 1MB gap** required between heap_end and stack_bottom
+
+This safety margin is enforced by ``sys_brk()`` when expanding the heap. If a heap expansion would bring it within 1MB of the stack, the system call fails with ``THUNDEROS_ENOMEM`` to prevent memory corruption.
+
+**Example Heap Validation:**
+
+.. code-block:: c
+
+    // In sys_brk() - validate new heap end
+    uint64_t new_heap_end = new_brk;
+    uint64_t stack_bottom = current->user_stack;
+    
+    // Ensure at least HEAP_STACK_SAFETY_MARGIN between heap and stack
+    if (new_heap_end + HEAP_STACK_SAFETY_MARGIN >= stack_bottom) {
+        RETURN_ERRNO(THUNDEROS_ENOMEM);  // Too close to stack!
+    }
+
 The kernel stack layout (grows downward):
 
 .. code-block:: text
@@ -729,42 +760,6 @@ The trap frame is allocated separately (not on stack) to prevent corruption:
    proc->trap_frame = (struct trap_frame *)kmalloc(sizeof(struct trap_frame));
 
 This was changed from stack-based allocation after discovering stack growth could corrupt the trap frame during process execution.
-
-Performance Considerations
---------------------------
-
-Time Complexity
-~~~~~~~~~~~~~~~
-
-- **Process creation**: O(n) - linear search for free slot
-- **Process lookup**: O(n) - linear search by PID
-- **Scheduler enqueue**: O(1) - append to tail
-- **Scheduler dequeue**: O(n) - linear search to remove
-- **Scheduler pick next**: O(1) - remove from head
-- **Context switch**: O(1) - fixed number of register saves/loads
-
-Memory Overhead
-~~~~~~~~~~~~~~~
-
-Per process:
-
-- PCB structure: 392 bytes (in static array)
-- Kernel stack: 16 KB
-- User stack: 1 MB
-- Trap frame: ~264 bytes
-- **Total**: ~1.04 MB per process
-
-Maximum 64 processes = ~66 MB maximum overhead
-
-Optimization Opportunities
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-1. **Use hash table for PID lookup**: O(1) instead of O(n)
-2. **Priority queue for scheduler**: Better scheduling decisions
-3. **Separate user/kernel page tables**: Memory isolation
-4. **Stack guard pages**: Detect stack overflows
-5. **Timer-based sleep queue**: Efficient sleeping processes
-6. **Process recycling**: Reuse ZOMBIE process slots
 
 Debugging Support
 -----------------

@@ -8,6 +8,7 @@
 #include <kernel/syscall.h>
 #include <hal/hal_uart.h>
 #include <kernel/kstring.h>
+#include <kernel/config.h>
 #include <fs/vfs.h>
 #include <kernel/elf_loader.h>
 
@@ -224,6 +225,7 @@ static int shell_exec_program(const char *program_path, int argument_count, char
         hal_uart_puts("Error: Failed to execute ");
         hal_uart_puts(program_path);
         hal_uart_puts("\n");
+        /* errno already set by elf_load_exec */
         return -1;
     }
     
@@ -234,6 +236,7 @@ static int shell_exec_program(const char *program_path, int argument_count, char
     
     if (result < 0) {
         hal_uart_puts("Error: waitpid failed\n");
+        /* errno already set by sys_waitpid */
         return -1;
     }
     
@@ -317,7 +320,7 @@ static void shell_process_char(char input_char) {
             hal_uart_puts("\b \b");
         }
     }
-    else if (input_char >= 32 && input_char < 127) {
+    else if (input_char >= ASCII_PRINTABLE_MIN && input_char < ASCII_PRINTABLE_MAX) {
         /* Printable character - echo and store */
         if (input_pos < MAX_CMD_LEN - 1) {
             input_buffer[input_pos++] = input_char;

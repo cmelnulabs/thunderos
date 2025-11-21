@@ -163,6 +163,53 @@ VirtIO Block Status
     #define VIRTIO_BLK_S_IOERR     1  // I/O error
     #define VIRTIO_BLK_S_UNSUPP    2  // Unsupported operation
 
+Error Handling
+~~~~~~~~~~~~~~
+
+VirtIO operations use ThunderOS's errno system. The driver sets specific error codes for different failure conditions:
+
+**VirtIO Error Codes:**
+
+.. code-block:: c
+
+    #define THUNDEROS_EVIRTIO_TIMEOUT  71  /* I/O operation timeout */
+    #define THUNDEROS_EVIRTIO_NODEV    72  /* Device not found/initialized */
+    #define THUNDEROS_EVIRTIO_INIT     73  /* Initialization failed */
+
+**Common Error Scenarios:**
+
+1. **Timeout** (``THUNDEROS_EVIRTIO_TIMEOUT``):
+   - Device doesn't respond within timeout period (default: 100,000 iterations)
+   - Most common cause: missing ``-global virtio-mmio.force-legacy=false`` flag
+   - Check QEMU configuration if this error occurs
+
+2. **Device not found** (``THUNDEROS_EVIRTIO_NODEV``):
+   - No VirtIO device at expected MMIO address (0x10001000)
+   - Wrong device type (not a block device)
+   - QEMU not started with ``-device virtio-blk-device``
+
+3. **Initialization failed** (``THUNDEROS_EVIRTIO_INIT``):
+   - Feature negotiation failed
+   - Queue setup failed
+   - Device status indicates error
+
+**Example:**
+
+.. code-block:: c
+
+    char buffer[512];
+    if (virtio_blk_read(0, buffer, 1) < 0) {
+        int err = get_errno();
+        if (err == THUNDEROS_EVIRTIO_TIMEOUT) {
+            kprintf("VirtIO timeout - check QEMU flags!\n");
+        } else if (err == THUNDEROS_EVIRTIO_NODEV) {
+            kprintf("VirtIO device not found\n");
+        }
+        return -1;  // errno already set
+    }
+
+See ``docs/source/internals/errno.rst`` for complete errno documentation.
+
 Initialization Sequence
 -----------------------
 
@@ -402,56 +449,6 @@ Cache Coherency
 
 RISC-V does not require explicit cache flushes for DMA on most implementations (cache-coherent DMA). However, memory barriers ensure proper ordering.
 
-Performance Characteristics
----------------------------
-
-Polling vs Interrupts
-~~~~~~~~~~~~~~~~~~~~~
-
-Current implementation uses polling:
-
-.. code-block:: c
-
-    while (last_used_idx == vring.used->idx) {
-        // Busy-wait for completion
-    }
-
-**Future Improvement:** Interrupt-driven I/O:
-
-.. code-block:: c
-
-    void virtio_blk_interrupt_handler(void) {
-        uint32_t int_status = read32(VIRTIO_MMIO_INTERRUPT_STATUS);
-        
-        if (int_status & 0x1) {  // Used ring update
-            process_used_ring();
-            write32(VIRTIO_MMIO_INTERRUPT_ACK, int_status);
-        }
-    }
-
-Batch Operations
-~~~~~~~~~~~~~~~~
-
-Multiple requests can be submitted before notifying the device:
-
-.. code-block:: c
-
-    for (int i = 0; i < num_requests; i++) {
-        add_request_to_available_ring(requests[i]);
-    }
-    
-    memory_barrier();
-    write32(VIRTIO_MMIO_QUEUE_NOTIFY, 0);  // Single notification
-
-This amortizes the notification overhead across multiple I/O operations.
-
-Typical Performance
-~~~~~~~~~~~~~~~~~~~
-
-- **Read latency**: 100-600 polling iterations in QEMU
-- **Throughput**: Limited by polling overhead (~1-2 MB/s)
-- **With interrupts**: Could achieve 10-20 MB/s
-
 Debugging
 ---------
 
@@ -531,7 +528,33 @@ Create a test disk image:
         -kernel thunderos.elf \
         -drive file=disk.img,if=none,format=raw,id=hd0 \
         -device virtio-blk-device,drive=hd0 \
+        -global virtio-mmio.force-legacy=false \
         -nographic
+
+.. warning::
+   **CRITICAL: QEMU 10.1.2+ Configuration**
+   
+   Modern VirtIO requires the ``-global virtio-mmio.force-legacy=false`` flag.
+   
+   **Without this flag:**
+   - All VirtIO I/O operations will timeout
+   - Mount will fail with "VirtIO timeout" errors
+   - Errno will be set to ``THUNDEROS_EVIRTIO_TIMEOUT`` (71)
+   
+   **Why this flag is needed:**
+   QEMU 10+ defaults to legacy mode for MMIO devices. ThunderOS implements
+   modern VirtIO (v2) with 64-bit queue addressing. The flag forces QEMU to
+   use modern mode, matching our driver implementation.
+   
+   **Symptoms of missing flag:**
+   
+   .. code-block:: text
+   
+       [FAIL] VirtIO block device timeout
+       [FAIL] Failed to mount ext2 filesystem
+       virtio_blk_do_request: Timeout waiting for response
+   
+   Always include this flag when running ThunderOS with VirtIO devices!
 
 Verification
 ~~~~~~~~~~~~

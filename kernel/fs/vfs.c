@@ -58,7 +58,7 @@ int vfs_mount_root(vfs_filesystem_t *fs) {
  * Allocate a file descriptor
  */
 int vfs_alloc_fd(void) {
-    for (int i = 3; i < VFS_MAX_OPEN_FILES; i++) {  /* Skip stdin/stdout/stderr */
+    for (int i = VFS_FD_FIRST_REGULAR; i < VFS_MAX_OPEN_FILES; i++) {
         if (!g_file_table[i].in_use) {
             g_file_table[i].in_use = 1;
             g_file_table[i].node = NULL;
@@ -121,14 +121,14 @@ vfs_node_t *vfs_resolve_path(const char *path) {
     
     /* Start from root */
     vfs_node_t *current = g_root_fs->root;
-    char component[256];
+    char component[VFS_MAX_PATH];
     uint32_t comp_idx = 0;
     
     while (*path) {
         /* Extract path component */
         comp_idx = 0;
         while (*path && *path != '/') {
-            if (comp_idx < 255) {
+            if (comp_idx < VFS_MAX_PATH - 1) {
                 component[comp_idx++] = *path;
             }
             path++;
@@ -197,7 +197,7 @@ int vfs_open(const char *path, uint32_t flags) {
             /* Create file in root directory */
             vfs_node_t *root = g_root_fs->root;
             if (root->ops && root->ops->create) {
-                int ret = root->ops->create(root, filename, 0644);
+                int ret = root->ops->create(root, filename, VFS_DEFAULT_FILE_MODE);
                 if (ret != 0) {
                     hal_uart_puts("vfs: Failed to create file\n");
                     /* errno already set by create */

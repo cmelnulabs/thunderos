@@ -44,6 +44,27 @@ PLIC (Platform-Level Interrupt Controller)
 * Enable/disable specific interrupts
 * Claim and complete interrupt processing
 
+**PLIC Constants:**
+
+.. code-block:: c
+
+    #define PLIC_MAX_IRQ  128  /* Maximum interrupt sources (0-127) */
+
+The PLIC supports up to 128 interrupt sources (IRQ 0-127):
+
+- **IRQ 0**: Reserved (no interrupt)
+- **IRQ 1-127**: Available for devices
+- Common IRQs on QEMU virt machine:
+  
+  * IRQ 1: VirtIO block device #0
+  * IRQ 2-8: Additional VirtIO devices
+  * IRQ 10: UART (NS16550a)
+
+**Priority Levels:**
+
+- **0**: Interrupt disabled
+- **1-7**: Interrupt enabled (7 = highest priority)
+
 **Key Functions:**
 
 .. code-block:: c

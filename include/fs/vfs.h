@@ -17,10 +17,14 @@
 /* Maximum path length */
 #define VFS_MAX_PATH 256
 
+/* Default file permissions */
+#define VFS_DEFAULT_FILE_MODE 0644  /* rw-r--r-- */
+
 /* File descriptor values */
 #define VFS_FD_STDIN  0
 #define VFS_FD_STDOUT 1
 #define VFS_FD_STDERR 2
+#define VFS_FD_FIRST_REGULAR 3  /* First available FD for regular files */
 
 /* File open flags */
 #define O_RDONLY  0x0000  /* Read-only */

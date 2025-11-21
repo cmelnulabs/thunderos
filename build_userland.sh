@@ -1,18 +1,21 @@
 #!/bin/bash
 # Build userland programs for ThunderOS
 
-set -e
+set -euo pipefail
 
-CROSS_COMPILE=riscv64-unknown-elf-
-CC="${CROSS_COMPILE}gcc"
-LD="${CROSS_COMPILE}ld"
-OBJCOPY="${CROSS_COMPILE}objcopy"
+readonly CROSS_COMPILE="riscv64-unknown-elf-"
+readonly CC="${CROSS_COMPILE}gcc"
+readonly LD="${CROSS_COMPILE}ld"
+readonly OBJCOPY="${CROSS_COMPILE}objcopy"
 
-CFLAGS="-march=rv64gc -mabi=lp64d -nostdlib -nostartfiles -ffreestanding -fno-common -O2 -Wall"
-LDFLAGS="-nostdlib -static"
+readonly CFLAGS="-march=rv64gc -mabi=lp64d -nostdlib -nostartfiles -ffreestanding -fno-common -O2 -Wall"
+readonly LDFLAGS="-nostdlib -static"
 
-USERLAND_DIR="$(cd "$(dirname "$0")" && pwd)/userland"
-BUILD_DIR="${USERLAND_DIR}/build"
+# User program entry point address
+readonly USER_ENTRY_POINT="0xf000"
+
+readonly USERLAND_DIR="$(cd "$(dirname "$0")" && pwd)/userland"
+readonly BUILD_DIR="${USERLAND_DIR}/build"
 
 # Create build directory
 mkdir -p "${BUILD_DIR}"
@@ -21,26 +24,26 @@ echo "Building userland programs..."
 
 # Build ls
 echo "Building ls..."
-${CC} ${CFLAGS} -c "${USERLAND_DIR}/ls.c" -o "${BUILD_DIR}/ls.o"
-${LD} ${LDFLAGS} -Ttext=0xf000 "${BUILD_DIR}/ls.o" -o "${BUILD_DIR}/ls"
-${OBJCOPY} -O binary "${BUILD_DIR}/ls" "${BUILD_DIR}/ls.bin"
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ls.c" -o "${BUILD_DIR}/ls.o"
+"${LD}" ${LDFLAGS} -Ttext="${USER_ENTRY_POINT}" "${BUILD_DIR}/ls.o" -o "${BUILD_DIR}/ls"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/ls" "${BUILD_DIR}/ls.bin"
 
 # Build cat
 echo "Building cat..."
-${CC} ${CFLAGS} -c "${USERLAND_DIR}/cat.c" -o "${BUILD_DIR}/cat.o"
-${LD} ${LDFLAGS} -Ttext=0xf000 "${BUILD_DIR}/cat.o" -o "${BUILD_DIR}/cat"
-${OBJCOPY} -O binary "${BUILD_DIR}/cat" "${BUILD_DIR}/cat.bin"
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/cat.c" -o "${BUILD_DIR}/cat.o"
+"${LD}" ${LDFLAGS} -Ttext="${USER_ENTRY_POINT}" "${BUILD_DIR}/cat.o" -o "${BUILD_DIR}/cat"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/cat" "${BUILD_DIR}/cat.bin"
 
 # Build hello
 echo "Building hello..."
-${CC} ${CFLAGS} -c "${USERLAND_DIR}/hello.c" -o "${BUILD_DIR}/hello.o"
-${LD} ${LDFLAGS} -Ttext=0xf000 "${BUILD_DIR}/hello.o" -o "${BUILD_DIR}/hello"
-${OBJCOPY} -O binary "${BUILD_DIR}/hello" "${BUILD_DIR}/hello.bin"
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/hello.c" -o "${BUILD_DIR}/hello.o"
+"${LD}" ${LDFLAGS} -Ttext="${USER_ENTRY_POINT}" "${BUILD_DIR}/hello.o" -o "${BUILD_DIR}/hello"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/hello" "${BUILD_DIR}/hello.bin"
 
 # Build signal_test
 echo "Building signal_test..."
-${CC} ${CFLAGS} -c "${USERLAND_DIR}/signal_test.c" -o "${BUILD_DIR}/signal_test.o"
-${LD} ${LDFLAGS} -Ttext=0xf000 "${BUILD_DIR}/signal_test.o" -o "${BUILD_DIR}/signal_test"
-${OBJCOPY} -O binary "${BUILD_DIR}/signal_test" "${BUILD_DIR}/signal_test.bin"
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/signal_test.c" -o "${BUILD_DIR}/signal_test.o"
+"${LD}" ${LDFLAGS} -Ttext="${USER_ENTRY_POINT}" "${BUILD_DIR}/signal_test.o" -o "${BUILD_DIR}/signal_test"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/signal_test" "${BUILD_DIR}/signal_test.bin"
 
 echo "Userland programs built successfully!"

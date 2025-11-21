@@ -7,6 +7,10 @@
 #ifndef KERNEL_CONFIG_H
 #define KERNEL_CONFIG_H
 
+/* ASCII character ranges */
+#define ASCII_PRINTABLE_MIN 32   /* Space character */
+#define ASCII_PRINTABLE_MAX 127  /* DEL character (exclusive) */
+
 // Timer configuration
 // Timer interrupt interval in microseconds
 // 100ms = 100,000 microseconds

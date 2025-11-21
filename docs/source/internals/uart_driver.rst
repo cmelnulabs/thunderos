@@ -625,18 +625,6 @@ Use QEMU's character device to capture output:
    # Check output:
    grep "ThunderOS" output.txt
 
-Performance Measurements
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Measure transmission time:
-
-.. code-block:: c
-
-   uint64_t start = read_time();
-   uart_puts("Test string\\n");
-   uint64_t end = read_time();
-   uint64_t microseconds = (end - start) / TICKS_PER_US;
-
 Debugging
 ---------
 
@@ -670,26 +658,6 @@ GDB Debugging
    (gdb) continue
    (gdb) print/x *(unsigned char*)0x10000005  # Read LSR
    (gdb) x/8xb 0x10000000                     # Examine UART registers
-
-Performance Notes
------------------
-
-Current Performance
-~~~~~~~~~~~~~~~~~~~
-
-At 115200 baud:
-
-* ~11520 bytes/second
-* ~87 microseconds/byte
-* Busy-waiting = 100% CPU usage during I/O
-
-Optimization Strategies
-~~~~~~~~~~~~~~~~~~~~~~~
-
-1. **Batch writes** - send multiple characters before checking status
-2. **Use interrupts** - free CPU while waiting
-3. **DMA transfers** - hardware copies buffer to UART
-4. **Higher baud rate** - 921600 or faster (if supported)
 
 See Also
 --------

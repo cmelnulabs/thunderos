@@ -5,6 +5,7 @@
  */
 
 #include "kernel/syscall.h"
+#include "hal/hal_timer.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
 #include "hal/hal_uart.h"
@@ -186,7 +187,7 @@ uint64_t sys_sbrk(int heap_increment) {
     
     // Don't let heap grow into stack (leave safety margin)
     uint64_t stack_bottom = USER_STACK_TOP - USER_STACK_SIZE;
-    if (new_brk >= stack_bottom - (1024 * 1024)) {  // 1MB safety margin
+    if (new_brk >= stack_bottom - HEAP_STACK_SAFETY_MARGIN) {
         return SYSCALL_ERROR;
     }
     
@@ -302,8 +303,7 @@ uint64_t sys_gettime(void) {
     uint64_t ticks = hal_timer_get_ticks();
     
     // Convert ticks to milliseconds
-    // Assuming 10MHz clock (QEMU default): 10,000 ticks = 1ms
-    return ticks / 10000;
+    return ticks / TICKS_PER_MS;
 }
 
 /**
@@ -509,12 +509,12 @@ uint64_t sys_stat(const char *path, void *statbuf) {
     // Validate path length
     size_t path_len = 0;
     const char *p = path;
-    while (*p && path_len < 4096) {
+    while (*p && path_len < SYSCALL_MAX_PATH) {
         p++;
         path_len++;
     }
     
-    if (path_len == 0 || path_len >= 4096) {
+    if (path_len == 0 || path_len >= SYSCALL_MAX_PATH) {
         return SYSCALL_ERROR;
     }
     
@@ -538,12 +538,12 @@ uint64_t sys_mkdir(const char *path, int mode) {
     // Validate path length
     size_t path_len = 0;
     const char *p = path;
-    while (*p && path_len < 4096) {
+    while (*p && path_len < SYSCALL_MAX_PATH) {
         p++;
         path_len++;
     }
     
-    if (path_len == 0 || path_len >= 4096) {
+    if (path_len == 0 || path_len >= SYSCALL_MAX_PATH) {
         return SYSCALL_ERROR;
     }
     
@@ -565,12 +565,12 @@ uint64_t sys_unlink(const char *path) {
     // Validate path length
     size_t path_len = 0;
     const char *p = path;
-    while (*p && path_len < 4096) {
+    while (*p && path_len < SYSCALL_MAX_PATH) {
         p++;
         path_len++;
     }
     
-    if (path_len == 0 || path_len >= 4096) {
+    if (path_len == 0 || path_len >= SYSCALL_MAX_PATH) {
         return SYSCALL_ERROR;
     }
     
@@ -592,12 +592,12 @@ uint64_t sys_rmdir(const char *path) {
     // Validate path length
     size_t path_len = 0;
     const char *p = path;
-    while (*p && path_len < 4096) {
+    while (*p && path_len < SYSCALL_MAX_PATH) {
         p++;
         path_len++;
     }
     
-    if (path_len == 0 || path_len >= 4096) {
+    if (path_len == 0 || path_len >= SYSCALL_MAX_PATH) {
         return SYSCALL_ERROR;
     }
     
@@ -711,7 +711,7 @@ uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
     // Count arguments
     int argc = 0;
     if (argv) {
-        while (argv[argc] && argc < 256) {
+        while (argv[argc] && argc < SYSCALL_MAX_ARGC) {
             if (!is_valid_user_pointer(argv[argc], 1)) {
                 return SYSCALL_ERROR;
             }

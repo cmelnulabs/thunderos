@@ -78,10 +78,23 @@ ELF Header
 **Key Fields:**
 
 - ``e_ident_magic``: Must be ``0x464C457F`` (bytes: 0x7F, 'E', 'L', 'F')
-- ``e_machine``: ``0xF3`` for RISC-V
+- ``e_machine``: ``0xF3`` (``EM_RISCV``) for RISC-V architecture
 - ``e_entry``: Virtual address to start execution (e.g., ``0x10000``)
 - ``e_phoff``: Byte offset of program header table in file
 - ``e_phnum``: Number of program headers (typically 2-4)
+
+**ELF Machine Types:**
+
+.. code-block:: c
+
+    #define EM_NONE    0    // No machine
+    #define EM_SPARC   2    // SPARC
+    #define EM_X86     3    // Intel x86
+    #define EM_MIPS    8    // MIPS
+    #define EM_ARM     40   // ARM
+    #define EM_X86_64  62   // AMD x86-64
+    #define EM_AARCH64 183  // ARM 64-bit
+    #define EM_RISCV   0xF3 // RISC-V (243 decimal)
 
 **ELF Types:**
 
@@ -89,11 +102,26 @@ ELF Header
 
     #define ET_NONE   0  // No file type
     #define ET_REL    1  // Relocatable file (.o)
-    #define ET_EXEC   2  // Executable file
+    #define ET_EXEC   2  // Executable file (static)
     #define ET_DYN    3  // Shared object file (.so)
     #define ET_CORE   4  // Core dump file
 
-ThunderOS loads ``ET_EXEC`` (statically linked executables).
+ThunderOS loads ``ET_EXEC`` (statically linked executables) only. Dynamic linking (``ET_DYN``) is not yet supported.
+
+**Validation Example:**
+
+.. code-block:: c
+
+    // Validate ELF header
+    if (header->e_ident_magic != ELF_MAGIC) {
+        RETURN_ERRNO(THUNDEROS_EELF_MAGIC);
+    }
+    if (header->e_machine != EM_RISCV) {
+        RETURN_ERRNO(THUNDEROS_EELF_ARCH);  // Wrong architecture
+    }
+    if (header->e_type != ET_EXEC) {
+        RETURN_ERRNO(THUNDEROS_EELF_TYPE);  // Not executable
+    }
 
 Program Header
 ~~~~~~~~~~~~~~

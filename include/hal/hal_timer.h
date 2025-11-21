@@ -14,6 +14,12 @@
 #ifndef HAL_TIMER_H
 #define HAL_TIMER_H
 
+#include <stdint.h>
+
+/* Timer frequency (QEMU virt machine) */
+#define TIMER_FREQ_HZ 10000000  /* 10 MHz */
+#define TICKS_PER_MS  10000     /* Ticks per millisecond at 10MHz */
+
 /**
  * Initialize the timer hardware and start periodic interrupts
  * 

@@ -850,40 +850,20 @@ All allocations are page-aligned (4KB boundaries):
 Future Improvements
 -------------------
 
-Free List Optimization
-~~~~~~~~~~~~~~~~~~~~~~
+Free List
+~~~~~~~~~
 
-Replace linear search with free list for faster allocation:
-
-.. code-block:: text
-
-   free_list_head → page_5 → page_12 → page_20 → NULL
-
-**Benefits:**
-
-* O(1) allocation instead of O(n) linear search
-* Reduced cache misses
-* Better performance under heavy allocation load
+Replace linear search with free list for faster allocation.
 
 Buddy Allocator
 ~~~~~~~~~~~~~~~
 
-Power-of-2 allocation sizes with efficient splitting/coalescing:
-
-.. code-block:: text
-
-   128KB block → split → 64KB + 64KB
-                         ↓
-                     32KB + 32KB + 64KB
+Power-of-2 allocation sizes with efficient splitting/coalescing.
 
 NUMA Awareness
 ~~~~~~~~~~~~~~
 
-Track pages by NUMA node for locality:
-
-.. code-block:: c
-
-   uintptr_t pmm_alloc_page_node(int node_id);
+Track pages by NUMA node for locality.
 
 Page Coloring
 ~~~~~~~~~~~~~
@@ -902,18 +882,17 @@ Current bitmap is fixed at 4KB (32,768 pages = 128MB). For larger systems:
    // TODO: Dynamic bitmap allocation
    // Allocate bitmap from first pages of managed memory
 
-**Linear Search Performance**
+**Linear Search**
 
-Multi-page allocation searches linearly for contiguous blocks. For large allocations or fragmented memory, this can be slow:
-
-* Single page: O(n) worst case
-* Multi-page: O(n × m) where m = num_pages
-
-Consider implementing free list or buddy allocator for better performance.
+Multi-page allocation searches linearly for contiguous blocks.
 
 **No Fragmentation Tracking**
 
 No statistics on fragmentation or largest contiguous block available.
+
+**Linear Search**
+
+Multi-page allocation searches linearly for contiguous blocks.
 
 See Also
 --------

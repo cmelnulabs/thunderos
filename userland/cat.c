@@ -12,6 +12,7 @@
 
 #define AT_FDCWD -100
 #define O_RDONLY 0
+#define READ_BUFFER_SIZE 512
 
 typedef unsigned long size_t;
 typedef long ssize_t;
@@ -43,7 +44,7 @@ static void print(const char *s) {
 }
 
 void _start(void) {
-    char buf[512];
+    char buf[READ_BUFFER_SIZE];
     
     // For now, cat just reads test.txt as a demo
     const char *filename = "test.txt";

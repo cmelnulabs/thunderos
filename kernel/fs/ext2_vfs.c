@@ -179,7 +179,7 @@ static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *e
         if (directory_entry->inode != 0) {
             if (current_index == entry_index) {
                 /* Found the requested entry - copy name and null-terminate */
-                for (uint32_t char_index = 0; char_index < directory_entry->name_len && char_index < 255; char_index++) {
+                for (uint32_t char_index = 0; char_index < directory_entry->name_len && char_index < EXT2_NAME_LEN; char_index++) {
                     entry_name[char_index] = directory_entry->name[char_index];
                 }
                 entry_name[directory_entry->name_len] = '\0';
