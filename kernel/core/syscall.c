@@ -694,6 +694,54 @@ uint64_t sys_munmap(void *addr, size_t length) {
 }
 
 /**
+ * sys_pipe - Create a pipe
+ * 
+ * Creates an anonymous pipe for inter-process communication.
+ * Returns two file descriptors in pipefd array:
+ * - pipefd[0] is the read end
+ * - pipefd[1] is the write end
+ * 
+ * Typical usage with fork():
+ *   int pipefd[2];
+ *   pipe(pipefd);
+ *   if (fork() == 0) {
+ *     // Child: close read end, write to pipe
+ *     close(pipefd[0]);
+ *     write(pipefd[1], "hello", 5);
+ *   } else {
+ *     // Parent: close write end, read from pipe
+ *     close(pipefd[1]);
+ *     read(pipefd[0], buf, sizeof(buf));
+ *   }
+ * 
+ * @param pipefd Array of 2 integers to receive file descriptors
+ * @return 0 on success, -1 on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid pipefd pointer
+ * @errno THUNDEROS_EMFILE - Too many open files
+ * @errno THUNDEROS_ENOMEM - Failed to allocate pipe buffer
+ */
+uint64_t sys_pipe(int pipefd[2]) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Validate user pointer
+    if (!pipefd || !process_validate_user_ptr(proc, pipefd, sizeof(int) * 2, VM_WRITE)) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Create the pipe through VFS
+    if (vfs_create_pipe(pipefd) != 0) {
+        // errno already set by vfs_create_pipe
+        return SYSCALL_ERROR;
+    }
+    
+    return SYSCALL_SUCCESS;
+}
+
+/**
  * sys_execve - Execute program from filesystem
  * 
  * @param path Path to executable
@@ -834,6 +882,10 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_MUNMAP:
             return_value = sys_munmap((void *)argument0, (size_t)argument1);
+            break;
+            
+        case SYS_PIPE:
+            return_value = sys_pipe((int *)argument0);
             break;
             
         case SYS_FORK:

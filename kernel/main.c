@@ -17,6 +17,7 @@
 #include "kernel/config.h"
 #include "kernel/syscall.h"
 #include "kernel/shell.h"
+#include "kernel/pipe.h"
 #include "drivers/virtio_blk.h"
 #include "fs/ext2.h"
 #include "fs/vfs.h"
@@ -197,6 +198,10 @@ void kernel_main(void) {
     
     // Initialize scheduler
     scheduler_init();
+    
+    // Initialize pipe subsystem
+    pipe_init();
+    hal_uart_puts("[OK] Pipe subsystem initialized\n");
     
 #ifdef ENABLE_KERNEL_TESTS
     // Run memory isolation tests (after process system is initialized)

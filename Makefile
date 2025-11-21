@@ -149,6 +149,9 @@ $(FS_IMG): userland
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"
+	@cp userland/build/signal_test $(BUILD_DIR)/testfs/bin/signal_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) signal_test not built"
+	@cp userland/build/pipe_test $(BUILD_DIR)/testfs/bin/pipe_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_test not built"
+	@cp userland/build/pipe_simple_test $(BUILD_DIR)/testfs/bin/pipe_simple_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_simple_test not built"
 	@if command -v mkfs.ext2 >/dev/null 2>&1; then \
 		mkfs.ext2 -F -q -d $(BUILD_DIR)/testfs $(FS_IMG) $(FS_SIZE) 2>&1 | grep -v "^mke2fs" | grep -v "^Creating" | grep -v "^Allocating" | grep -v "^Writing" | grep -v "^Copying" || true; \
 		rm -rf $(BUILD_DIR)/testfs; \

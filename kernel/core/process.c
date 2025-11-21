@@ -903,6 +903,38 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->exit_code = 0;
     proc->errno_value = 0;
     
+    // Setup memory isolation (VMAs for validation)
+    if (process_setup_memory_isolation(proc) != 0) {
+        free_page_table(proc->page_table);
+        kfree((void *)proc->kernel_stack);
+        kfree(proc->trap_frame);
+        process_free(proc);
+        /* errno already set by process_setup_memory_isolation */
+        return NULL;
+    }
+    
+    // Add VMAs for code segment
+    if (process_add_vma(proc, code_base, code_base + code_size, 
+                       VM_READ | VM_WRITE | VM_EXEC | VM_USER) != 0) {
+        process_cleanup_vmas(proc);
+        free_page_table(proc->page_table);
+        kfree((void *)proc->kernel_stack);
+        kfree(proc->trap_frame);
+        process_free(proc);
+        return NULL;
+    }
+    
+    // Add VMA for stack segment
+    if (process_add_vma(proc, stack_base_vaddr, USER_STACK_TOP,
+                       VM_READ | VM_WRITE | VM_USER | VM_GROWSDOWN) != 0) {
+        process_cleanup_vmas(proc);
+        free_page_table(proc->page_table);
+        kfree((void *)proc->kernel_stack);
+        kfree(proc->trap_frame);
+        process_free(proc);
+        return NULL;
+    }
+    
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
     scheduler_enqueue(proc);

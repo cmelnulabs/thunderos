@@ -8,7 +8,7 @@ System calls (syscalls) provide the interface between user-space programs and th
 
 **Current Status:**
 
-ThunderOS v0.4.0 implements **24 system calls** covering process management, I/O, filesystem operations, signals, and memory management.
+ThunderOS v0.4.0 implements **25 system calls** covering process management, I/O, filesystem operations, signals, memory management, and inter-process communication.
 
 **Key Features:**
 
@@ -1221,6 +1221,100 @@ Unmap a previously mapped memory region.
 3. Frees physical pages
 4. Removes VMA from process
 5. Flushes TLB
+
+sys_pipe (26)
+~~~~~~~~~~~~~
+
+**Prototype:**
+
+.. code-block:: c
+
+   int sys_pipe(int pipefd[2]);
+
+**Description:**
+
+Creates an anonymous pipe for inter-process communication. The pipe provides unidirectional data flow with a 4KB circular buffer.
+
+Returns two file descriptors:
+
+- ``pipefd[0]``: Read end of the pipe
+- ``pipefd[1]``: Write end of the pipe
+
+Data written to the write end can be read from the read end. Pipes are typically used after ``fork()`` to enable parent-child communication or to implement shell pipelines.
+
+**Parameters:**
+
+- ``pipefd[2]``: Array to receive the two file descriptors
+
+**Return Value:**
+
+- ``0`` on success
+- ``-1`` on error (check ``errno``)
+
+**Error Codes:**
+
+.. code-block:: c
+
+   THUNDEROS_EINVAL  // Invalid pipefd pointer
+   THUNDEROS_EMFILE  // Too many open files (FD table full)
+   THUNDEROS_ENOMEM  // Failed to allocate pipe buffer
+
+**Example:**
+
+.. code-block:: c
+
+   #define SYS_PIPE 26
+   
+   int pipe(int pipefd[2]) {
+       register long a0 asm("a0") = (long)pipefd;
+       register long a7 asm("a7") = SYS_PIPE;
+       asm volatile("ecall" : "+r"(a0) : "r"(a7) : "memory");
+       return a0;
+   }
+   
+   // Parent-child communication
+   int pipefd[2];
+   pipe(pipefd);
+   
+   if (fork() == 0) {
+       // Child: reads from parent
+       close(pipefd[1]);  // Close write end
+       char buf[256];
+       read(pipefd[0], buf, sizeof(buf));
+       close(pipefd[0]);
+   } else {
+       // Parent: writes to child
+       close(pipefd[0]);  // Close read end
+       write(pipefd[1], "Hello child!", 12);
+       close(pipefd[1]);
+   }
+
+**Implementation:**
+
+1. Validates user pointer against process VMAs (writable)
+2. Allocates pipe structure (4KB circular buffer)
+3. Allocates two file descriptors from VFS
+4. Initializes read end (``pipefd[0]``, ``O_RDONLY``)
+5. Initializes write end (``pipefd[1]``, ``O_WRONLY``)
+6. Returns file descriptors to userspace
+
+**Pipe Behavior:**
+
+- **Reading from empty pipe (write end open)**: Returns ``-EAGAIN`` (non-blocking)
+- **Reading from empty pipe (write end closed)**: Returns ``0`` (EOF)
+- **Writing to full pipe**: Returns ``-EAGAIN`` (non-blocking)
+- **Writing with read end closed**: Returns ``-EPIPE`` (broken pipe)
+
+**Buffer Size:**
+
+.. code-block:: c
+
+   #define PIPE_BUF_SIZE 4096  // 4KB circular buffer
+
+**See Also:**
+
+- :doc:`pipes` - Complete pipe implementation documentation
+- :doc:`vfs` - Virtual Filesystem integration
 
 Future Syscalls
 ---------------

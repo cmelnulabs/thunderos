@@ -46,4 +46,16 @@ echo "Building signal_test..."
 "${LD}" ${LDFLAGS} -Ttext="${USER_ENTRY_POINT}" "${BUILD_DIR}/signal_test.o" -o "${BUILD_DIR}/signal_test"
 "${OBJCOPY}" -O binary "${BUILD_DIR}/signal_test" "${BUILD_DIR}/signal_test.bin"
 
+# Build pipe_test
+echo "Building pipe_test..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/pipe_test.c" -o "${BUILD_DIR}/pipe_test.o"
+"${LD}" ${LDFLAGS} -Ttext="${USER_ENTRY_POINT}" "${BUILD_DIR}/pipe_test.o" -o "${BUILD_DIR}/pipe_test"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/pipe_test" "${BUILD_DIR}/pipe_test.bin"
+
+# Build pipe_simple_test
+echo "Building pipe_simple_test..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/pipe_simple_test.c" -o "${BUILD_DIR}/pipe_simple_test.o"
+"${LD}" ${LDFLAGS} -Ttext="${USER_ENTRY_POINT}" "${BUILD_DIR}/pipe_simple_test.o" -o "${BUILD_DIR}/pipe_simple_test"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/pipe_simple_test" "${BUILD_DIR}/pipe_simple_test.bin"
+
 echo "Userland programs built successfully!"
