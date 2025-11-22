@@ -5,6 +5,7 @@
  */
 
 #include "kernel/syscall.h"
+#include "kernel/errno.h"
 #include "hal/hal_timer.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
@@ -135,8 +136,10 @@ uint64_t sys_waitpid(int pid, int *wstatus, int options) {
             return SYSCALL_ERROR;
         }
         
-        // Child exists but hasn't exited yet - yield and try again
+        // Child exists but hasn't exited yet - sleep and try again
+        current->state = PROC_SLEEPING;
         scheduler_yield();
+        current->state = PROC_RUNNING;
     }
 }
 
@@ -742,6 +745,50 @@ uint64_t sys_pipe(int pipefd[2]) {
 }
 
 /**
+ * sys_fork - Create a child process
+ * 
+ * Creates a complete copy of the current process with its own address space.
+ * Both processes continue execution after fork() returns, with different return values:
+ * - Parent receives child PID
+ * - Child receives 0
+ * 
+ * The child process gets:
+ * - Copy of all memory pages (code, data, stack, heap)
+ * - Copy of all VMAs (virtual memory areas)
+ * - Copy of all open file descriptors
+ * - Separate page table (memory isolation)
+ * - Same instruction pointer (continues from fork() call)
+ * 
+ * @return Child PID in parent process, 0 in child process, -1 on error
+ * 
+ * @errno THUNDEROS_EINVAL - No current process
+ * @errno THUNDEROS_EAGAIN - Process table full
+ * @errno THUNDEROS_ENOMEM - Out of memory
+ * 
+ * Example:
+ *   pid_t pid = fork();
+ *   if (pid < 0) {
+ *     // Error
+ *   } else if (pid == 0) {
+ *     // Child process
+ *   } else {
+ *     // Parent process (pid = child's PID)
+ *   }
+ */
+uint64_t sys_fork(void) {
+    struct process *current = process_current();
+    if (!current) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    // Call kernel fork implementation
+    pid_t child_pid = process_fork();
+    
+    // Return child PID to parent, or -1 on error (errno already set)
+    return child_pid;
+}
+
+/**
  * sys_execve - Execute program from filesystem
  * 
  * @param path Path to executable
@@ -889,6 +936,9 @@ uint64_t syscall_handler(uint64_t syscall_number,
             break;
             
         case SYS_FORK:
+            return_value = sys_fork();
+            break;
+            
         case SYS_EXEC:
             return_value = SYSCALL_ERROR;
             break;

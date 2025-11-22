@@ -7,6 +7,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-11-21 - "Communication"
+
+### Overview
+Fifth release of ThunderOS. Implements inter-process communication through signals and pipes, plus process forking for true multi-process execution. This milestone enables processes to communicate, coordinate, and create child processes - fundamental building blocks for Unix-like process management.
+
+### Added
+
+#### Signal System (`kernel/core/signal.c`, `include/kernel/signal.h`)
+- **Signal Infrastructure**:
+  - Per-process signal masks (pending, blocked)
+  - Signal handler registration (user-space function pointers)
+  - Signal delivery via trap frame modification
+  - Signal handling before return to user mode
+- **Core Signals**:
+  - `SIGKILL` (9) - Terminate process (cannot be caught)
+  - `SIGTERM` (15) - Graceful termination request
+  - `SIGCHLD` (17) - Child process state change notification
+  - `SIGSTOP` (19) - Stop/pause process (cannot be caught)
+  - `SIGCONT` (18) - Continue stopped process
+  - `SIGUSR1` (10), `SIGUSR2` (12) - User-defined signals
+- **System Calls**:
+  - `sys_kill(pid, signal)` - Send signal to process
+  - `sys_signal(signum, handler)` - Register signal handler
+  - `sys_sigaction()`, `sys_sigreturn()` - Advanced signal handling (stubs)
+- **Process Integration**:
+  - SIGCHLD automatically sent to parent on child exit
+  - Signal handlers execute in user space
+  - Signal delivery integrated with trap handling
+
+#### Pipe System (`kernel/core/pipe.c`, `include/kernel/pipe.h`)
+- **Pipe Implementation**:
+  - Anonymous pipes for IPC
+  - 4KB circular buffer per pipe
+  - Non-blocking read/write operations
+  - Reference counting for lifecycle management
+  - EOF detection when write end closed
+- **System Call**:
+  - `sys_pipe(pipefd[2])` - Create pipe with read/write file descriptors
+- **VFS Integration**:
+  - Pipes exposed as file descriptors
+  - Read/write operations via VFS layer
+  - Proper cleanup when file descriptors closed
+
+#### Process Forking (`kernel/core/process.c`)
+- **Fork Implementation**:
+  - `sys_fork()` - Create child process as copy of parent
+  - Complete process state duplication:
+    * Independent page tables with kernel mappings
+    * All VMAs copied with permissions
+    * Physical memory pages duplicated
+    * Register state copied via trap frame
+- **Memory Isolation**:
+  - Each child gets own page table
+  - Physical pages copied (not shared)
+  - VMAs duplicated independently
+  - Full memory isolation between parent and child
+- **Return Values**:
+  - Parent process receives child PID (> 0)
+  - Child process receives 0
+  - Distinguishes execution paths
+- **Scheduler Integration**:
+  - Child added to ready queue in `PROC_READY` state
+  - Parent and child execute concurrently
+  - Proper context switching between processes
+- **Critical Bug Fixes**:
+  - **Trap frame lifecycle**: Updated `proc->trap_frame` to point to current trap frame before syscalls
+  - **Return address**: Child's `sepc` advanced by 4 to skip past `ecall` instruction
+  - **Page table switching**: Moved to after `context_switch_asm()` completes to avoid crashes
+  - **waitpid blocking**: Set `PROC_SLEEPING` state before yield to properly block parent
+
+#### Process Sleeping State
+- **PROC_SLEEPING State**:
+  - New process state for blocking operations
+  - Processes in PROC_SLEEPING not enqueued in scheduler
+  - Used by `waitpid()` to block parent until child exits
+  - Foundation for future blocking I/O operations
+- **Enhanced waitpid()**:
+  - Properly blocks parent when child hasn't exited
+  - Sets `current->state = PROC_SLEEPING` before yield
+  - Restores `PROC_RUNNING` after wake
+  - Prevents parent from monopolizing CPU
+
+#### Documentation
+- **Syscalls Documentation** (`docs/source/internals/syscalls.rst`):
+  - Added comprehensive `sys_fork()` documentation
+  - Added `sys_pipe()` documentation
+  - Updated syscall count from 25 to 27
+  - Detailed implementation notes and examples
+- **Updated Roadmap** (`ROADMAP.md`):
+  - v0.5.0 marked as in-progress
+  - Fork, signals, and pipes listed as completed
+  - Future versions renumbered
+
+### Changed
+- **Process Creation**:
+  - `forked_child_entry()` - New entry point for child's first execution
+  - Sets up `sscratch` for trap handling
+  - Calls `user_return()` to restore all registers and return to user mode
+- **Context Switching**:
+  - Page table switch moved to AFTER `context_switch_asm()` completes
+  - Prevents instruction page faults during switch
+  - Safer execution with new process's kernel stack
+- **Trap Handling** (`kernel/arch/riscv64/core/trap.c`):
+  - Updates `proc->trap_frame` pointer before calling syscall handler
+  - Ensures fork copies CURRENT trap state, not stale data
+  - Critical for correct child return address
+
+### Fixed
+- **Scheduler Bugs**:
+  - Fixed `waitpid()` not setting PROC_SLEEPING, causing parent to monopolize CPU
+  - Child processes now properly scheduled after fork
+- **Memory Bugs**:
+  - Fixed page table switching timing (moved after context switch)
+  - Fixed stale trap frame copying in fork
+  - Fixed child return address (sepc now points past ecall)
+- **Context Switch Crashes**:
+  - Eliminated instruction page faults during page table switching
+  - Fixed by switching page tables after returning from assembly routine
+
+### Testing
+- **Test Programs**:
+  - `signal_test` - Validates signal delivery and handling
+  - `pipe_test` - Tests pipe communication between processes
+  - `fork_test` - Tests process forking and parent-child execution
+- **Validation**:
+  - Signals delivered and handled correctly
+  - Pipes create and transfer data successfully
+  - Fork creates isolated child processes
+  - Parent receives child PID, child receives 0
+  - Child executes from correct return point
+  - Scheduler switches between processes properly
+  - waitpid() blocks parent until child exits
+
+### Known Limitations
+- **Pipe Blocking**: Pipes are non-blocking (return EAGAIN when empty/full)
+  - Proper blocking I/O requires wait queue implementation
+  - Deferred to v0.10.0 "Synchronization" release
+- **File Descriptor Inheritance**: Child processes don't inherit parent's FDs
+- **Signal Handling**: No signal handler inheritance in child processes
+
+## [Unreleased - Pre-v0.5.0]
+
 ### Added
 
 #### Memory Isolation (`kernel/core/process.c`, `kernel/core/syscall.c`, `kernel/mm/paging.c`)

@@ -80,6 +80,14 @@ static void handle_exception(struct trap_frame *tf, unsigned long cause) {
     if (cause == CAUSE_USER_ECALL) {
         // System call - pass syscall number and arguments from trap frame directly
         
+        // CRITICAL: Update current process's trap_frame pointer to point to THIS trap frame!
+        // This ensures syscalls like fork() can access the CURRENT trap state, not an old one.
+        extern struct process *process_current(void);
+        struct process *proc = process_current();
+        if (proc) {
+            proc->trap_frame = tf;
+        }
+        
         // Call syscall handler
         uint64_t ret = syscall_handler(tf->a7, tf->a0, tf->a1, tf->a2, tf->a3, tf->a4, tf->a5);
         

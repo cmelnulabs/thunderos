@@ -199,25 +199,55 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
   - ✅ Signal handling before return to user mode
   - ✅ SIGCHLD sent to parent on child exit
   - ✅ Signal handlers execute in user space
-- ✅ Test program
+- ✅ Pipes for IPC
+  - ✅ `sys_pipe()` - Create pipe with read/write file descriptors
+  - ✅ Circular buffer implementation (4KB)
+  - ✅ Non-blocking read/write operations
+  - ✅ Reference counting for pipe lifecycle management
+  - ✅ EOF detection when write end closed
+  - ✅ Integration with VFS layer
+- ✅ Fork system call implementation
+  - ✅ `sys_fork()` - Create child process
+  - ✅ Complete process state duplication (page tables, VMAs, trap frame)
+  - ✅ Memory isolation with independent page tables
+  - ✅ Physical memory copying for isolation
+  - ✅ Parent-child relationship (child returns 0, parent gets PID)
+  - ✅ Correct return address after fork (sepc management)
+  - ✅ Scheduler enhancements (PROC_SLEEPING state)
+  - ✅ `waitpid()` blocks parent until child exits
+- ✅ Test programs
   - ✅ `signal_test` - Validates signal delivery and handling
+  - ✅ `pipe_test` - Tests pipe communication between processes
+  - ✅ `fork_test` - Tests process forking
 
-### Planned Features
-- [ ] Pipes for IPC
-- [ ] Shared memory support
-- [ ] VirtIO network driver
-- [ ] Basic TCP/IP stack (port lwIP or custom)
-- [ ] Socket API (socket, bind, listen, connect, send, recv)
-- [ ] Simple network utilities (ping, wget)
+### Completed Features (for v0.5.0)
+- ✅ Documentation updates (syscalls.rst, process management docs)
+- ✅ Clean up debug output from fork implementation
+- ✅ CHANGELOG.md entry for v0.5.0
+- ✅ Final testing and validation
+
+### Testing Completed
+- ✅ Signals delivered and handled correctly
+- ✅ SIGKILL terminates processes reliably
+- ✅ SIGCHLD sent to parent on child exit
+- ✅ Signal handlers execute in user space
+- ✅ Pipes created and data transferred successfully
+- ✅ Pipe EOF handling works correctly
+- ✅ Fork creates child successfully with memory isolation
+- ✅ Parent receives child PID, child receives 0
+- ✅ Child executes from correct return point
+- ✅ Scheduler switches between parent and child correctly
 
 **Release Criteria:**
 - ✅ Processes can send and receive signals
 - ✅ SIGKILL terminates processes reliably
 - ✅ SIGCHLD notifies parent of child termination
 - ✅ Signal handlers execute in user space
-- [ ] Processes can communicate via pipes
-- [ ] Basic networking works (ping, simple HTTP)
-- [ ] Can download files from network
+- ✅ Processes can communicate via pipes
+- ✅ Fork system call works reliably
+- ✅ Documentation complete
+- ✅ Debug output cleaned up
+- ✅ CHANGELOG.md updated
 
 ---
 
@@ -242,51 +272,91 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.7.0 - "POSIX Lite"
+## Version 0.7.0 - "Processes"
 
-**Focus:** POSIX compatibility basics
+**Focus:** Advanced process management and POSIX compatibility
 
 ### Planned Features
-- [ ] Fork and exec implementation
-- [ ] Wait/waitpid for process management
+- [ ] Exec system call (load and execute new program)
 - [ ] Process groups and sessions
 - [ ] Job control (background/foreground processes)
+- [ ] Enhanced error handling with errno throughout
+- [ ] Process resource limits
+
+**Release Criteria:**
+- Fork + exec can run new programs
+- Process groups functional
+- Job control basics working
+- Can run complex multi-process programs
+
+---
+
+## Version 0.8.0 - "Shell"
+
+**Focus:** Shell features and scripting
+
+### Planned Features
 - [ ] Environment variables
 - [ ] Expanded syscall set (50+ syscalls)
-- [ ] Basic POSIX signals implementation
+- [ ] Working directory (chdir, getcwd)
+- [ ] File permissions and ownership
 - [ ] Simple shell scripting support
+- [ ] Shell builtins (cd, export, etc.)
+- [ ] Pipes in shell syntax (cmd1 | cmd2)
+- [ ] I/O redirection (>, <, >>)
 
 **Release Criteria:**
 - Can run simple POSIX programs
 - Basic shell scripts execute
 - Process tree management works
-- Job control functional
+- Shell features functional
 
 ---
 
-## Version 0.8.0 - "Tools"
+## Version 0.9.0 - "Tools"
 
 **Focus:** Development environment
 
 ### Planned Features
-- [ ] Full ELF loader implementation
 - [ ] Dynamic linking support
+- [ ] Shared libraries (libc)
 - [ ] Simple text editor (nano-like)
 - [ ] Embedded compiler/interpreter (TinyCC or Lua)
 - [ ] GDB stub for debugging
 - [ ] Developer utilities (make, grep, sed)
+- [ ] Networking basics (VirtIO network, lwIP)
 
 **Release Criteria:**
 - Can compile and run programs on ThunderOS
 - Self-hosting capability (compile kernel on itself)
 - Developer tools available and working
 - Debugging support functional
+- Basic networking operational
 
 ---
 
-## Version 0.9.0 - "Performance"
+## Version 0.10.0 - "Synchronization"
 
-**Focus:** Optimization and stability
+**Focus:** Blocking I/O and synchronization primitives
+
+### Planned Features
+- [ ] Wait queues for blocking I/O (pipe, network, disk)
+- [ ] Mutexes and semaphores
+- [ ] Condition variables
+- [ ] Reader-writer locks
+- [ ] Proper wakeup mechanisms for sleeping processes
+
+**Release Criteria:**
+- Blocking I/O works properly with wakeup mechanisms
+- Pipes block readers when empty, writers when full
+- Mutex/semaphore primitives functional
+- No busy-waiting in kernel
+
+---
+
+## Version 0.11.0 - "Performance"
+
+**Focus:** Optimization and multi-core support
 
 ### Planned Features
 - [ ] Advanced scheduling (CFS-like algorithm)
@@ -298,14 +368,14 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - [ ] Performance benchmarks
 
 **Release Criteria:**
-- Significant performance improvements over v0.8
+- Significant performance improvements
 - Stable under stress tests
 - Can utilize multiple CPU cores
 - Benchmarks show competitive performance
 
 ---
 
-## Version 0.10.0 - "Hardware Ready"
+## Version 0.12.0 - "Hardware Ready"
 
 **Focus:** Real hardware support
 
@@ -398,16 +468,18 @@ See `CONTRIBUTING.md` for details on how to contribute to ThunderOS development.
 
 Interested in contributing? Here's where we need help:
 
-### For v0.3 (Current)
-- DMA allocator implementation
-- Address translation (virt-to-phys)
-- Memory barriers for device I/O
-- Enhanced paging support
+### For v0.5 (Current)
+- Documentation for signals, pipes, and fork
+- Clean up debug output
+- Final testing and validation
+- CHANGELOG.md updates
 
-### For v0.4+ (Future)
-- Driver development (storage, network, graphics)
+### For v0.6+ (Future)
+- Graphics drivers (VirtIO GPU, framebuffer)
+- Exec system call and process groups
+- Wait queues for blocking I/O
+- Network drivers (VirtIO network)
 - User-space utilities and programs
-- Documentation and tutorials
 - Testing on real RISC-V hardware
 
 See the [Issues](https://github.com/cmelnu/thunderos/issues) page for specific tasks.

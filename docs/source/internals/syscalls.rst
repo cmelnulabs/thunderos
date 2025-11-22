@@ -8,7 +8,7 @@ System calls (syscalls) provide the interface between user-space programs and th
 
 **Current Status:**
 
-ThunderOS v0.4.0 implements **25 system calls** covering process management, I/O, filesystem operations, signals, memory management, and inter-process communication.
+ThunderOS v0.5.0 implements **27 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, and process creation.
 
 **Key Features:**
 
@@ -1315,6 +1315,165 @@ Data written to the write end can be read from the read end. Pipes are typically
 
 - :doc:`pipes` - Complete pipe implementation documentation
 - :doc:`vfs` - Virtual Filesystem integration
+
+sys_fork (7)
+~~~~~~~~~~~~
+
+**Prototype:**
+
+.. code-block:: c
+
+   pid_t sys_fork(void);
+
+**Description:**
+
+Creates a new child process by duplicating the calling process. The child process is an exact copy of the parent with:
+
+- **Separate memory space**: Child has its own page table with copied physical pages
+- **Separate VMAs**: Virtual memory areas are duplicated to maintain isolation
+- **Copied registers**: All registers including PC are duplicated
+- **Independent execution**: Child and parent execute concurrently
+
+The child starts executing from the instruction immediately after the ``fork()`` call, with the same state as the parent except for the return value.
+
+**Parameters:**
+
+- None
+
+**Return Value:**
+
+- **Parent process**: Returns child's PID (> 0)
+- **Child process**: Returns ``0``
+- **Error**: Returns ``-1`` (check ``errno``)
+
+**Error Codes:**
+
+.. code-block:: c
+
+   THUNDEROS_ENOMEM    // Failed to allocate memory for child
+   THUNDEROS_EINVAL    // No current process (should never happen)
+
+**Example:**
+
+.. code-block:: c
+
+   #define SYS_FORK 7
+   
+   pid_t fork(void) {
+       register long a0 asm("a0");
+       register long a7 asm("a7") = SYS_FORK;
+       asm volatile("ecall" : "=r"(a0) : "r"(a7) : "memory");
+       return a0;
+   }
+   
+   // Parent-child execution
+   pid_t pid = fork();
+   
+   if (pid == 0) {
+       // Child process
+       puts("I am the child\n");
+       exit(0);
+   } else if (pid > 0) {
+       // Parent process
+       puts("I am the parent, child PID = ");
+       print_number(pid);
+       waitpid(pid, NULL, 0);  // Wait for child
+   } else {
+       // Error
+       puts("fork failed\n");
+       exit(1);
+   }
+
+**Implementation:**
+
+1. **Allocate new PCB**: Create new process structure with unique PID
+2. **Copy page table**: Create independent page table with kernel mappings
+3. **Copy VMAs**: Duplicate all virtual memory areas (code, data, heap, stack)
+4. **Copy physical memory**: Allocate new physical pages and copy contents
+5. **Copy trap frame**: Duplicate all register values from parent
+6. **Adjust child state**:
+   
+   - Set ``a0`` register to ``0`` (child's return value)
+   - Advance ``sepc`` by 4 to skip past ``ecall`` instruction
+   - Set state to ``PROC_READY``
+
+7. **Initialize kernel context**:
+   
+   - Allocate kernel stack for child
+   - Set entry point to ``forked_child_entry()``
+   - Zero all saved registers (s0-s11)
+
+8. **Enqueue child**: Add child to scheduler's ready queue
+9. **Return child PID to parent**
+
+**Memory Isolation:**
+
+Fork provides complete memory isolation through:
+
+- **Independent page tables**: Each process has its own virtual address space
+- **Physical memory copies**: All writable pages are duplicated, not shared
+- **VMA duplication**: Virtual memory areas track permissions independently
+- **Copy-on-write semantics**: Implemented via initial full copy
+
+**Scheduler Integration:**
+
+After fork:
+
+1. Parent continues execution with child PID as return value
+2. Child is added to ready queue in ``PROC_READY`` state
+3. Scheduler will eventually pick child to run
+4. Child begins execution at instruction after ``ecall``
+5. Both processes run concurrently based on scheduling policy
+
+**Trap Frame Management:**
+
+Critical implementation detail - the trap frame must be handled carefully:
+
+.. code-block:: c
+
+   // In trap handler (before syscall)
+   proc->trap_frame = tf;  // Update to point to CURRENT trap frame
+   
+   // In process_fork()
+   child->trap_frame = kmalloc(sizeof(struct trap_frame));
+   kmemcpy(child->trap_frame, parent->trap_frame, sizeof(struct trap_frame));
+   child->trap_frame->a0 = 0;      // Child returns 0
+   child->trap_frame->sepc += 4;   // Skip past ecall
+
+This ensures:
+
+- Child copies the parent's **current** syscall state, not stale data
+- Child returns to the correct instruction (after ``ecall``)
+- Child has proper return value (0 vs parent's child PID)
+
+**Use Cases:**
+
+1. **Process creation**: Spawn new processes for concurrent work
+2. **Shell job control**: Run commands in child processes
+3. **IPC setup**: Create child and establish pipe communication
+4. **Server model**: Accept connections and fork to handle each client
+
+**Performance Considerations:**
+
+- **Memory overhead**: Each fork copies all writable pages (no COW yet)
+- **Page table overhead**: Each process maintains independent page tables
+- **Context switch cost**: Scheduler switches between processes
+
+Future optimization: Implement true copy-on-write to reduce memory duplication.
+
+**Limitations:**
+
+- No file descriptor inheritance (each process has independent FD table)
+- No signal handling inheritance (child starts with default signal handlers)
+- Parent-child relationship tracked but no process groups yet
+
+**See Also:**
+
+- :doc:`process` - Process management implementation
+- :doc:`scheduler` - Process scheduling
+- :doc:`memory` - Virtual memory and paging
+- ``sys_waitpid`` - Wait for child to terminate
+- ``sys_execve`` - Replace process image with new program
 
 Future Syscalls
 ---------------

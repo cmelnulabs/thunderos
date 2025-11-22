@@ -67,6 +67,7 @@ uint64_t sys_getpid(void);
 uint64_t sys_sbrk(int increment);
 uint64_t sys_sleep(uint64_t ms);
 uint64_t sys_yield(void);
+uint64_t sys_fork(void);
 uint64_t sys_getppid(void);
 uint64_t sys_kill(int pid, int signal);
 uint64_t sys_gettime(void);
