@@ -4,16 +4,16 @@ A RISC-V operating system focused on AI acceleration and educational use.
 
 ## Current Status
 
-**Version 0.4.0 - "Persistence"** 🎯 Released!
+**Version 0.6.0 - "User Shell"** 🎯 Released!
 
-- ✅ **v0.4.0 Released** - Persistent storage with VirtIO and ext2
-- ✅ VirtIO block device driver (modern MMIO interface)
-- ✅ ext2 filesystem with read/write support
-- ✅ Virtual Filesystem (VFS) abstraction layer
-- ✅ ELF64 loader for executing programs from disk
-- ✅ Interactive shell with ls, cat, and program execution
-- ✅ **Memory isolation** - Per-process page tables, VMAs, isolated heaps
-- 🚧 **Next**: Inter-process communication and networking (v0.5.0)
+- ✅ **v0.6.0 Released** - User-mode shell with fork+exec
+- ✅ User-mode shell (ush) running from filesystem
+- ✅ Fork+exec process model for launching programs
+- ✅ Directory operations (mkdir, rmdir, cd, pwd)
+- ✅ File operations (touch, rm, cat, ls)
+- ✅ 9 userland utilities available
+- ✅ 32 system calls implemented
+- 🚧 **Next**: Graphics and virtual terminals (v0.7.0)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.
 

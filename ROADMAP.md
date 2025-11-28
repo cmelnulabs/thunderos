@@ -251,9 +251,9 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.6.0 - "User Shell" 🚧 IN PROGRESS
+## Version 0.6.0 - "User Shell" ✅ RELEASED
 
-**Status:** In Development (started November 28, 2025)
+**Status:** Released on November 28, 2025
 
 **Focus:** User-mode shell and process execution
 
@@ -272,7 +272,7 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
   - ✅ `sys_getdents()` - Read directory entries
 - ✅ File operations
   - ✅ `sys_unlink()` - Remove file
-- ✅ User-mode shell (ush v0.8.0)
+- ✅ User-mode shell (ush)
   - ✅ Runs entirely in user space
   - ✅ Fork+exec for external commands
   - ✅ Shell builtins: cd, pwd, mkdir, rmdir, clear, echo, help, exit
@@ -287,24 +287,23 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
   - ✅ rm - Remove file
   - ✅ clear - Clear screen
   - ✅ sleep - Sleep for seconds
-
-### Remaining Features
-- [ ] Relative path resolution in VFS (cd .., cd subdir)
-- [ ] Command history (up/down arrows)
-- [ ] Tab completion
+- ✅ Test infrastructure improvements
+  - ✅ CI-friendly test runner with non-interactive mode
+  - ✅ Clean code standards applied to kernel/main.c
+  - ✅ Improved build scripts with visual output
 
 ### Testing Completed
 - ✅ Fork+exec works reliably
 - ✅ Shell commands execute correctly
 - ✅ Directory navigation works (absolute paths)
 - ✅ File/directory creation and removal works
+- ✅ All CI tests passing
 
 **Release Criteria:**
 - ✅ User-mode shell runs from filesystem
 - ✅ Fork+exec launches programs
 - ✅ Basic shell builtins work
 - ✅ Userland utilities operational
-- [ ] Relative path support
 
 ---
 
@@ -334,15 +333,17 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 **Focus:** POSIX compatibility and advanced shell features
 
 ### Planned Features
+- [ ] Relative path resolution in VFS (cd .., cd subdir, ./program)
 - [ ] Environment variables
 - [ ] Expanded syscall set (50+ syscalls)
-- [ ] Relative path resolution throughout VFS
 - [ ] File permissions and ownership
 - [ ] Simple shell scripting support
 - [ ] Process groups and sessions
 - [ ] Job control (background/foreground processes)
 - [ ] Pipes in shell syntax (cmd1 | cmd2)
 - [ ] I/O redirection (>, <, >>)
+- [ ] Command history (up/down arrows)
+- [ ] Tab completion
 
 **Release Criteria:**
 - Can run simple POSIX programs

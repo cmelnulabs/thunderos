@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-11-28 - "User Shell"
+
+### Overview
+Sixth release of ThunderOS. Implements a fully functional user-mode shell with fork+exec process launching, directory operations, and a suite of userland utilities. The shell runs entirely in user space and can execute programs from the ext2 filesystem.
+
+### Added
+
+#### Exec System Call (`kernel/core/process.c`)
+- **sys_exec Implementation**:
+  - Load and execute ELF programs from filesystem
+  - Replace current process image completely
+  - Argument passing support (argv, envp)
+  - Proper memory cleanup before loading new image
+
+#### Working Directory Support
+- **System Calls**:
+  - `sys_chdir(path)` - Change current working directory
+  - `sys_getcwd(buf, size)` - Get current working directory
+- **Per-Process Tracking**:
+  - Each process maintains its own cwd
+  - Inherited by child processes on fork
+
+#### Directory Operations
+- **System Calls**:
+  - `sys_mkdir(path, mode)` - Create new directory
+  - `sys_rmdir(path)` - Remove empty directory
+  - `sys_getdents(fd, buf, count)` - Read directory entries
+- **ext2 Integration**:
+  - Directory creation with proper inode allocation
+  - Directory removal with block deallocation
+  - Efficient directory entry iteration
+
+#### File Operations
+- **System Calls**:
+  - `sys_unlink(path)` - Remove file from filesystem
+- **ext2 Integration**:
+  - Proper inode and block deallocation
+  - Directory entry removal
+
+#### User-Mode Shell (ush)
+- **Shell Features**:
+  - Runs entirely in user space (loaded from /bin/ush)
+  - Fork+exec model for external commands
+  - Command line parsing and argument handling
+- **Built-in Commands**:
+  - `cd <path>` - Change directory
+  - `pwd` - Print working directory
+  - `mkdir <name>` - Create directory
+  - `rmdir <name>` - Remove directory
+  - `clear` - Clear screen
+  - `echo <text>` - Print text
+  - `help` - Show available commands
+  - `exit` - Exit shell
+- **External Commands**:
+  - Executes programs from /bin directory
+  - Supports: ls, cat, hello, and any ELF executable
+
+#### Userland Utilities (`userland/`)
+- **File Utilities**:
+  - `cat` - Display file contents
+  - `touch` - Create empty file
+  - `rm` - Remove file
+- **Directory Utilities**:
+  - `ls` - List directory contents
+  - `pwd` - Print working directory
+  - `mkdir` - Create directory
+  - `rmdir` - Remove directory
+- **System Utilities**:
+  - `clear` - Clear terminal screen
+  - `sleep` - Sleep for specified seconds
+  - `hello` - Test program
+
 ### Changed
 
 #### Test Infrastructure Refactoring
@@ -20,6 +92,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Organized programs into categories (Core Utilities, User Applications, Test Programs)
   - Added build summary with program count and output directory
   - Extracted common build logic into reusable `build_program()` function
+- **CI-friendly test runner**:
+  - Added non-interactive mode for CI environments
+  - Fixed TERM environment variable handling
+  - Simple text output for pipelines
 
 #### Clean Code Standards Applied to kernel/main.c
 - **Extracted helper functions** (all marked `static`):
@@ -41,6 +117,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `g_test_ext2_fs` → `g_root_ext2_fs`
 - **Added forward declarations** after constants section
 - **Initialized all variables** explicitly
+
+### Technical Details
+
+#### Syscall Count
+- Total syscalls: 32 (up from 27 in v0.5.0)
+- New syscalls: sys_exec, sys_chdir, sys_getcwd, sys_mkdir, sys_rmdir
+
+#### Shell Architecture
+- Shell binary loaded from `/bin/ush` on boot
+- Falls back to kernel shell if user shell fails to load
+- Uses fork() to create child process for each command
+- Uses exec() in child to replace with target program
+- Parent waits for child with waitpid()
+
+### Testing
+- ✅ Fork+exec works reliably
+- ✅ Shell commands execute correctly
+- ✅ Directory navigation works (absolute paths)
+- ✅ File/directory creation and removal works
+- ✅ All CI tests passing
+- ✅ Kernel boots and shell launches automatically
 
 ## [0.5.0] - 2025-11-21 - "Communication"
 
