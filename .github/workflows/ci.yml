@@ -57,8 +57,7 @@ jobs:
                      echo 'ERROR: QEMU exited with unexpected code \$EXIT_CODE'; \
                      cat qemu_output.log; \
                      exit 1; \
-                   fi; \
-                   cat qemu_output.log"
+                   fi"
         
         # Display output for debugging
         echo "=== QEMU Output ==="
