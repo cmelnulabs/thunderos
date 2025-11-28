@@ -58,6 +58,13 @@ uint64_t syscall_handler(uint64_t syscall_num,
                         uint64_t arg0, uint64_t arg1, uint64_t arg2,
                         uint64_t arg3, uint64_t arg4, uint64_t arg5);
 
+// Syscall handler with trap frame (for syscalls like fork that need full register state)
+struct trap_frame;
+uint64_t syscall_handler_with_frame(struct trap_frame *tf,
+                                    uint64_t syscall_num, 
+                                    uint64_t arg0, uint64_t arg1, uint64_t arg2,
+                                    uint64_t arg3, uint64_t arg4, uint64_t arg5);
+
 // Individual syscall implementations
 uint64_t sys_exit(int status);
 uint64_t sys_waitpid(int pid, int *wstatus, int options);
@@ -67,7 +74,7 @@ uint64_t sys_getpid(void);
 uint64_t sys_sbrk(int increment);
 uint64_t sys_sleep(uint64_t ms);
 uint64_t sys_yield(void);
-uint64_t sys_fork(void);
+uint64_t sys_fork(struct trap_frame *tf);
 uint64_t sys_getppid(void);
 uint64_t sys_kill(int pid, int signal);
 uint64_t sys_gettime(void);

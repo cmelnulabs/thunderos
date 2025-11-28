@@ -164,8 +164,11 @@ restore_to_user:
     # sscratch should already contain kernel stack top from user_mode_entry_wrapper
     # DO NOT modify sscratch here - it's already correct!
     
-    # Restore exception program counter and status for user mode
+    # DEBUG: Check sepc value before restoring
     ld t0, 248(sp)
+    # We can't easily print here, but we can set a pattern to check with gdb if needed
+    
+    # Restore exception program counter and status for user mode
     csrw sepc, t0
     ld t0, 256(sp)
     # CRITICAL FIX: Set SPIE=1 to re-enable interrupts after sret
@@ -205,7 +208,19 @@ restore_to_user:
     ld t6, 240(sp)
     
     # Restore user stack pointer last
+    # CRITICAL: Before loading user sp, we need to save kernel sp to sscratch
+    # so that the next trap from user mode will have access to kernel stack.
+    # Current sp points to trap frame on kernel stack.
+    # Calculate kernel stack top: sp + 272 (trap frame size)
+    addi t6, sp, 272
+    csrw sscratch, t6
+    
+    # Now load user sp from trap frame
     ld sp, 8(sp)
+    
+    # DEBUG: Read SATP before sret
+    # (Can't print here since we've already restored registers, but we can trigger a breakpoint)
+    # For now, just continue - we'll debug with other methods if needed
     
     # Return from exception to user mode (sret restores privilege from sstatus.SPP)
     sret

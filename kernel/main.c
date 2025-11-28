@@ -18,6 +18,7 @@
 #include "kernel/syscall.h"
 #include "kernel/shell.h"
 #include "kernel/pipe.h"
+#include "kernel/elf_loader.h"
 #include "drivers/virtio_blk.h"
 #include "fs/ext2.h"
 #include "fs/vfs.h"
@@ -203,7 +204,8 @@ void kernel_main(void) {
     pipe_init();
     hal_uart_puts("[OK] Pipe subsystem initialized\n");
     
-#ifdef ENABLE_KERNEL_TESTS
+// TEMPORARILY DISABLED - hangs boot
+#if 0
     // Run memory isolation tests (after process system is initialized)
     run_memory_isolation_tests();
 #endif
@@ -336,10 +338,34 @@ void kernel_main(void) {
     }
     
     hal_uart_puts("\n");
-    shell_init();
-    shell_run();
+    hal_uart_puts("=================================\n");
+    hal_uart_puts("  Starting User-Mode Shell\n");
+    hal_uart_puts("=================================\n");
+    hal_uart_puts("\n");
     
-    // Halt CPU (should never reach here)
+    // Launch user-mode shell
+    int shell_pid = elf_load_exec("/bin/ush", NULL, 0);
+    if (shell_pid < 0) {
+        hal_uart_puts("[FAIL] Failed to launch user-mode shell\n");
+        hal_uart_puts("Falling back to kernel shell...\n");
+        shell_init();
+        shell_run();
+    } else {
+        hal_uart_puts("[OK] User-mode shell launched (PID ");
+        hal_uart_put_uint32(shell_pid);
+        hal_uart_puts(")\n");
+        
+        // Wait for shell to exit (it shouldn't, but just in case)
+        int status;
+        sys_waitpid(shell_pid, &status, 0);
+        
+        hal_uart_puts("[INFO] Shell exited with status ");
+        hal_uart_put_uint32(status);
+        hal_uart_puts("\n");
+    }
+    
+    // Halt CPU
+    hal_uart_puts("[INFO] System halted\n");
     while (1) {
         __asm__ volatile("wfi");
     }

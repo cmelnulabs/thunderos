@@ -355,10 +355,11 @@ uint64_t sys_open(const char *path, int flags, int mode) {
     }
     
     int fd = vfs_open(path, vfs_flags);
+    
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
-    
+
     (void)mode; // TODO: Use mode for file permissions
     return fd;
 }
@@ -400,8 +401,15 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
     
     // Handle stdin separately
     if (file_descriptor == STDIN_FD) {
-        // Not implemented yet - requires input buffering
-        return 0;
+        // Read from UART
+        if (byte_count == 0) {
+            return 0;
+        }
+        
+        // Read one character from UART
+        char c = hal_uart_getc();
+        buffer[0] = c;
+        return 1;
     }
     
     // Handle regular file descriptors
@@ -410,6 +418,7 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
     }
     
     int bytes_read = vfs_read(file_descriptor, buffer, byte_count);
+    
     if (bytes_read < 0) {
         return SYSCALL_ERROR;
     }
@@ -775,28 +784,34 @@ uint64_t sys_pipe(int pipefd[2]) {
  *     // Parent process (pid = child's PID)
  *   }
  */
-uint64_t sys_fork(void) {
+uint64_t sys_fork(struct trap_frame *tf) {
     struct process *current = process_current();
     if (!current) {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    // Call kernel fork implementation
-    pid_t child_pid = process_fork();
+    if (!tf) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    // Call kernel fork implementation with current trap frame
+    // The child will get a copy of this trap frame
+    pid_t child_pid = process_fork(tf);
     
     // Return child PID to parent, or -1 on error (errno already set)
     return child_pid;
 }
 
 /**
- * sys_execve - Execute program from filesystem
+ * sys_execve_with_frame - Execute program from filesystem (with trap frame)
  * 
+ * @param tf Trap frame pointer (for updating entry point)
  * @param path Path to executable
  * @param argv Argument array
  * @param envp Environment array (ignored)
  * @return Does not return on success, -1 on error
  */
-uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
+uint64_t sys_execve_with_frame(struct trap_frame *tf, const char *path, const char *argv[], const char *envp[]) {
     (void)envp;
     
     if (!is_valid_user_pointer(path, 1)) {
@@ -814,11 +829,21 @@ uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
         }
     }
     
-    // Load and execute ELF binary
-    int result = elf_load_exec(path, argv, argc);
+    // Replace current process with new ELF binary
+    // On success, this modifies trap_frame to jump to new entry point
+    // and returns 0. On error, returns -1.
+    int result = elf_exec_replace(path, argv, argc, tf);
     
-    // If we get here, exec failed
-    return (result < 0) ? SYSCALL_ERROR : (uint64_t)result;
+    if (result == 0) {
+        // SUCCESS: exec replaced the process
+        // The trap frame has been modified to jump to the new program
+        // We must NOT modify trap_frame->a0 - just return 
+        // The syscall handler should detect exec success and not modify a0
+        return 0;  // Special: tells syscall_handler not to modify a0
+    }
+    
+    // FAILURE: exec failed
+    return SYSCALL_ERROR;
 }
 
 /**
@@ -836,6 +861,28 @@ uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
  * @param argument5 Sixth argument (from a5 register)
  * @return Return value (placed in a0 register)
  */
+/**
+ * Syscall handler with trap frame for syscalls that need full register state
+ */
+uint64_t syscall_handler_with_frame(struct trap_frame *tf,
+                                    uint64_t syscall_number, 
+                                    uint64_t argument0, uint64_t argument1, uint64_t argument2,
+                                    uint64_t argument3, uint64_t argument4, uint64_t argument5) {
+    // For fork, we need to pass the current trap frame
+    if (syscall_number == SYS_FORK) {
+        return sys_fork(tf);
+    }
+    
+    // For execve, we need to pass the trap frame to update sepc
+    if (syscall_number == SYS_EXECVE) {
+        return sys_execve_with_frame(tf, (const char *)argument0, (const char **)argument1, (const char **)argument2);
+    }
+    
+    // For all other syscalls, use the normal handler
+    return syscall_handler(syscall_number, argument0, argument1, argument2, 
+                          argument3, argument4, argument5);
+}
+
 uint64_t syscall_handler(uint64_t syscall_number, 
                         uint64_t argument0, uint64_t argument1, uint64_t argument2,
                         uint64_t argument3, uint64_t argument4, uint64_t argument5) {
@@ -919,7 +966,8 @@ uint64_t syscall_handler(uint64_t syscall_number,
             break;
             
         case SYS_EXECVE:
-            return_value = sys_execve((const char *)argument0, (const char **)argument1, (const char **)argument2);
+            // Execve is handled in syscall_handler_with_frame
+            return_value = SYSCALL_ERROR;
             break;
             
         case SYS_MMAP:
@@ -936,7 +984,11 @@ uint64_t syscall_handler(uint64_t syscall_number,
             break;
             
         case SYS_FORK:
-            return_value = sys_fork();
+            // Fork is handled in syscall_handler_with_frame
+            // This should not be reached
+            hal_uart_puts("[WARN] SYS_FORK called from old syscall_handler\n");
+            return_value = SYSCALL_ERROR;
+            break;
             break;
             
         case SYS_EXEC:

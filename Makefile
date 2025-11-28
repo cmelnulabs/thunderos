@@ -30,7 +30,7 @@ ENABLE_TESTS ?= 1
 # Compiler flags
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany
 CFLAGS += -nostdlib -nostartfiles -ffreestanding -fno-common
-CFLAGS += -O0 -Wall -Wextra
+CFLAGS += -O0 -g -Wall -Wextra
 CFLAGS += -I$(INCLUDE_DIR)
 
 # Enable kernel tests (set ENABLE_TESTS=0 to disable)
@@ -149,6 +149,7 @@ $(FS_IMG): userland
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"
+	@cp userland/build/ush $(BUILD_DIR)/testfs/bin/ush 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ush not built"
 	@cp userland/build/signal_test $(BUILD_DIR)/testfs/bin/signal_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) signal_test not built"
 	@cp userland/build/pipe_test $(BUILD_DIR)/testfs/bin/pipe_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_test not built"
 	@cp userland/build/pipe_simple_test $(BUILD_DIR)/testfs/bin/pipe_simple_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_simple_test not built"

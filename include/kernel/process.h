@@ -231,7 +231,8 @@ void process_dump(void);
  * 
  * @return Child PID in parent, 0 in child, -1 on error
  */
-pid_t process_fork(void);
+struct trap_frame;
+pid_t process_fork(struct trap_frame *current_tf);
 
 /**
  * Execute a new program in the current process
