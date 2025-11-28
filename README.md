@@ -38,9 +38,10 @@ make test
 
 # Individual test scripts
 cd tests/scripts
-./test_boot.sh
-./test_integration.sh
-./test_user_mode.sh
+./test_boot.sh          # Quick boot validation
+./test_kernel.sh        # Comprehensive kernel test
+./test_integration.sh   # Full integration tests
+./run_all_tests.sh      # Run all test suites
 ```
 
 ### Debugging

@@ -18,94 +18,102 @@ readonly LDSCRIPT="${USERLAND_DIR}/user.ld"
 # User program entry point address
 #readonly USER_ENTRY_POINT="0xf000"
 
+# Colors for output
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly BOLD='\033[1m'
+readonly NC='\033[0m' # No Color
+
+# Counters
+TOTAL_PROGRAMS=0
+BUILT_PROGRAMS=0
+
+# Print functions
+print_header() {
+    echo ""
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}${BOLD}           ThunderOS Userland Build System                    ${NC}${CYAN}║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+print_section() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}  $1${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+print_building() {
+    printf "  ${YELLOW}▶${NC} Building %-20s " "$1"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC}"
+    BUILT_PROGRAMS=$((BUILT_PROGRAMS + 1))
+}
+
+print_footer() {
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}${BOLD}  ✓ Build Complete!${NC}"
+    echo -e "    Programs built: ${BOLD}${BUILT_PROGRAMS}/${TOTAL_PROGRAMS}${NC}"
+    echo -e "    Output directory: ${CYAN}${BUILD_DIR}${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
+# Build function for simple programs (single source file)
+build_program() {
+    local name="$1"
+    local source="${2:-$1}"  # Use name as source if not specified
+    
+    TOTAL_PROGRAMS=$((TOTAL_PROGRAMS + 1))
+    print_building "$name"
+    
+    "${CC}" ${CFLAGS} -c "${USERLAND_DIR}/${source}.c" -o "${BUILD_DIR}/${source}.o" 2>/dev/null
+    "${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/${source}.o" -o "${BUILD_DIR}/${name}" 2>/dev/null
+    "${OBJCOPY}" -O binary "${BUILD_DIR}/${name}" "${BUILD_DIR}/${name}.bin" 2>/dev/null
+    
+    print_success
+}
+
 # Create build directory
 mkdir -p "${BUILD_DIR}"
 
-echo "Building userland programs..."
+print_header
 
-# Build ls
-echo "Building ls..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ls.c" -o "${BUILD_DIR}/ls.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/ls.o" -o "${BUILD_DIR}/ls"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/ls" "${BUILD_DIR}/ls.bin"
+# Core utilities
+print_section "Core Utilities"
+build_program "ls"
+build_program "cat"
+build_program "pwd"
+build_program "mkdir"
+build_program "rmdir"
+build_program "touch"
+build_program "rm"
+build_program "clear"
+build_program "sleep"
 
-# Build cat
-echo "Building cat..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/cat.c" -o "${BUILD_DIR}/cat.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/cat.o" -o "${BUILD_DIR}/cat"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/cat" "${BUILD_DIR}/cat.bin"
+# User applications
+print_section "User Applications"
+build_program "hello"
 
-# Build hello
-echo "Building hello..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/hello.c" -o "${BUILD_DIR}/hello.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/hello.o" -o "${BUILD_DIR}/hello"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/hello" "${BUILD_DIR}/hello.bin"
+# Build ush (user shell) - special case with multiple source files
+TOTAL_PROGRAMS=$((TOTAL_PROGRAMS + 1))
+print_building "ush (shell)"
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ush_flat.c" -o "${BUILD_DIR}/ush_flat.o" 2>/dev/null
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/syscall.S" -o "${BUILD_DIR}/syscall.o" 2>/dev/null
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/ush_flat.o" "${BUILD_DIR}/syscall.o" -o "${BUILD_DIR}/ush" 2>/dev/null
+"${OBJCOPY}" -O binary "${BUILD_DIR}/ush" "${BUILD_DIR}/ush.bin" 2>/dev/null
+print_success
 
-# Build signal_test
-echo "Building signal_test..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/signal_test.c" -o "${BUILD_DIR}/signal_test.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/signal_test.o" -o "${BUILD_DIR}/signal_test"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/signal_test" "${BUILD_DIR}/signal_test.bin"
+# Test programs
+print_section "Test Programs"
+build_program "signal_test"
+build_program "pipe_test"
+build_program "pipe_simple_test"
 
-# Build pipe_test
-echo "Building pipe_test..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/pipe_test.c" -o "${BUILD_DIR}/pipe_test.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/pipe_test.o" -o "${BUILD_DIR}/pipe_test"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/pipe_test" "${BUILD_DIR}/pipe_test.bin"
-
-# Build pipe_simple_test
-echo "Building pipe_simple_test..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/pipe_simple_test.c" -o "${BUILD_DIR}/pipe_simple_test.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/pipe_simple_test.o" -o "${BUILD_DIR}/pipe_simple_test"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/pipe_simple_test" "${BUILD_DIR}/pipe_simple_test.bin"
-
-# Build mkdir
-echo "Building mkdir..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/mkdir.c" -o "${BUILD_DIR}/mkdir.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/mkdir.o" -o "${BUILD_DIR}/mkdir"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/mkdir" "${BUILD_DIR}/mkdir.bin"
-
-# Build rmdir
-echo "Building rmdir..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/rmdir.c" -o "${BUILD_DIR}/rmdir.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/rmdir.o" -o "${BUILD_DIR}/rmdir"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/rmdir" "${BUILD_DIR}/rmdir.bin"
-
-# Build pwd
-echo "Building pwd..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/pwd.c" -o "${BUILD_DIR}/pwd.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/pwd.o" -o "${BUILD_DIR}/pwd"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/pwd" "${BUILD_DIR}/pwd.bin"
-
-# Build touch
-echo "Building touch..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/touch.c" -o "${BUILD_DIR}/touch.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/touch.o" -o "${BUILD_DIR}/touch"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/touch" "${BUILD_DIR}/touch.bin"
-
-# Build rm
-echo "Building rm..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/rm.c" -o "${BUILD_DIR}/rm.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/rm.o" -o "${BUILD_DIR}/rm"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/rm" "${BUILD_DIR}/rm.bin"
-
-# Build clear
-echo "Building clear..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/clear.c" -o "${BUILD_DIR}/clear.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/clear.o" -o "${BUILD_DIR}/clear"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/clear" "${BUILD_DIR}/clear.bin"
-
-# Build sleep
-echo "Building sleep..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/sleep.c" -o "${BUILD_DIR}/sleep.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/sleep.o" -o "${BUILD_DIR}/sleep"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/sleep" "${BUILD_DIR}/sleep.bin"
-
-# Build ush (user shell) - flat version to avoid stack issues with -O0
-echo "Building ush (flat)..."
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ush_flat.c" -o "${BUILD_DIR}/ush_flat.o"
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/syscall.S" -o "${BUILD_DIR}/syscall.o"
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/ush_flat.o" "${BUILD_DIR}/syscall.o" -o "${BUILD_DIR}/ush"
-"${OBJCOPY}" -O binary "${BUILD_DIR}/ush" "${BUILD_DIR}/ush.bin"
-
-echo "Userland programs built successfully!"
+print_footer
