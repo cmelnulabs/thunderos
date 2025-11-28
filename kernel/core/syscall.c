@@ -773,25 +773,33 @@ struct thunderos_dirent {
  * @param dirp Buffer to store directory entries
  * @param count Size of buffer in bytes
  * @return Number of bytes read on success, 0 on end of directory, -1 on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid buffer or count
+ * @errno THUNDEROS_EBADF - Invalid file descriptor
+ * @errno THUNDEROS_ENOTDIR - fd does not refer to a directory
  */
 uint64_t sys_getdents(int fd, void *dirp, size_t count) {
     struct process *proc = process_current();
     if (!proc) {
+        set_errno(THUNDEROS_EINVAL);
         return SYSCALL_ERROR;
     }
     
     if (!dirp || count < sizeof(struct thunderos_dirent)) {
+        set_errno(THUNDEROS_EINVAL);
         return SYSCALL_ERROR;
     }
     
     // Validate user pointer
     if (!process_validate_user_ptr(proc, dirp, count, VM_WRITE)) {
+        set_errno(THUNDEROS_EINVAL);
         return SYSCALL_ERROR;
     }
     
     // Get the file from fd
     vfs_file_t *file = vfs_get_file(fd);
     if (!file || !file->node) {
+        set_errno(THUNDEROS_EBADF);
         return SYSCALL_ERROR;
     }
     
@@ -799,11 +807,13 @@ uint64_t sys_getdents(int fd, void *dirp, size_t count) {
     
     // Must be a directory
     if (node->type != VFS_TYPE_DIRECTORY) {
+        set_errno(THUNDEROS_ENOTDIR);
         return SYSCALL_ERROR;
     }
     
     // Check for readdir operation
     if (!node->ops || !node->ops->readdir) {
+        set_errno(THUNDEROS_EIO);
         return SYSCALL_ERROR;
     }
     
@@ -843,32 +853,41 @@ uint64_t sys_getdents(int fd, void *dirp, size_t count) {
     // Update file position
     file->pos = index;
     
+    clear_errno();
     return bytes_written;
 }
 
 /**
  * sys_chdir - Change current working directory
  * 
- * @param path Path to new working directory
+ * @param path Path to new working directory (must be absolute)
  * @return 0 on success, -1 on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid path or not absolute
+ * @errno THUNDEROS_ENOENT - Path does not exist
+ * @errno THUNDEROS_ENOTDIR - Path is not a directory
  */
 uint64_t sys_chdir(const char *path) {
     struct process *proc = process_current();
     if (!proc) {
+        set_errno(THUNDEROS_EINVAL);
         return SYSCALL_ERROR;
     }
     
     if (!is_valid_user_pointer(path, 1)) {
+        set_errno(THUNDEROS_EINVAL);
         return SYSCALL_ERROR;
     }
     
     // Resolve the path to verify it exists and is a directory
     vfs_node_t *node = vfs_resolve_path(path);
     if (!node) {
+        /* errno already set by vfs_resolve_path */
         return SYSCALL_ERROR;
     }
     
     if (node->type != VFS_TYPE_DIRECTORY) {
+        set_errno(THUNDEROS_ENOTDIR);
         return SYSCALL_ERROR;
     }
     
@@ -880,6 +899,7 @@ uint64_t sys_chdir(const char *path) {
     }
     proc->cwd[i] = '\0';
     
+    clear_errno();
     return SYSCALL_SUCCESS;
 }
 
@@ -889,18 +909,33 @@ uint64_t sys_chdir(const char *path) {
  * @param buf Buffer to store path
  * @param size Size of buffer
  * @return Pointer to buf on success, NULL on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid buffer or size
+ * @errno THUNDEROS_ERANGE - Buffer too small for path
  */
 uint64_t sys_getcwd(char *buf, size_t size) {
     struct process *proc = process_current();
     if (!proc) {
+        set_errno(THUNDEROS_EINVAL);
         return (uint64_t)NULL;
     }
     
     if (!buf || size == 0) {
+        set_errno(THUNDEROS_EINVAL);
         return (uint64_t)NULL;
     }
     
     if (!process_validate_user_ptr(proc, buf, size, VM_WRITE)) {
+        set_errno(THUNDEROS_EINVAL);
+        return (uint64_t)NULL;
+    }
+    
+    // Check if buffer is large enough
+    size_t cwd_len = 0;
+    while (proc->cwd[cwd_len]) cwd_len++;
+    
+    if (cwd_len >= size) {
+        set_errno(THUNDEROS_ERANGE);
         return (uint64_t)NULL;
     }
     
@@ -912,6 +947,7 @@ uint64_t sys_getcwd(char *buf, size_t size) {
     }
     buf[i] = '\0';
     
+    clear_errno();
     return (uint64_t)buf;
 }
 

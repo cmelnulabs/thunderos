@@ -52,7 +52,9 @@
 #define THUNDEROS_ENOSPC      28  /* No space left on device */
 #define THUNDEROS_ESPIPE      29  /* Illegal seek */
 #define THUNDEROS_EPIPE       32  /* Broken pipe (read end closed) */
+#define THUNDEROS_ERANGE      34  /* Result too large / buffer too small */
 #define THUNDEROS_ENOSYS      38  /* Function not implemented */
+#define THUNDEROS_ENOTEMPTY   39  /* Directory not empty */
 
 /* ========== Filesystem Errors (30-49) ========== */
 #define THUNDEROS_EFS_CORRUPT 30  /* Filesystem corruption detected */

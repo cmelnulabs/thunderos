@@ -23,6 +23,7 @@ This section documents the internal implementation details of ThunderOS.
    errno
    process_management
    user_mode
+   shell
    signals
    testing_framework
    linker_script
@@ -97,6 +98,9 @@ Component Status
    * - :doc:`user_mode`
      - ✓ Done
      - User mode support with privilege transitions and memory isolation
+   * - :doc:`shell`
+     - ✓ Done (v0.6.0)
+     - User-mode interactive shell with fork+exec command execution
    * - :doc:`signals`
      - ✓ Done (v0.5.0)
      - POSIX-style signal handling for IPC and process control
@@ -107,14 +111,14 @@ Component Status
      - ✓ Done
      - Memory layout and section placement
    * - Syscall Interface
-     - In Progress
-     - Basic syscall infrastructure (v0.2.0)
+     - ✓ Done (v0.6.0)
+     - 30 syscalls: I/O, process, filesystem, signals, directories
+   * - Fork/Exec
+     - ✓ Done (v0.6.0)
+     - Process cloning and program loading
    * - Higher-Half Kernel
      - Planned
-     - Move kernel to 0xFFFFFFFF80000000 (v0.2.0+)
-   * - Fork/Exec
-     - Planned
-     - Process cloning and program loading (v0.6.0)
+     - Move kernel to 0xFFFFFFFF80000000
 
 Code Organization
 -----------------

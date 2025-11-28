@@ -8,7 +8,7 @@ System calls (syscalls) provide the interface between user-space programs and th
 
 **Current Status:**
 
-ThunderOS v0.5.0 implements **27 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, and process creation.
+ThunderOS v0.6.0 implements **30 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, and directory navigation.
 
 **Key Features:**
 
@@ -1315,6 +1315,207 @@ Data written to the write end can be read from the read end. Pipes are typically
 
 - :doc:`pipes` - Complete pipe implementation documentation
 - :doc:`vfs` - Virtual Filesystem integration
+
+Directory Operations
+~~~~~~~~~~~~~~~~~~~~
+
+sys_getdents (27)
+^^^^^^^^^^^^^^^^^
+
+Read directory entries from a directory file descriptor.
+
+.. code-block:: c
+
+   ssize_t sys_getdents(int fd, void *dirp, size_t count);
+
+**Parameters:**
+
+* ``fd``: File descriptor for an open directory
+* ``dirp``: Buffer to receive directory entries
+* ``count``: Size of buffer in bytes
+
+**Return Value:**
+
+* Number of bytes read on success
+* ``0`` when end of directory reached
+* ``-1`` on error
+
+**Directory Entry Structure:**
+
+.. code-block:: c
+
+   struct thunderos_dirent {
+       unsigned int d_ino;       // Inode number
+       unsigned short d_reclen;  // Record length  
+       unsigned char d_type;     // File type (DT_REG, DT_DIR, etc.)
+       char d_name[256];         // Null-terminated filename
+   };
+
+**Errno:**
+
+* ``THUNDEROS_EBADF`` - Invalid file descriptor
+* ``THUNDEROS_ENOTDIR`` - fd does not refer to a directory
+* ``THUNDEROS_EINVAL`` - Invalid buffer or count
+
+**Example:**
+
+.. code-block:: c
+
+   #define SYS_GETDENTS 27
+   
+   ssize_t getdents(int fd, void *dirp, size_t count) {
+       register long a7 asm("a7") = SYS_GETDENTS;
+       register long a0 asm("a0") = fd;
+       register long a1 asm("a1") = (long)dirp;
+       register long a2 asm("a2") = count;
+       asm volatile("ecall" : "+r"(a0) : "r"(a7), "r"(a1), "r"(a2) : "memory");
+       return a0;
+   }
+   
+   // List directory contents
+   char buf[4096];
+   int fd = open("/", O_RDONLY);
+   ssize_t nread;
+   
+   while ((nread = getdents(fd, buf, sizeof(buf))) > 0) {
+       char *ptr = buf;
+       while (ptr < buf + nread) {
+           struct thunderos_dirent *d = (struct thunderos_dirent *)ptr;
+           printf("%s\n", d->d_name);
+           ptr += d->d_reclen;
+       }
+   }
+   close(fd);
+
+**Implementation:**
+
+1. Validates file descriptor refers to open directory
+2. Reads directory entries from VFS readdir operation
+3. Formats entries into thunderos_dirent structures
+4. Updates file position for subsequent calls
+5. Returns total bytes written to buffer
+
+sys_chdir (28)
+^^^^^^^^^^^^^^
+
+Change the current working directory of the calling process.
+
+.. code-block:: c
+
+   int sys_chdir(const char *path);
+
+**Parameters:**
+
+* ``path``: Absolute path to the new working directory
+
+**Return Value:**
+
+* ``0`` on success
+* ``-1`` on error
+
+**Errno:**
+
+* ``THUNDEROS_EINVAL`` - Invalid path or not absolute
+* ``THUNDEROS_ENOENT`` - Path does not exist
+* ``THUNDEROS_ENOTDIR`` - Path is not a directory
+
+**Example:**
+
+.. code-block:: c
+
+   #define SYS_CHDIR 28
+   
+   int chdir(const char *path) {
+       register long a7 asm("a7") = SYS_CHDIR;
+       register long a0 asm("a0") = (long)path;
+       asm volatile("ecall" : "+r"(a0) : "r"(a7) : "memory");
+       return a0;
+   }
+   
+   if (chdir("/bin") == 0) {
+       // Now in /bin directory
+   }
+
+**Implementation:**
+
+1. Validates path pointer is in user memory
+2. Resolves path using VFS to verify existence
+3. Verifies target is a directory
+4. Updates process cwd field
+5. Returns success
+
+**Current Limitation:**
+
+Only absolute paths are supported. Relative paths (e.g., ``..``, ``subdir``) are not yet resolved.
+
+sys_getcwd (29)
+^^^^^^^^^^^^^^^
+
+Get the current working directory of the calling process.
+
+.. code-block:: c
+
+   char *sys_getcwd(char *buf, size_t size);
+
+**Parameters:**
+
+* ``buf``: Buffer to receive the current working directory path
+* ``size``: Size of buffer in bytes
+
+**Return Value:**
+
+* Pointer to ``buf`` on success
+* ``NULL`` on error
+
+**Errno:**
+
+* ``THUNDEROS_EINVAL`` - Invalid buffer or size
+* ``THUNDEROS_ERANGE`` - Buffer too small for path
+
+**Example:**
+
+.. code-block:: c
+
+   #define SYS_GETCWD 29
+   
+   char *getcwd(char *buf, size_t size) {
+       register long a7 asm("a7") = SYS_GETCWD;
+       register long a0 asm("a0") = (long)buf;
+       register long a1 asm("a1") = size;
+       asm volatile("ecall" : "+r"(a0) : "r"(a7), "r"(a1) : "memory");
+       return (char *)a0;
+   }
+   
+   char cwd[256];
+   if (getcwd(cwd, sizeof(cwd))) {
+       printf("Current directory: %s\n", cwd);
+   }
+
+**Implementation:**
+
+1. Validates buffer pointer is in user memory (writable)
+2. Validates size is non-zero
+3. Copies process cwd string to user buffer
+4. Returns pointer to buffer
+
+**Per-Process Working Directory:**
+
+Each process maintains its own current working directory in the ``cwd`` field of its process structure:
+
+.. code-block:: c
+
+   struct process {
+       // ...
+       char cwd[256];  // Current working directory
+       // ...
+   };
+
+The cwd is:
+
+- Initialized to ``/`` when process is created
+- Copied from parent to child during ``fork()``
+- Updated by ``sys_chdir()``
+- Queried by ``sys_getcwd()``
 
 sys_fork (7)
 ~~~~~~~~~~~~

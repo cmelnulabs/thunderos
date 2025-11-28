@@ -41,6 +41,7 @@ Generic Errors (POSIX-Compatible)
    #define THUNDEROS_EPERM       1   /* Operation not permitted */
    #define THUNDEROS_ENOENT      2   /* No such file or directory */
    #define THUNDEROS_EIO         5   /* I/O error */
+   #define THUNDEROS_EBADF       9   /* Bad file descriptor */
    #define THUNDEROS_ENOMEM      12  /* Out of memory */
    #define THUNDEROS_EACCES      13  /* Permission denied */
    #define THUNDEROS_EBUSY       16  /* Device or resource busy */
@@ -50,6 +51,8 @@ Generic Errors (POSIX-Compatible)
    #define THUNDEROS_EINVAL      22  /* Invalid argument */
    #define THUNDEROS_EMFILE      24  /* Too many open files */
    #define THUNDEROS_ENOSPC      28  /* No space left on device */
+   #define THUNDEROS_ERANGE      34  /* Result too large / buffer too small */
+   #define THUNDEROS_ENOTEMPTY   39  /* Directory not empty */
 
 Filesystem Errors
 ~~~~~~~~~~~~~~~~~
