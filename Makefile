@@ -242,7 +242,7 @@ qemu-gpu: userland fs
 	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
 		qemu-system-riscv64 -machine virt -m 128M \
 			-serial mon:stdio \
-			-bios default \
+			-bios none \
 			-kernel $(KERNEL_ELF) \
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
@@ -251,7 +251,7 @@ qemu-gpu: userland fs
 	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
 		/tmp/qemu-10.1.2/build/qemu-system-riscv64 -machine virt -m 128M \
 			-serial mon:stdio \
-			-bios default \
+			-bios none \
 			-kernel $(KERNEL_ELF) \
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
