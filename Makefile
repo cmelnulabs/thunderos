@@ -231,6 +231,37 @@ qemu: userland fs
 		exit 1; \
 	fi
 
+# Run with GPU support (opens graphical window)
+qemu-gpu: userland fs
+	@rm -f $(BUILD_DIR)/kernel/main.o
+	@$(MAKE) --no-print-directory TEST_MODE=0 all
+	@echo ""
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)  Starting ThunderOS in QEMU (with GPU)$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios default \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device; \
+	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		/tmp/qemu-10.1.2/build/qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios default \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device; \
+	else \
+		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
+		exit 1; \
+	fi
+
 debug: $(KERNEL_ELF)
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"

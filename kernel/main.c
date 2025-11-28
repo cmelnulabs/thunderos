@@ -20,6 +20,8 @@
 #include "kernel/pipe.h"
 #include "kernel/elf_loader.h"
 #include "drivers/virtio_blk.h"
+#include "drivers/virtio_gpu.h"
+#include "drivers/framebuffer.h"
 #include "fs/ext2.h"
 #include "fs/vfs.h"
 
@@ -46,6 +48,7 @@ static void print_boot_banner(void);
 static void init_interrupts(void);
 static void init_memory(void);
 static int init_block_device(void);
+static int init_gpu_device(void);
 static int init_filesystem(void);
 static void launch_shell(void);
 static void halt_cpu(void);
@@ -184,6 +187,34 @@ static int init_block_device(void) {
 }
 
 /*
+ * Probe and initialize VirtIO GPU device.
+ * Returns 0 on success, -1 if no device found.
+ */
+static int init_gpu_device(void) {
+    for (int probe_index = 0; probe_index < VIRTIO_PROBE_COUNT; probe_index++) {
+        uint64_t device_address = VIRTIO_BASE_ADDRESS + (probe_index * VIRTIO_ADDRESS_STRIDE);
+        int irq_number = probe_index + 1;
+
+        if (virtio_gpu_init(device_address, irq_number) == 0) {
+            /* Initialize framebuffer abstraction */
+            if (fb_init() == 0) {
+                hal_uart_puts("[OK] Framebuffer initialized\n");
+                
+                /* Draw a test pattern to verify GPU works */
+                fb_clear(0xFF000080);  /* Dark blue background */
+                fb_fill_rect(10, 10, 100, 50, 0xFF00FF00);  /* Green rectangle */
+                fb_draw_rect(120, 10, 100, 50, 0xFFFF0000);  /* Red outline */
+                fb_flush();
+            }
+            return 0;
+        }
+    }
+
+    hal_uart_puts("[INFO] No VirtIO GPU device found - console only mode\n");
+    return -1;
+}
+
+/*
  * Mount ext2 filesystem and register with VFS.
  * Returns 0 on success, -1 on failure.
  */
@@ -294,6 +325,9 @@ void kernel_main(void) {
     if (init_block_device() == 0) {
         init_filesystem();
     }
+
+    /* Try to initialize GPU (optional - console works without it) */
+    init_gpu_device();
 
 #ifdef TEST_MODE
     hal_uart_puts("\n");
