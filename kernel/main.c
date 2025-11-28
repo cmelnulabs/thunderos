@@ -22,6 +22,8 @@
 #include "drivers/virtio_blk.h"
 #include "drivers/virtio_gpu.h"
 #include "drivers/framebuffer.h"
+#include "drivers/fbconsole.h"
+#include "drivers/font.h"
 #include "fs/ext2.h"
 #include "fs/vfs.h"
 
@@ -200,11 +202,19 @@ static int init_gpu_device(void) {
             if (fb_init() == 0) {
                 hal_uart_puts("[OK] Framebuffer initialized\n");
                 
-                /* Draw a test pattern to verify GPU works */
-                fb_clear(0xFF000080);  /* Dark blue background */
-                fb_fill_rect(10, 10, 100, 50, 0xFF00FF00);  /* Green rectangle */
-                fb_draw_rect(120, 10, 100, 50, 0xFFFF0000);  /* Red outline */
-                fb_flush();
+                /* Initialize framebuffer console */
+                if (fbcon_init() == 0) {
+                    hal_uart_puts("[OK] Framebuffer console initialized\n");
+                    
+                    /* Display boot message on graphical console */
+                    fbcon_set_colors(FBCON_COLOR_BRIGHT_CYAN, FBCON_COLOR_BLACK);
+                    fbcon_puts("========================================\n");
+                    fbcon_puts("    ThunderOS - RISC-V AI OS\n");
+                    fbcon_puts("    Graphical Console Active\n");
+                    fbcon_puts("========================================\n\n");
+                    fbcon_reset_colors();
+                    fbcon_flush();
+                }
             }
             return 0;
         }
