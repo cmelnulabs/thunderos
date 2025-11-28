@@ -62,12 +62,12 @@ print_test() {
     echo -e "\n${YELLOW}[TEST]${NC} $1"
 }
 
-# Build kernel and userland
+# Build kernel with TEST_MODE (no shell)
 print_header "ThunderOS Integration Test"
-print_info "Building kernel..."
+print_info "Building kernel in test mode (no shell)..."
 
 cd "${ROOT_DIR}"
-if make clean >/dev/null 2>&1 && make >/dev/null 2>&1; then
+if make clean >/dev/null 2>&1 && make TEST_MODE=1 >/dev/null 2>&1; then
     print_pass "Kernel build successful"
 else
     print_fail "Kernel build failed"
@@ -162,15 +162,7 @@ else
     FAILED=$((FAILED + 1))
 fi
 
-# Test 5: Shell started
-if grep -q "Interactive Shell\|ThunderOS>" "${OUTPUT_FILE}"; then
-    print_pass "Interactive shell started"
-else
-    print_fail "Shell failed to start"
-    FAILED=$((FAILED + 1))
-fi
-
-# Test 6: ELF loader tests
+# Test 5: ELF loader tests
 if grep -q "ELF Loader Tests" "${OUTPUT_FILE}"; then
     print_pass "ELF loader tests executed"
 else
@@ -181,7 +173,7 @@ fi
 # Summary
 print_header "Integration Test Summary"
 
-TOTAL_TESTS=6
+TOTAL_TESTS=5
 PASSED=$((TOTAL_TESTS - FAILED))
 
 if [ $FAILED -eq 0 ]; then

@@ -25,7 +25,8 @@ BOOT_DIR := boot
 INCLUDE_DIR := include
 
 # Build configuration
-ENABLE_TESTS ?= 1
+ENABLE_TESTS ?= 0
+TEST_MODE ?= 0
 
 # Compiler flags
 CFLAGS := -march=rv64gc -mabi=lp64d -mcmodel=medany
@@ -36,6 +37,11 @@ CFLAGS += -I$(INCLUDE_DIR)
 # Enable kernel tests (set ENABLE_TESTS=0 to disable)
 ifeq ($(ENABLE_TESTS),1)
     CFLAGS += -DENABLE_KERNEL_TESTS
+endif
+
+# Test mode: run tests and halt without launching shell
+ifeq ($(TEST_MODE),1)
+    CFLAGS += -DTEST_MODE
 endif
 
 # Linker flags
@@ -89,7 +95,7 @@ QEMU_FLAGS += -bios none
 FS_IMG := $(BUILD_DIR)/fs.img
 FS_SIZE := 10M
 
-.PHONY: all clean qemu debug fs userland test run
+.PHONY: all clean run debug fs userland test test-quick
 
 all: $(KERNEL_ELF) $(KERNEL_BIN)
 	@echo ""
@@ -181,14 +187,14 @@ userland:
 	@echo ""
 
 test:
-	@echo ""
-	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@echo "$(BOLD)$(CYAN)  Running ThunderOS Test Suite$(RESET)"
-	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@cd tests/scripts && bash run_all_tests.sh
-	@echo ""
+	@cd tests/scripts && bash test_runner.sh
 
-qemu: $(KERNEL_ELF) $(FS_IMG)
+test-quick:
+	@cd tests/scripts && bash test_runner.sh --quick
+
+qemu: userland fs
+	@rm -f $(BUILD_DIR)/kernel/main.o
+	@$(MAKE) --no-print-directory TEST_MODE=0 all
 	@echo ""
 	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo "$(BOLD)$(GREEN)  Starting ThunderOS in QEMU$(RESET)"
@@ -249,5 +255,5 @@ dump: $(KERNEL_ELF)
 	@$(OBJDUMP) -d $< > $(BUILD_DIR)/thunderos.dump
 	@echo "$(GREEN)✓ Disassembly saved:$(RESET) $(BUILD_DIR)/thunderos.dump"
 
-# Quick run: build everything and run QEMU
-run: all userland fs qemu
+# Quick run: build everything and run QEMU with shell
+run: qemu
