@@ -15,6 +15,13 @@ set -e
 # Ensure TERM is set for tput commands (needed for CI environments)
 export TERM="${TERM:-dumb}"
 
+# Detect CI/non-interactive environment
+if [ -z "$TERM" ] || [ "$TERM" = "dumb" ] || [ ! -t 1 ]; then
+    CI_MODE=1
+else
+    CI_MODE=0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR}/../.."
 BUILD_DIR="${ROOT_DIR}/build"
@@ -138,14 +145,24 @@ for stage in "${STAGES[@]}"; do
     STAGE_STATUS["$stage"]="pending"
 done
 
-# Terminal control
-hide_cursor() { printf '\033[?25l'; }
-show_cursor() { printf '\033[?25h'; }
+# Terminal control (disabled in CI mode)
+hide_cursor() { 
+    if [ $CI_MODE -eq 0 ]; then
+        printf '\033[?25l'
+    fi
+}
+show_cursor() { 
+    if [ $CI_MODE -eq 0 ]; then
+        printf '\033[?25h'
+    fi
+}
 
 # Cleanup on exit
 cleanup() {
     show_cursor
-    tput cnorm 2>/dev/null || true
+    if [ $CI_MODE -eq 0 ]; then
+        tput cnorm 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT
 
@@ -168,7 +185,12 @@ draw_progress() {
         percent=$((passed * 100 / total))
     fi
     
-    # Clear screen and draw
+    # In CI mode, use simple output without screen clearing
+    if [ $CI_MODE -eq 1 ]; then
+        return
+    fi
+    
+    # Clear screen and draw (interactive mode only)
     clear
     
     echo ""
@@ -324,6 +346,20 @@ run_qemu() {
 
 # Main execution
 main() {
+    # CI mode header
+    if [ $CI_MODE -eq 1 ]; then
+        echo "╔══════════════════════════════════════════════════════════╗"
+        echo "║           ⚡ ThunderOS Test Suite ⚡                     ║"
+        echo "╚══════════════════════════════════════════════════════════╝"
+        echo ""
+        if [ $QUICK_MODE -eq 1 ]; then
+            echo "[*] Running quick boot test..."
+        else
+            echo "[*] Running full test suite..."
+        fi
+        echo ""
+    fi
+    
     hide_cursor
     
     # Clear log file
@@ -334,15 +370,27 @@ main() {
     
     # Build phase
     STAGE_STATUS["Kernel Boot"]="running"
+    if [ $CI_MODE -eq 1 ]; then
+        echo "[*] Building kernel..."
+    fi
     draw_progress "Building kernel"
     
     build_kernel
     
     if [ $QUICK_MODE -eq 0 ]; then
+        if [ $CI_MODE -eq 1 ]; then
+            echo "[*] Building userland..."
+        fi
         build_userland
+        if [ $CI_MODE -eq 1 ]; then
+            echo "[*] Creating test filesystem..."
+        fi
         create_filesystem
     fi
     
+    if [ $CI_MODE -eq 1 ]; then
+        echo "[*] Starting QEMU (timeout: ${QEMU_TIMEOUT}s)..."
+    fi
     draw_progress "Starting QEMU"
     
     # Run QEMU in background
@@ -407,13 +455,38 @@ main() {
     draw_progress ""
     show_cursor
     
-    # Check final result
+    # Check final result and print CI-friendly output
     local failed=0
+    local passed=0
     for stage in "${STAGES[@]}"; do
         if [ "${STAGE_STATUS[$stage]}" = "failed" ]; then
             failed=$((failed + 1))
+        elif [ "${STAGE_STATUS[$stage]}" = "passed" ]; then
+            passed=$((passed + 1))
         fi
     done
+    
+    # In CI mode, print detailed results
+    if [ $CI_MODE -eq 1 ]; then
+        echo ""
+        echo "Test Results:"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        for stage in "${STAGES[@]}"; do
+            if [ "${STAGE_STATUS[$stage]}" = "passed" ]; then
+                echo "  ✓ PASS: $stage"
+            else
+                echo "  ✗ FAIL: $stage"
+            fi
+        done
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        if [ $failed -eq 0 ]; then
+            echo "✓ All ${passed} tests passed!"
+        else
+            echo "✗ ${failed} tests failed, ${passed} passed"
+        fi
+        echo ""
+    fi
     
     echo ""
     echo -e "  ${DIM}Log saved to: tests/outputs/test_results.log${NC}"
