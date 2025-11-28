@@ -239,6 +239,8 @@ qemu-gpu: userland fs
 	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo "$(BOLD)$(MAGENTA)  Starting ThunderOS in QEMU (with GPU)$(RESET)"
 	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)VNC Display:$(RESET) Connect to localhost:5900 from host"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
 		qemu-system-riscv64 -machine virt -m 128M \
 			-serial mon:stdio \
@@ -247,7 +249,8 @@ qemu-gpu: userland fs
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
 			-device virtio-blk-device,drive=hd0 \
-			-device virtio-gpu-device; \
+			-device virtio-gpu-device \
+			-vnc :0; \
 	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
 		/tmp/qemu-10.1.2/build/qemu-system-riscv64 -machine virt -m 128M \
 			-serial mon:stdio \
@@ -256,11 +259,53 @@ qemu-gpu: userland fs
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
 			-device virtio-blk-device,drive=hd0 \
-			-device virtio-gpu-device; \
+			-device virtio-gpu-device \
+			-vnc :0; \
 	else \
 		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
 		exit 1; \
 	fi
+
+# Run with GPU and web-based VNC viewer (no VNC client needed)
+qemu-gpu-web: userland fs
+	@rm -f $(BUILD_DIR)/kernel/main.o
+	@$(MAKE) --no-print-directory TEST_MODE=0 all
+	@echo ""
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)  Starting ThunderOS in QEMU (with Web VNC)$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)Open in browser:$(RESET) http://localhost:6080/vnc.html"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@# Start websockify in background to bridge web to VNC
+	@websockify --web=/usr/share/novnc 6080 localhost:5900 &
+	@sleep 1
+	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios none \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device \
+			-vnc :0; \
+	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		/tmp/qemu-10.1.2/build/qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios none \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device \
+			-vnc :0; \
+	else \
+		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
+		exit 1; \
+	fi
+	@# Clean up websockify
+	@pkill -f "websockify.*6080" 2>/dev/null || true
 
 debug: $(KERNEL_ELF)
 	@echo ""
