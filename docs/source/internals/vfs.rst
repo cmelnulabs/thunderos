@@ -749,6 +749,42 @@ Tracing VFS Operations
         // ... operation
     }
 
+Working Directory Support
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each process maintains a current working directory (cwd) for relative path resolution:
+
+.. code-block:: c
+
+    struct process {
+        // ... other fields ...
+        char cwd[256];  /* Current working directory */
+    };
+
+**Key Operations:**
+
+- ``sys_chdir(path)``: Change working directory (syscall 28)
+- ``sys_getcwd(buf, size)``: Get current working directory (syscall 29)
+
+**Initialization:**
+
+- Process created: ``cwd = "/"``
+- After fork: child inherits parent's cwd
+
+**Current Limitation:**
+
+Only absolute paths are supported. Relative path resolution (``..``, ``subdir``) is not yet implemented.
+
+.. code-block:: c
+
+    // Future: resolve relative paths
+    char *vfs_resolve_relative(const char *path, const char *cwd) {
+        if (path[0] == '/') {
+            return path;  // Already absolute
+        }
+        // TODO: Handle "..", ".", and relative components
+    }
+
 Listing Mount Points
 ~~~~~~~~~~~~~~~~~~~~
 

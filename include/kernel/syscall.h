@@ -37,8 +37,11 @@
 #define SYS_MMAP        24  // Map memory
 #define SYS_MUNMAP      25  // Unmap memory
 #define SYS_PIPE        26  // Create pipe
+#define SYS_GETDENTS    27  // Get directory entries
+#define SYS_CHDIR       28  // Change current directory
+#define SYS_GETCWD      29  // Get current working directory
 
-#define SYSCALL_COUNT   27
+#define SYSCALL_COUNT   30
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -58,6 +61,13 @@ uint64_t syscall_handler(uint64_t syscall_num,
                         uint64_t arg0, uint64_t arg1, uint64_t arg2,
                         uint64_t arg3, uint64_t arg4, uint64_t arg5);
 
+// Syscall handler with trap frame (for syscalls like fork that need full register state)
+struct trap_frame;
+uint64_t syscall_handler_with_frame(struct trap_frame *tf,
+                                    uint64_t syscall_num, 
+                                    uint64_t arg0, uint64_t arg1, uint64_t arg2,
+                                    uint64_t arg3, uint64_t arg4, uint64_t arg5);
+
 // Individual syscall implementations
 uint64_t sys_exit(int status);
 uint64_t sys_waitpid(int pid, int *wstatus, int options);
@@ -67,7 +77,7 @@ uint64_t sys_getpid(void);
 uint64_t sys_sbrk(int increment);
 uint64_t sys_sleep(uint64_t ms);
 uint64_t sys_yield(void);
-uint64_t sys_fork(void);
+uint64_t sys_fork(struct trap_frame *tf);
 uint64_t sys_getppid(void);
 uint64_t sys_kill(int pid, int signal);
 uint64_t sys_gettime(void);
@@ -85,5 +95,8 @@ uint64_t sys_sigreturn(void);
 uint64_t sys_mmap(void *addr, size_t length, int prot, int flags, int fd, uint64_t offset);
 uint64_t sys_munmap(void *addr, size_t length);
 uint64_t sys_pipe(int pipefd[2]);
+uint64_t sys_getdents(int fd, void *dirp, size_t count);
+uint64_t sys_chdir(const char *path);
+uint64_t sys_getcwd(char *buf, size_t size);
 
 #endif // SYSCALL_H

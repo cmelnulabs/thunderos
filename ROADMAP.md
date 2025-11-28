@@ -251,7 +251,64 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.6.0 - "Visual"
+## Version 0.6.0 - "User Shell" 🚧 IN PROGRESS
+
+**Status:** In Development (started November 28, 2025)
+
+**Focus:** User-mode shell and process execution
+
+### Completed Features
+- ✅ Exec system call (`sys_exec`)
+  - ✅ Load and execute ELF programs from filesystem
+  - ✅ Replace current process image
+  - ✅ Argument passing (argv, envp)
+- ✅ Working directory support
+  - ✅ `sys_chdir()` - Change current directory
+  - ✅ `sys_getcwd()` - Get current working directory
+  - ✅ Per-process cwd tracking
+- ✅ Directory operations
+  - ✅ `sys_mkdir()` - Create directory
+  - ✅ `sys_rmdir()` - Remove directory
+  - ✅ `sys_getdents()` - Read directory entries
+- ✅ File operations
+  - ✅ `sys_unlink()` - Remove file
+- ✅ User-mode shell (ush v0.8.0)
+  - ✅ Runs entirely in user space
+  - ✅ Fork+exec for external commands
+  - ✅ Shell builtins: cd, pwd, mkdir, rmdir, clear, echo, help, exit
+  - ✅ External commands: ls, cat, hello
+- ✅ Userland utilities
+  - ✅ ls - List directory contents
+  - ✅ cat - Display file contents
+  - ✅ pwd - Print working directory
+  - ✅ mkdir - Create directory
+  - ✅ rmdir - Remove directory
+  - ✅ touch - Create empty file
+  - ✅ rm - Remove file
+  - ✅ clear - Clear screen
+  - ✅ sleep - Sleep for seconds
+
+### Remaining Features
+- [ ] Relative path resolution in VFS (cd .., cd subdir)
+- [ ] Command history (up/down arrows)
+- [ ] Tab completion
+
+### Testing Completed
+- ✅ Fork+exec works reliably
+- ✅ Shell commands execute correctly
+- ✅ Directory navigation works (absolute paths)
+- ✅ File/directory creation and removal works
+
+**Release Criteria:**
+- ✅ User-mode shell runs from filesystem
+- ✅ Fork+exec launches programs
+- ✅ Basic shell builtins work
+- ✅ Userland utilities operational
+- [ ] Relative path support
+
+---
+
+## Version 0.7.0 - "Visual"
 
 **Focus:** Graphics and user interface
 
@@ -260,48 +317,30 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - [ ] VirtIO GPU driver
 - [ ] Bitmap font rendering (8x16 characters)
 - [ ] Basic graphics primitives (lines, rectangles, text)
-- [ ] Interactive shell with command history
+- [ ] Command history in shell
 - [ ] Virtual terminals (Alt+F1, Alt+F2, etc.)
 - [ ] Console multiplexing
 
 **Release Criteria:**
 - Graphical console works
-- Interactive shell operational
+- Interactive shell with history
 - Can switch between multiple terminals
 - Works on real hardware with HDMI output
 
 ---
 
-## Version 0.7.0 - "Processes"
+## Version 0.8.0 - "Compatibility"
 
-**Focus:** Advanced process management and POSIX compatibility
-
-### Planned Features
-- [ ] Exec system call (load and execute new program)
-- [ ] Process groups and sessions
-- [ ] Job control (background/foreground processes)
-- [ ] Enhanced error handling with errno throughout
-- [ ] Process resource limits
-
-**Release Criteria:**
-- Fork + exec can run new programs
-- Process groups functional
-- Job control basics working
-- Can run complex multi-process programs
-
----
-
-## Version 0.8.0 - "Shell"
-
-**Focus:** Shell features and scripting
+**Focus:** POSIX compatibility and advanced shell features
 
 ### Planned Features
 - [ ] Environment variables
 - [ ] Expanded syscall set (50+ syscalls)
-- [ ] Working directory (chdir, getcwd)
+- [ ] Relative path resolution throughout VFS
 - [ ] File permissions and ownership
 - [ ] Simple shell scripting support
-- [ ] Shell builtins (cd, export, etc.)
+- [ ] Process groups and sessions
+- [ ] Job control (background/foreground processes)
 - [ ] Pipes in shell syntax (cmd1 | cmd2)
 - [ ] I/O redirection (>, <, >>)
 
@@ -468,15 +507,16 @@ See `CONTRIBUTING.md` for details on how to contribute to ThunderOS development.
 
 Interested in contributing? Here's where we need help:
 
-### For v0.5 (Current)
-- Documentation for signals, pipes, and fork
-- Clean up debug output
-- Final testing and validation
-- CHANGELOG.md updates
+### For v0.6 (Current)
+- Relative path resolution in VFS (cd .., cd subdir)
+- Command history (up/down arrow keys)
+- Tab completion for commands and paths
+- Documentation updates for new syscalls
+- Testing on different scenarios
 
-### For v0.6+ (Future)
+### For v0.7+ (Future)
 - Graphics drivers (VirtIO GPU, framebuffer)
-- Exec system call and process groups
+- Virtual terminal support
 - Wait queues for blocking I/O
 - Network drivers (VirtIO network)
 - User-space utilities and programs

@@ -4,6 +4,7 @@
 #include "kernel/kstring.h"
 #include "kernel/errno.h"
 #include "kernel/elf_loader.h"
+#include "trap.h"
 #include "fs/vfs.h"
 #include "kernel/process.h"
 #include "mm/kmalloc.h"
@@ -219,4 +220,277 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
     clear_errno();
     /* Return process ID */
     return proc->pid;
+}
+
+/**
+ * elf_exec_replace - Replace current process with new ELF executable
+ * 
+ * This is the real exec() implementation - replaces the current process's
+ * memory and starts execution at the new entry point. Does NOT return on success.
+ * 
+ * @param path Path to ELF executable
+ * @param argv Argument array (NULL-terminated)
+ * @param argc Argument count
+ * @param tf Trap frame pointer (from syscall handler stack) to update with new entry point
+ * @return -1 on error (and errno is set), does not return on success
+ */
+int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap_frame *tf) {
+    (void)argv;
+    (void)argc;
+    
+    struct process *proc = process_current();
+    if (!proc || !tf) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    /* Open file */
+    int fd = vfs_open(path, O_RDONLY);
+    if (fd < 0) {
+        return -1;
+    }
+    
+    /* Read ELF header */
+    elf64_ehdr_t ehdr;
+    if (vfs_read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr)) {
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_EIO);
+    }
+    
+    /* Verify ELF magic */
+    if (ehdr.magic != ELF_MAGIC) {
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_EELF_MAGIC);
+    }
+    
+    /* Verify it's a RISC-V executable */
+    if (ehdr.machine != EM_RISCV) {
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_EELF_ARCH);
+    }
+    
+    /* Verify it's an executable */
+    if (ehdr.type != ET_EXEC) {
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_EELF_TYPE);
+    }
+    
+    /* Read program headers */
+    if (ehdr.phnum == 0 || ehdr.phnum > 16) {
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_EELF_NOPHDR);
+    }
+    
+    /* Allocate space for program headers */
+    size_t phdrs_size = ehdr.phnum * sizeof(elf64_phdr_t);
+    elf64_phdr_t *phdrs = kmalloc(phdrs_size);
+    if (!phdrs) {
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
+    }
+    
+    /* Seek to program headers */
+    if (vfs_seek(fd, ehdr.phoff, SEEK_SET) < 0) {
+        kfree(phdrs);
+        vfs_close(fd);
+        return -1;
+    }
+    
+    /* Read all program headers */
+    if (vfs_read(fd, phdrs, phdrs_size) != (int)phdrs_size) {
+        kfree(phdrs);
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_EIO);
+    }
+    
+    /* Find memory range needed */
+    uint64_t min_addr = (uint64_t)-1;
+    uint64_t max_addr = 0;
+    
+    for (int i = 0; i < ehdr.phnum; i++) {
+        if (phdrs[i].type == PT_LOAD) {
+            if (phdrs[i].vaddr < min_addr) {
+                min_addr = phdrs[i].vaddr;
+            }
+            uint64_t seg_end = phdrs[i].vaddr + phdrs[i].memsz;
+            if (seg_end > max_addr) {
+                max_addr = seg_end;
+            }
+        }
+    }
+    
+    if (min_addr == (uint64_t)-1) {
+        kfree(phdrs);
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_EELF_NOPHDR);
+    }
+    
+    /* Allocate memory for the new program */
+    size_t total_size = max_addr - min_addr;
+    size_t num_pages = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    uintptr_t program_phys = pmm_alloc_pages(num_pages);
+    if (!program_phys) {
+        kfree(phdrs);
+        vfs_close(fd);
+        RETURN_ERRNO(THUNDEROS_ENOMEM);
+    }
+    
+    /* Zero out the memory */
+    void *program_mem = (void *)program_phys;
+    kmemset(program_mem, 0, total_size);
+    
+    /* Load each PT_LOAD segment */
+    for (int i = 0; i < ehdr.phnum; i++) {
+        if (phdrs[i].type != PT_LOAD) {
+            continue;
+        }
+        
+        void *dest = (uint8_t*)program_mem + (phdrs[i].vaddr - min_addr);
+        
+        if (vfs_seek(fd, phdrs[i].offset, SEEK_SET) < 0) {
+            pmm_free_pages(program_phys, num_pages);
+            kfree(phdrs);
+            vfs_close(fd);
+            return -1;
+        }
+        
+        if (phdrs[i].filesz > 0) {
+            int nread = vfs_read(fd, dest, phdrs[i].filesz);
+            if (nread != (int)phdrs[i].filesz) {
+                pmm_free_pages(program_phys, num_pages);
+                kfree(phdrs);
+                vfs_close(fd);
+                RETURN_ERRNO(THUNDEROS_EIO);
+            }
+        }
+        
+        /* Zero out BSS */
+        if (phdrs[i].memsz > phdrs[i].filesz) {
+            size_t bss_size = phdrs[i].memsz - phdrs[i].filesz;
+            kmemset((uint8_t*)dest + phdrs[i].filesz, 0, bss_size);
+        }
+    }
+    
+    vfs_close(fd);
+    kfree(phdrs);
+    
+    /* Now replace the current process's memory */
+    
+    /* 1. Free old CODE VMAs and their pages (but keep the stack!) */
+    vm_area_t *vma = proc->vm_areas;
+    vm_area_t *prev = NULL;
+    
+    while (vma) {
+        vm_area_t *next = vma->next;
+        
+        /* Check if this is the user stack (typically at high addresses like 0x3FFF8000) */
+        int is_stack = (vma->start >= 0x3FFF0000 && vma->start < 0x40000000);
+        
+        if (!is_stack) {
+            /* Free physical pages for code/data VMAs */
+            for (uint64_t addr = vma->start; addr < vma->end; addr += PAGE_SIZE) {
+                uintptr_t paddr;
+                if (virt_to_phys(proc->page_table, addr, &paddr) == 0) {
+                    unmap_page(proc->page_table, addr);
+                    pmm_free_page(paddr);
+                }
+            }
+            
+            /* Remove this VMA from the list */
+            if (prev) {
+                prev->next = next;
+            } else {
+                proc->vm_areas = next;
+            }
+            kfree(vma);
+        } else {
+            /* Keep stack VMA, just move prev pointer */
+            prev = vma;
+        }
+        
+        vma = next;
+    }
+    
+    /* 2. Map new program into process's page table */
+    for (size_t i = 0; i < num_pages; i++) {
+        uintptr_t vaddr = min_addr + (i * PAGE_SIZE);
+        uintptr_t paddr = program_phys + (i * PAGE_SIZE);
+        
+        uint64_t flags = PTE_V | PTE_R | PTE_W | PTE_X | PTE_U;
+        
+        if (map_page(proc->page_table, vaddr, paddr, flags) != 0) {
+            /* Critical error - can't recover */
+            hal_uart_puts("FATAL: exec failed to map page at vaddr=0x");
+            hal_uart_put_hex(vaddr);
+            hal_uart_puts("\n");
+            process_exit(-1);
+        }
+    }
+    
+    /* 3. Add VMA for the new program */
+    if (process_add_vma(proc, min_addr, max_addr, VM_READ | VM_WRITE | VM_EXEC | VM_USER) != 0) {
+        hal_uart_puts("FATAL: exec failed to add VMA\n");
+        process_exit(-1);
+    }
+    
+    /* 4. Setup new user stack (keep the existing stack) */
+    /* The stack is already mapped from process creation, we keep it */
+    
+    /* 5. Update trap frame to start at new entry point */
+    /* CRITICAL: We modify the trap frame passed from syscall handler (on stack),
+     * NOT proc->trap_frame. The trap handler will return using this tf. */
+    tf->sepc = ehdr.entry;
+    tf->sp = USER_STACK_TOP;  /* Stack pointer at TOP, grows down */
+    
+    /* 6. Clear registers except sp */
+    tf->ra = 0;
+    tf->gp = 0;
+    tf->tp = 0;
+    tf->t0 = 0;
+    tf->t1 = 0;
+    tf->t2 = 0;
+    tf->s0 = USER_STACK_TOP;  /* CRITICAL: s0 must be valid for -O0 compiled code */
+    tf->s1 = 0;
+    tf->a0 = argc;  /* argc */
+    tf->a1 = (uint64_t)argv;  /* argv */
+    tf->a2 = 0;
+    tf->a3 = 0;
+    tf->a4 = 0;
+    tf->a5 = 0;
+    tf->a6 = 0;
+    tf->a7 = 0;
+    tf->s2 = 0;
+    tf->s3 = 0;
+    tf->s4 = 0;
+    tf->s5 = 0;
+    tf->s6 = 0;
+    tf->s7 = 0;
+    tf->s8 = 0;
+    tf->s9 = 0;
+    tf->s10 = 0;
+    tf->s11 = 0;
+    tf->t3 = 0;
+    tf->t4 = 0;
+    tf->t5 = 0;
+    tf->t6 = 0;
+    
+    /* Extract program name from path */
+    const char *program_name = path;
+    for (const char *p = path; *p; p++) {
+        if (*p == '/') {
+            program_name = p + 1;
+        }
+    }
+    kstrcpy(proc->name, program_name);
+    
+    /* CRITICAL: Switch to the new page table BEFORE returning to user mode!
+     * We just replaced the memory mappings, but the CPU is still using the old
+     * page table. Without this switch, we'd execute the old code. */
+    switch_page_table(proc->page_table);
+    
+    clear_errno();
+    
+    /* SUCCESS: The trap return will jump to the new program's entry point
+     * We return 0 to indicate success to sys_execve, but this value
+     * should NOT be placed in a0 - the trap frame already has the correct values */
+    return 0;
 }

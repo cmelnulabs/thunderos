@@ -149,8 +149,13 @@ void context_switch(struct process *old, struct process *new) {
     }
     new->state = PROC_RUNNING;
     
-    // Set current process
+    // Set current process BEFORE context switch
     process_set_current(new);
+    
+    // NOTE: Page table switch is done by the destination function
+    // (forked_child_entry or after returning from context_switch_asm)
+    // We can't switch page tables here because the return from switch_page_table
+    // fails for forked children - the stack addresses get corrupted.
     
     // Perform low-level context switch
     if (old) {
@@ -159,9 +164,15 @@ void context_switch(struct process *old, struct process *new) {
         context_switch_asm(NULL, &new->context);
     }
     
-    // NOW switch page tables AFTER context switch completes
-    // This is safe because we're now executing with the new process's kernel stack
-    switch_page_table(new->page_table);
+    // CRITICAL: After context_switch_asm returns, we're on the new stack
+    // but may be using the old page table. We need to switch to the
+    // current process's page table.
+    // NOTE: process_set_current(new) was called before the switch, so
+    // process_current() returns the correct (new) process.
+    struct process *current_after = process_current();
+    if (current_after && current_after->page_table) {
+        switch_page_table(current_after->page_table);
+    }
 }
 
 /**

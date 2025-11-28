@@ -65,6 +65,8 @@ void process_init(void) {
     init_proc->exit_code = 0;
     init_proc->errno_value = 0;
     init_proc->trap_frame = NULL;
+    init_proc->cwd[0] = '/';
+    init_proc->cwd[1] = '\0';
     
     current_process = init_proc;
     
@@ -149,14 +151,17 @@ void process_free(struct process *proc) {
     // Clean up VMAs first
     process_cleanup_vmas(proc);
     
-    // Free allocated memory regions
+    // Free kernel stack (this WAS allocated with kmalloc)
     if (proc->kernel_stack) {
         kfree((void *)proc->kernel_stack);
     }
     
-    if (proc->user_stack) {
-        kfree((void *)proc->user_stack);
-    }
+    // NOTE: Do NOT kfree user_stack! It's a USER SPACE virtual address,
+    // not a kernel allocation. The user stack pages are freed when we
+    // free the page table (which unmaps and frees all user pages).
+    // if (proc->user_stack) {
+    //     kfree((void *)proc->user_stack);  // WRONG!
+    // }
     
     if (proc->trap_frame) {
         kfree(proc->trap_frame);
@@ -291,6 +296,8 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->parent = current_process;
     proc->exit_code = 0;
     proc->errno_value = 0;
+    proc->cwd[0] = '/';
+    proc->cwd[1] = '\0';
     
     // Initialize signals
     extern void signal_init_process(struct process *proc);
@@ -321,23 +328,27 @@ void process_exit(int exit_code) {
         }
     }
     
+    // Save parent pointer before acquiring lock
+    struct process *parent = proc->parent;
+    
     lock_acquire(&process_lock);
     
     // Mark as zombie and record exit code
     proc->state = PROC_ZOMBIE;
     proc->exit_code = exit_code;
     
-    // Send SIGCHLD to parent if it exists
-    if (proc->parent) {
-        extern int signal_send(struct process *target, int signum);
-        signal_send(proc->parent, SIGCHLD);
-    }
-    
     // Remove from scheduler to prevent re-execution
     extern void scheduler_dequeue(struct process *proc);
     scheduler_dequeue(proc);
     
     lock_release(&process_lock);
+    
+    // Send SIGCHLD to parent AFTER releasing lock to avoid deadlock
+    // (signal_send -> process_wakeup also acquires process_lock)
+    if (parent) {
+        extern int signal_send(struct process *target, int signum);
+        signal_send(parent, SIGCHLD);
+    }
     
     // Keep yielding until scheduler finds another process
     // This process is now a zombie and should never run again
@@ -496,12 +507,18 @@ void process_dump(void) {
  * Creates a copy of the current process with complete memory isolation.
  * Copies page table, VMAs, and process state.
  * 
+ * @param current_tf Current trap frame with register state to copy to child
  * @return Child PID in parent, 0 in child, -1 on error
  */
-pid_t process_fork(void) {
+pid_t process_fork(struct trap_frame *current_tf) {
     struct process *parent = process_current();
     if (!parent) {
         hal_uart_puts("process_fork: no current process\n");
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    if (!current_tf) {
+        hal_uart_puts("process_fork: NULL trap frame\n");
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
@@ -523,6 +540,11 @@ pid_t process_fork(void) {
     child->priority = parent->priority;
     child->exit_code = 0;
     child->errno_value = 0;
+    
+    // Copy parent's current working directory
+    for (int i = 0; i < 256 && parent->cwd[i]; i++) {
+        child->cwd[i] = parent->cwd[i];
+    }
     
     // Allocate kernel stack for child
     child->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
@@ -571,7 +593,7 @@ pid_t process_fork(void) {
                     RETURN_ERRNO(THUNDEROS_ENOMEM);
                 }
                 
-                // Copy page contents
+                // Copy page contents using physical addresses (identity-mapped in kernel)
                 kmemcpy((void *)child_paddr, (void *)parent_paddr, PAGE_SIZE);
                 
                 // Convert VM flags to PTE flags
@@ -608,7 +630,12 @@ pid_t process_fork(void) {
         RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
-    kmemcpy(child->trap_frame, parent->trap_frame, sizeof(struct trap_frame));
+    // Copy from CURRENT trap frame (on kernel stack), not old parent->trap_frame
+    kmemcpy(child->trap_frame, current_tf, sizeof(struct trap_frame));
+    
+    // NOTE: We do NOT update parent->trap_frame here! The parent is still executing
+    // in the syscall, and parent->trap_frame will be updated by the trap handler
+    // when it returns (or during next context switch if preempted).
     
     // Set return value to 0 in child (distinguish from parent)
     child->trap_frame->a0 = 0;
@@ -624,6 +651,15 @@ pid_t process_fork(void) {
     
     // Set up child's kernel stack pointer
     child->context.sp = child->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    
+    // CRITICAL: Initialize s0 (frame pointer) to point to kernel stack!
+    // forked_child_entry is a C function and with -O0 it uses frame pointers.
+    // It needs s0 to point to a valid KERNEL stack location, not user space.
+    // Set s0 = sp (both point to top of kernel stack).
+    child->context.s0 = child->context.sp;
+    
+    // Other callee-saved registers (s1-s11) can stay at 0 - they're not used
+    // by forked_child_entry before user_return restores them from trap_frame.
     
     // Set up child to return to user mode on first schedule
     // Use forked_child_entry which restores all registers from trap frame
@@ -771,6 +807,8 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     proc->parent = current_process;
     proc->exit_code = 0;
     proc->errno_value = 0;
+    proc->cwd[0] = '/';
+    proc->cwd[1] = '\0';
     
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
@@ -886,6 +924,10 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     // Set stack pointer to top of user stack (grows downward)
     proc->trap_frame->sp = USER_STACK_TOP;
     
+    // CRITICAL: Initialize frame pointer (s0/fp) for -O0 compiled code
+    // With -O0, GCC uses s0 as frame pointer, so it must point to valid stack
+    proc->trap_frame->s0 = USER_STACK_TOP;
+    
     // Set sstatus for user mode return:
     // SPIE=1 (enable interrupts after sret)
     // SPP=0 (return to user mode, not supervisor)
@@ -916,6 +958,8 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->parent = current_process;
     proc->exit_code = 0;
     proc->errno_value = 0;
+    proc->cwd[0] = '/';
+    proc->cwd[1] = '\0';
     
     // Setup memory isolation (VMAs for validation)
     if (process_setup_memory_isolation(proc) != 0) {

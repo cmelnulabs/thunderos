@@ -78,18 +78,28 @@ static void print_hex(unsigned long val) {
 static void handle_exception(struct trap_frame *tf, unsigned long cause) {
     // Check if this is an ECALL from user mode (syscall)
     if (cause == CAUSE_USER_ECALL) {
-        // System call - pass syscall number and arguments from trap frame directly
+        // System call - pass trap frame for syscalls that need full register state (fork)
         
-        // CRITICAL: Update current process's trap_frame pointer to point to THIS trap frame!
-        // This ensures syscalls like fork() can access the CURRENT trap state, not an old one.
-        extern struct process *process_current(void);
-        struct process *proc = process_current();
-        if (proc) {
-            proc->trap_frame = tf;
+        // Call syscall handler with trap frame
+        uint64_t syscall_num = tf->a7;
+        
+        uint64_t ret = syscall_handler_with_frame(tf, syscall_num, tf->a0, tf->a1, tf->a2, tf->a3, tf->a4, tf->a5);
+        
+        // Special case: execve success (SYS_EXECVE==20, ret==0)
+        // On successful exec, trap frame is already configured to jump to new program
+        // Don't modify a0 or sepc
+        if (syscall_num == 20 && ret == 0) {
+            // Exec succeeded - trap frame already set up, just return
+            return;
         }
         
-        // Call syscall handler
-        uint64_t ret = syscall_handler(tf->a7, tf->a0, tf->a1, tf->a2, tf->a3, tf->a4, tf->a5);
+        // Special case: execve success (SYS_EXECVE==20, ret==0)
+        // On successful exec, trap frame is already configured to jump to new program
+        // Don't modify a0 or sepc
+        if (syscall_num == 20 && ret == 0) {
+            // Exec succeeded - trap frame already set up, just return
+            return;
+        }
         
         // Store return value in a0
         tf->a0 = ret;
@@ -131,6 +141,20 @@ static void handle_exception(struct trap_frame *tf, unsigned long cause) {
         print_hex(tf->sepc);
         hal_uart_puts("\nstval:  ");
         print_hex(read_stval());
+        hal_uart_puts("\nra:     ");
+        print_hex(tf->ra);
+        hal_uart_puts("\nsp:     ");
+        print_hex(tf->sp);
+        hal_uart_puts("\ns0:     ");
+        print_hex(tf->s0);
+        hal_uart_puts("\ngp:     ");
+        print_hex(tf->gp);
+        hal_uart_puts("\na0-a2:  ");
+        print_hex(tf->a0);
+        hal_uart_puts(" ");
+        print_hex(tf->a1);
+        hal_uart_puts(" ");
+        print_hex(tf->a2);
         hal_uart_puts("\n");
         
         // Terminate the user process
@@ -207,8 +231,6 @@ void trap_handler(struct trap_frame *tf) {
         // Deliver any pending signals, passing the trap frame so signal
         // handler can modify it to redirect execution
         signal_deliver_with_frame(current, tf);
-    } else {
-        hal_uart_puts("[Trap] No current process\n");
     }
 }
 

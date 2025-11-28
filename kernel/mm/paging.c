@@ -403,6 +403,13 @@ page_table_t *create_user_page_table(void) {
         return NULL;
     }
     
+    // Map VirtIO MMIO region for block device access
+    // Kernel needs this during syscalls that access the filesystem
+    if (map_page(user_pt, 0x10008000, 0x10008000, PTE_KERNEL_DATA) != 0) {
+        kfree(user_pt);
+        return NULL;
+    }
+    
     // Map CLINT MMIO region for timer and interrupt handling
     // Supervisor mode needs this for IPI and scheduling timer management
     if (map_page(user_pt, 0x2000000, 0x2000000, PTE_KERNEL_DATA) != 0) {

@@ -41,6 +41,7 @@ Generic Errors (POSIX-Compatible)
    #define THUNDEROS_EPERM       1   /* Operation not permitted */
    #define THUNDEROS_ENOENT      2   /* No such file or directory */
    #define THUNDEROS_EIO         5   /* I/O error */
+   #define THUNDEROS_EBADF       9   /* Bad file descriptor */
    #define THUNDEROS_ENOMEM      12  /* Out of memory */
    #define THUNDEROS_EACCES      13  /* Permission denied */
    #define THUNDEROS_EBUSY       16  /* Device or resource busy */
@@ -50,6 +51,8 @@ Generic Errors (POSIX-Compatible)
    #define THUNDEROS_EINVAL      22  /* Invalid argument */
    #define THUNDEROS_EMFILE      24  /* Too many open files */
    #define THUNDEROS_ENOSPC      28  /* No space left on device */
+   #define THUNDEROS_ERANGE      34  /* Result too large / buffer too small */
+   #define THUNDEROS_ENOTEMPTY   39  /* Directory not empty */
 
 Filesystem Errors
 ~~~~~~~~~~~~~~~~~
@@ -515,7 +518,7 @@ ThunderOS includes comprehensive errno tests that validate error handling across
    cd build
    mkdir -p testfs
    echo "Test file" > testfs/test.txt
-   mkfs.ext2 -F -q -d testfs ext2-disk.img 10M
+   mkfs.ext2 -F -q -d testfs fs.img 10M
    cd ..
    
    # Run with QEMU 10.1.2+ (IMPORTANT: use virtio-mmio.force-legacy=false)
@@ -527,7 +530,7 @@ ThunderOS includes comprehensive errno tests that validate error handling across
        -bios none \
        -kernel build/thunderos.elf \
        -global virtio-mmio.force-legacy=false \
-       -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \
+       -drive file=build/fs.img,if=none,format=raw,id=hd0 \
        -device virtio-blk-device,drive=hd0
 
 **Critical QEMU Configuration:**
@@ -598,7 +601,7 @@ Common Issues
 
 **Solution:** 
 1. Verify QEMU is started with VirtIO block device parameters
-2. Check that ext2-disk.img exists and is properly formatted
+2. Check that fs.img exists and is properly formatted
 3. Ensure ``-global virtio-mmio.force-legacy=false`` is present
 
 **Issue: errno tests show failures**

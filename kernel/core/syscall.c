@@ -355,10 +355,11 @@ uint64_t sys_open(const char *path, int flags, int mode) {
     }
     
     int fd = vfs_open(path, vfs_flags);
+    
     if (fd < 0) {
         return SYSCALL_ERROR;
     }
-    
+
     (void)mode; // TODO: Use mode for file permissions
     return fd;
 }
@@ -400,8 +401,15 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
     
     // Handle stdin separately
     if (file_descriptor == STDIN_FD) {
-        // Not implemented yet - requires input buffering
-        return 0;
+        // Read from UART
+        if (byte_count == 0) {
+            return 0;
+        }
+        
+        // Read one character from UART
+        char c = hal_uart_getc();
+        buffer[0] = c;
+        return 1;
     }
     
     // Handle regular file descriptors
@@ -410,6 +418,7 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
     }
     
     int bytes_read = vfs_read(file_descriptor, buffer, byte_count);
+    
     if (bytes_read < 0) {
         return SYSCALL_ERROR;
     }
@@ -745,6 +754,204 @@ uint64_t sys_pipe(int pipefd[2]) {
 }
 
 /**
+ * Directory entry structure for getdents
+ * Similar to Linux struct linux_dirent
+ */
+struct thunderos_dirent {
+    uint32_t d_ino;       /* Inode number */
+    uint16_t d_reclen;    /* Record length */
+    uint8_t  d_type;      /* File type */
+    char     d_name[256]; /* File name (null-terminated) */
+};
+
+/**
+ * sys_getdents - Get directory entries
+ * 
+ * Reads directory entries from an open directory file descriptor.
+ * 
+ * @param fd File descriptor of open directory
+ * @param dirp Buffer to store directory entries
+ * @param count Size of buffer in bytes
+ * @return Number of bytes read on success, 0 on end of directory, -1 on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid buffer or count
+ * @errno THUNDEROS_EBADF - Invalid file descriptor
+ * @errno THUNDEROS_ENOTDIR - fd does not refer to a directory
+ */
+uint64_t sys_getdents(int fd, void *dirp, size_t count) {
+    struct process *proc = process_current();
+    if (!proc) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    if (!dirp || count < sizeof(struct thunderos_dirent)) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    // Validate user pointer
+    if (!process_validate_user_ptr(proc, dirp, count, VM_WRITE)) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    // Get the file from fd
+    vfs_file_t *file = vfs_get_file(fd);
+    if (!file || !file->node) {
+        set_errno(THUNDEROS_EBADF);
+        return SYSCALL_ERROR;
+    }
+    
+    vfs_node_t *node = file->node;
+    
+    // Must be a directory
+    if (node->type != VFS_TYPE_DIRECTORY) {
+        set_errno(THUNDEROS_ENOTDIR);
+        return SYSCALL_ERROR;
+    }
+    
+    // Check for readdir operation
+    if (!node->ops || !node->ops->readdir) {
+        set_errno(THUNDEROS_EIO);
+        return SYSCALL_ERROR;
+    }
+    
+    // Read directory entries starting from current position
+    uint8_t *buf = (uint8_t *)dirp;
+    size_t bytes_written = 0;
+    uint32_t index = file->pos;
+    
+    char name[256];
+    uint32_t inode_num;
+    
+    while (bytes_written + sizeof(struct thunderos_dirent) <= count) {
+        int ret = node->ops->readdir(node, index, name, &inode_num);
+        if (ret != 0) {
+            // No more entries
+            break;
+        }
+        
+        // Create dirent entry
+        struct thunderos_dirent *entry = (struct thunderos_dirent *)(buf + bytes_written);
+        entry->d_ino = inode_num;
+        entry->d_reclen = sizeof(struct thunderos_dirent);
+        entry->d_type = 0;  // DT_UNKNOWN for now
+        
+        // Copy name
+        uint32_t name_len = 0;
+        while (name[name_len] && name_len < 255) {
+            entry->d_name[name_len] = name[name_len];
+            name_len++;
+        }
+        entry->d_name[name_len] = '\0';
+        
+        bytes_written += sizeof(struct thunderos_dirent);
+        index++;
+    }
+    
+    // Update file position
+    file->pos = index;
+    
+    clear_errno();
+    return bytes_written;
+}
+
+/**
+ * sys_chdir - Change current working directory
+ * 
+ * @param path Path to new working directory (must be absolute)
+ * @return 0 on success, -1 on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid path or not absolute
+ * @errno THUNDEROS_ENOENT - Path does not exist
+ * @errno THUNDEROS_ENOTDIR - Path is not a directory
+ */
+uint64_t sys_chdir(const char *path) {
+    struct process *proc = process_current();
+    if (!proc) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    if (!is_valid_user_pointer(path, 1)) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    // Resolve the path to verify it exists and is a directory
+    vfs_node_t *node = vfs_resolve_path(path);
+    if (!node) {
+        /* errno already set by vfs_resolve_path */
+        return SYSCALL_ERROR;
+    }
+    
+    if (node->type != VFS_TYPE_DIRECTORY) {
+        set_errno(THUNDEROS_ENOTDIR);
+        return SYSCALL_ERROR;
+    }
+    
+    // Copy path to process cwd
+    size_t i = 0;
+    while (path[i] && i < VFS_MAX_PATH - 1) {
+        proc->cwd[i] = path[i];
+        i++;
+    }
+    proc->cwd[i] = '\0';
+    
+    clear_errno();
+    return SYSCALL_SUCCESS;
+}
+
+/**
+ * sys_getcwd - Get current working directory
+ * 
+ * @param buf Buffer to store path
+ * @param size Size of buffer
+ * @return Pointer to buf on success, NULL on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid buffer or size
+ * @errno THUNDEROS_ERANGE - Buffer too small for path
+ */
+uint64_t sys_getcwd(char *buf, size_t size) {
+    struct process *proc = process_current();
+    if (!proc) {
+        set_errno(THUNDEROS_EINVAL);
+        return (uint64_t)NULL;
+    }
+    
+    if (!buf || size == 0) {
+        set_errno(THUNDEROS_EINVAL);
+        return (uint64_t)NULL;
+    }
+    
+    if (!process_validate_user_ptr(proc, buf, size, VM_WRITE)) {
+        set_errno(THUNDEROS_EINVAL);
+        return (uint64_t)NULL;
+    }
+    
+    // Check if buffer is large enough
+    size_t cwd_len = 0;
+    while (proc->cwd[cwd_len]) cwd_len++;
+    
+    if (cwd_len >= size) {
+        set_errno(THUNDEROS_ERANGE);
+        return (uint64_t)NULL;
+    }
+    
+    // Copy cwd to buffer
+    size_t i = 0;
+    while (proc->cwd[i] && i < size - 1) {
+        buf[i] = proc->cwd[i];
+        i++;
+    }
+    buf[i] = '\0';
+    
+    clear_errno();
+    return (uint64_t)buf;
+}
+
+/**
  * sys_fork - Create a child process
  * 
  * Creates a complete copy of the current process with its own address space.
@@ -775,28 +982,34 @@ uint64_t sys_pipe(int pipefd[2]) {
  *     // Parent process (pid = child's PID)
  *   }
  */
-uint64_t sys_fork(void) {
+uint64_t sys_fork(struct trap_frame *tf) {
     struct process *current = process_current();
     if (!current) {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    // Call kernel fork implementation
-    pid_t child_pid = process_fork();
+    if (!tf) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    // Call kernel fork implementation with current trap frame
+    // The child will get a copy of this trap frame
+    pid_t child_pid = process_fork(tf);
     
     // Return child PID to parent, or -1 on error (errno already set)
     return child_pid;
 }
 
 /**
- * sys_execve - Execute program from filesystem
+ * sys_execve_with_frame - Execute program from filesystem (with trap frame)
  * 
+ * @param tf Trap frame pointer (for updating entry point)
  * @param path Path to executable
  * @param argv Argument array
  * @param envp Environment array (ignored)
  * @return Does not return on success, -1 on error
  */
-uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
+uint64_t sys_execve_with_frame(struct trap_frame *tf, const char *path, const char *argv[], const char *envp[]) {
     (void)envp;
     
     if (!is_valid_user_pointer(path, 1)) {
@@ -814,11 +1027,21 @@ uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
         }
     }
     
-    // Load and execute ELF binary
-    int result = elf_load_exec(path, argv, argc);
+    // Replace current process with new ELF binary
+    // On success, this modifies trap_frame to jump to new entry point
+    // and returns 0. On error, returns -1.
+    int result = elf_exec_replace(path, argv, argc, tf);
     
-    // If we get here, exec failed
-    return (result < 0) ? SYSCALL_ERROR : (uint64_t)result;
+    if (result == 0) {
+        // SUCCESS: exec replaced the process
+        // The trap frame has been modified to jump to the new program
+        // We must NOT modify trap_frame->a0 - just return 
+        // The syscall handler should detect exec success and not modify a0
+        return 0;  // Special: tells syscall_handler not to modify a0
+    }
+    
+    // FAILURE: exec failed
+    return SYSCALL_ERROR;
 }
 
 /**
@@ -836,6 +1059,28 @@ uint64_t sys_execve(const char *path, const char *argv[], const char *envp[]) {
  * @param argument5 Sixth argument (from a5 register)
  * @return Return value (placed in a0 register)
  */
+/**
+ * Syscall handler with trap frame for syscalls that need full register state
+ */
+uint64_t syscall_handler_with_frame(struct trap_frame *tf,
+                                    uint64_t syscall_number, 
+                                    uint64_t argument0, uint64_t argument1, uint64_t argument2,
+                                    uint64_t argument3, uint64_t argument4, uint64_t argument5) {
+    // For fork, we need to pass the current trap frame
+    if (syscall_number == SYS_FORK) {
+        return sys_fork(tf);
+    }
+    
+    // For execve, we need to pass the trap frame to update sepc
+    if (syscall_number == SYS_EXECVE) {
+        return sys_execve_with_frame(tf, (const char *)argument0, (const char **)argument1, (const char **)argument2);
+    }
+    
+    // For all other syscalls, use the normal handler
+    return syscall_handler(syscall_number, argument0, argument1, argument2, 
+                          argument3, argument4, argument5);
+}
+
 uint64_t syscall_handler(uint64_t syscall_number, 
                         uint64_t argument0, uint64_t argument1, uint64_t argument2,
                         uint64_t argument3, uint64_t argument4, uint64_t argument5) {
@@ -919,7 +1164,8 @@ uint64_t syscall_handler(uint64_t syscall_number,
             break;
             
         case SYS_EXECVE:
-            return_value = sys_execve((const char *)argument0, (const char **)argument1, (const char **)argument2);
+            // Execve is handled in syscall_handler_with_frame
+            return_value = SYSCALL_ERROR;
             break;
             
         case SYS_MMAP:
@@ -935,8 +1181,24 @@ uint64_t syscall_handler(uint64_t syscall_number,
             return_value = sys_pipe((int *)argument0);
             break;
             
+        case SYS_GETDENTS:
+            return_value = sys_getdents((int)argument0, (void *)argument1, (size_t)argument2);
+            break;
+            
+        case SYS_CHDIR:
+            return_value = sys_chdir((const char *)argument0);
+            break;
+            
+        case SYS_GETCWD:
+            return_value = sys_getcwd((char *)argument0, (size_t)argument1);
+            break;
+            
         case SYS_FORK:
-            return_value = sys_fork();
+            // Fork is handled in syscall_handler_with_frame
+            // This should not be reached
+            hal_uart_puts("[WARN] SYS_FORK called from old syscall_handler\n");
+            return_value = SYSCALL_ERROR;
+            break;
             break;
             
         case SYS_EXEC:

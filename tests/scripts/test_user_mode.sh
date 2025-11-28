@@ -37,7 +37,7 @@ cd build
 mkdir -p testfs
 echo "Hello from ext2!" > testfs/hello.txt
 echo "Testing user mode" > testfs/test.txt
-mkfs.ext2 -F -q -d testfs ext2-disk.img 10M
+mkfs.ext2 -F -q -d testfs fs.img 10M
 cd ..
 
 # Start QEMU and feed commands
@@ -57,7 +57,7 @@ echo "Running QEMU tests..."
     -bios none \
     -kernel build/thunderos.elf \
     -global virtio-mmio.force-legacy=false \
-    -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \
+    -drive file=build/fs.img,if=none,format=raw,id=hd0 \
     -device virtio-blk-device,drive=hd0 2>&1 | tee test_output.txt
 
 echo ""

@@ -125,6 +125,9 @@ struct process {
     sigset_t pending_signals;           // Pending signals (bitmask)
     sigset_t blocked_signals;           // Blocked signals (bitmask)
     sighandler_t signal_handlers[NSIG]; // Signal handler functions
+    
+    // Current working directory
+    char cwd[256];                      // Current working directory path
 };
 
 /**
@@ -231,7 +234,8 @@ void process_dump(void);
  * 
  * @return Child PID in parent, 0 in child, -1 on error
  */
-pid_t process_fork(void);
+struct trap_frame;
+pid_t process_fork(struct trap_frame *current_tf);
 
 /**
  * Execute a new program in the current process
