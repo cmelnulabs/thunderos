@@ -515,7 +515,7 @@ ThunderOS includes comprehensive errno tests that validate error handling across
    cd build
    mkdir -p testfs
    echo "Test file" > testfs/test.txt
-   mkfs.ext2 -F -q -d testfs ext2-disk.img 10M
+   mkfs.ext2 -F -q -d testfs fs.img 10M
    cd ..
    
    # Run with QEMU 10.1.2+ (IMPORTANT: use virtio-mmio.force-legacy=false)
@@ -527,7 +527,7 @@ ThunderOS includes comprehensive errno tests that validate error handling across
        -bios none \
        -kernel build/thunderos.elf \
        -global virtio-mmio.force-legacy=false \
-       -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \
+       -drive file=build/fs.img,if=none,format=raw,id=hd0 \
        -device virtio-blk-device,drive=hd0
 
 **Critical QEMU Configuration:**
@@ -598,7 +598,7 @@ Common Issues
 
 **Solution:** 
 1. Verify QEMU is started with VirtIO block device parameters
-2. Check that ext2-disk.img exists and is properly formatted
+2. Check that fs.img exists and is properly formatted
 3. Ensure ``-global virtio-mmio.force-legacy=false`` is present
 
 **Issue: errno tests show failures**

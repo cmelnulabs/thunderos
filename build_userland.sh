@@ -59,6 +59,48 @@ echo "Building pipe_simple_test..."
 "${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/pipe_simple_test.o" -o "${BUILD_DIR}/pipe_simple_test"
 "${OBJCOPY}" -O binary "${BUILD_DIR}/pipe_simple_test" "${BUILD_DIR}/pipe_simple_test.bin"
 
+# Build mkdir
+echo "Building mkdir..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/mkdir.c" -o "${BUILD_DIR}/mkdir.o"
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/mkdir.o" -o "${BUILD_DIR}/mkdir"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/mkdir" "${BUILD_DIR}/mkdir.bin"
+
+# Build rmdir
+echo "Building rmdir..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/rmdir.c" -o "${BUILD_DIR}/rmdir.o"
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/rmdir.o" -o "${BUILD_DIR}/rmdir"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/rmdir" "${BUILD_DIR}/rmdir.bin"
+
+# Build pwd
+echo "Building pwd..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/pwd.c" -o "${BUILD_DIR}/pwd.o"
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/pwd.o" -o "${BUILD_DIR}/pwd"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/pwd" "${BUILD_DIR}/pwd.bin"
+
+# Build touch
+echo "Building touch..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/touch.c" -o "${BUILD_DIR}/touch.o"
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/touch.o" -o "${BUILD_DIR}/touch"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/touch" "${BUILD_DIR}/touch.bin"
+
+# Build rm
+echo "Building rm..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/rm.c" -o "${BUILD_DIR}/rm.o"
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/rm.o" -o "${BUILD_DIR}/rm"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/rm" "${BUILD_DIR}/rm.bin"
+
+# Build clear
+echo "Building clear..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/clear.c" -o "${BUILD_DIR}/clear.o"
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/clear.o" -o "${BUILD_DIR}/clear"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/clear" "${BUILD_DIR}/clear.bin"
+
+# Build sleep
+echo "Building sleep..."
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/sleep.c" -o "${BUILD_DIR}/sleep.o"
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/sleep.o" -o "${BUILD_DIR}/sleep"
+"${OBJCOPY}" -O binary "${BUILD_DIR}/sleep" "${BUILD_DIR}/sleep.bin"
+
 # Build ush (user shell) - flat version to avoid stack issues with -O0
 echo "Building ush (flat)..."
 "${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ush_flat.c" -o "${BUILD_DIR}/ush_flat.o"

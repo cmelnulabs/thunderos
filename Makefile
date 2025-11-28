@@ -89,7 +89,7 @@ QEMU_FLAGS += -bios none
 FS_IMG := $(BUILD_DIR)/fs.img
 FS_SIZE := 10M
 
-.PHONY: all clean qemu debug fs userland test
+.PHONY: all clean qemu debug fs userland test run
 
 all: $(KERNEL_ELF) $(KERNEL_BIN)
 	@echo ""
@@ -149,6 +149,13 @@ $(FS_IMG): userland
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"
+	@cp userland/build/mkdir $(BUILD_DIR)/testfs/bin/mkdir 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) mkdir not built"
+	@cp userland/build/rmdir $(BUILD_DIR)/testfs/bin/rmdir 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) rmdir not built"
+	@cp userland/build/pwd $(BUILD_DIR)/testfs/bin/pwd 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pwd not built"
+	@cp userland/build/touch $(BUILD_DIR)/testfs/bin/touch 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) touch not built"
+	@cp userland/build/rm $(BUILD_DIR)/testfs/bin/rm 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) rm not built"
+	@cp userland/build/clear $(BUILD_DIR)/testfs/bin/clear 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) clear not built"
+	@cp userland/build/sleep $(BUILD_DIR)/testfs/bin/sleep 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) sleep not built"
 	@cp userland/build/ush $(BUILD_DIR)/testfs/bin/ush 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ush not built"
 	@cp userland/build/signal_test $(BUILD_DIR)/testfs/bin/signal_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) signal_test not built"
 	@cp userland/build/pipe_test $(BUILD_DIR)/testfs/bin/pipe_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_test not built"
@@ -241,3 +248,6 @@ dump: $(KERNEL_ELF)
 	@echo "$(BOLD)$(BLUE)[DUMP]$(RESET) Generating disassembly..."
 	@$(OBJDUMP) -d $< > $(BUILD_DIR)/thunderos.dump
 	@echo "$(GREEN)✓ Disassembly saved:$(RESET) $(BUILD_DIR)/thunderos.dump"
+
+# Quick run: build everything and run QEMU
+run: all userland fs qemu

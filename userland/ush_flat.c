@@ -21,18 +21,24 @@ void _start(void) {
     // Banner strings
     const char *nl = "\n";
     const char *banner1 = "===========================================\n";
-    const char *banner2 = "  ThunderOS User Shell v0.6.0\n";
+    const char *banner2 = "  ThunderOS User Shell v0.8.0\n";
     const char *banner3 = "===========================================\n";
     const char *info = "Type 'help' for available commands\n";
     const char *prompt = "ush> ";
     
     // Command strings  
-    const char *help_response = "Available commands:\n  help  - Show this help\n  echo  - Echo arguments\n  cat   - Display file contents\n  hello - Run hello program\n  exit  - Exit shell\n";
+    const char *help_response = "Available commands:\n  help  - Show this help\n  echo  - Echo arguments\n  cat   - Display file contents\n  ls    - List directory\n  cd    - Change directory\n  pwd   - Print working directory\n  mkdir - Create directory\n  rmdir - Remove directory\n  clear - Clear screen\n  hello - Run hello program\n  exit  - Exit shell\n";
     const char *goodbye = "Goodbye!\n";
     const char *unknown = "Unknown command (try 'help')\n";
     const char *usage_cat = "Usage: cat <filename>\n";
     const char *usage_echo = "Usage: echo <text>\n";
+    const char *usage_cd = "Usage: cd <directory>\n";
+    const char *usage_mkdir = "Usage: mkdir <directory>\n";
+    const char *usage_rmdir = "Usage: rmdir <directory>\n";
     const char *file_error = "Error: Cannot open file\n";
+    const char *cd_error = "cd: cannot access directory\n";
+    const char *mkdir_error = "mkdir: cannot create directory\n";
+    const char *rmdir_error = "rmdir: cannot remove directory\n";
     
     // Write banner (inline strlen and write)
     const char *s;
@@ -64,9 +70,11 @@ void _start(void) {
         }
         
         // Echo character
-        syscall3(1, 1, (long)&c, 1);
-        
         if (c == '\r' || c == '\n') {
+            // Echo a proper newline sequence
+            const char *crlf = "\r\n";
+            syscall3(1, 1, (long)crlf, 2);
+            
             // End of line
             input[pos] = '\0';
             
@@ -85,6 +93,12 @@ void _start(void) {
                 int is_echo = (cmd_len == 4 && input[0] == 'e' && input[1] == 'c' && input[2] == 'h' && input[3] == 'o');
                 int is_cat = (cmd_len == 3 && input[0] == 'c' && input[1] == 'a' && input[2] == 't');
                 int is_hello = (cmd_len == 5 && input[0] == 'h' && input[1] == 'e' && input[2] == 'l' && input[3] == 'l' && input[4] == 'o');
+                int is_ls = (cmd_len == 2 && input[0] == 'l' && input[1] == 's');
+                int is_cd = (cmd_len == 2 && input[0] == 'c' && input[1] == 'd');
+                int is_mkdir = (cmd_len == 5 && input[0] == 'm' && input[1] == 'k' && input[2] == 'd' && input[3] == 'i' && input[4] == 'r');
+                int is_rmdir = (cmd_len == 5 && input[0] == 'r' && input[1] == 'm' && input[2] == 'd' && input[3] == 'i' && input[4] == 'r');
+                int is_pwd = (cmd_len == 3 && input[0] == 'p' && input[1] == 'w' && input[2] == 'd');
+                int is_clear = (cmd_len == 5 && input[0] == 'c' && input[1] == 'l' && input[2] == 'e' && input[3] == 'a' && input[4] == 'r');
                 
                 if (is_help) {
                     s = help_response;
@@ -166,6 +180,116 @@ void _start(void) {
                         syscall3(9, pid, (long)&status, 0);
                     }
                     
+                } else if (is_ls) {
+                    // Fork and exec ls program
+                    long pid = syscall0(7);  // SYS_FORK
+                    if (pid == 0) {
+                        // Child process - exec /bin/ls
+                        const char *path = "/bin/ls";
+                        const char *argv[] = { path, 0 };
+                        const char *envp[] = { 0 };
+                        syscall3(20, (long)path, (long)argv, (long)envp);  // SYS_EXECVE
+                        // If exec fails, exit
+                        const char *exec_fail = "Failed to exec ls\n";
+                        s = exec_fail;
+                        len = 0;
+                        while (s[len]) len++;
+                        syscall3(1, 1, (long)exec_fail, len);
+                        syscall1(0, 1);
+                    } else if (pid > 0) {
+                        // Parent - wait for child (SYS_WAIT = 9)
+                        int status;
+                        syscall3(9, pid, (long)&status, 0);
+                    }
+                    
+                } else if (is_cd) {
+                    // cd is a shell built-in (changes shell's cwd)
+                    if (arg_start < pos) {
+                        // Null-terminate the path
+                        input[pos] = '\0';
+                        // SYS_CHDIR = 28
+                        long result = syscall1(28, (long)&input[arg_start]);
+                        if (result != 0) {
+                            s = cd_error;
+                            len = 0;
+                            while (s[len]) len++;
+                            syscall3(1, 1, (long)cd_error, len);
+                        }
+                    } else {
+                        s = usage_cd;
+                        len = 0;
+                        while (s[len]) len++;
+                        syscall3(1, 1, (long)usage_cd, len);
+                    }
+                    
+                } else if (is_mkdir) {
+                    // mkdir is a shell built-in
+                    if (arg_start < pos) {
+                        // Null-terminate the path
+                        input[pos] = '\0';
+                        // SYS_MKDIR = 17, mode = 0755
+                        long result = syscall2(17, (long)&input[arg_start], 0755);
+                        if (result != 0) {
+                            s = mkdir_error;
+                            len = 0;
+                            while (s[len]) len++;
+                            syscall3(1, 1, (long)mkdir_error, len);
+                        }
+                    } else {
+                        s = usage_mkdir;
+                        len = 0;
+                        while (s[len]) len++;
+                        syscall3(1, 1, (long)usage_mkdir, len);
+                    }
+                    
+                } else if (is_rmdir) {
+                    // rmdir is a shell built-in
+                    if (arg_start < pos) {
+                        // Null-terminate the path
+                        input[pos] = '\0';
+                        // SYS_RMDIR = 19
+                        long result = syscall1(19, (long)&input[arg_start]);
+                        if (result != 0) {
+                            s = rmdir_error;
+                            len = 0;
+                            while (s[len]) len++;
+                            syscall3(1, 1, (long)rmdir_error, len);
+                        }
+                    } else {
+                        s = usage_rmdir;
+                        len = 0;
+                        while (s[len]) len++;
+                        syscall3(1, 1, (long)usage_rmdir, len);
+                    }
+                    
+                } else if (is_pwd) {
+                    // pwd - fork and exec /bin/pwd
+                    long pid = syscall0(7);  // SYS_FORK
+                    if (pid == 0) {
+                        const char *path = "/bin/pwd";
+                        const char *argv[] = { path, 0 };
+                        const char *envp[] = { 0 };
+                        syscall3(20, (long)path, (long)argv, (long)envp);
+                        syscall1(0, 1);
+                    } else if (pid > 0) {
+                        int status;
+                        syscall3(9, pid, (long)&status, 0);
+                    }
+                    
+                } else if (is_clear) {
+                    // clear - fork and exec /bin/clear
+                    long pid = syscall0(7);  // SYS_FORK
+                    if (pid == 0) {
+                        const char *path = "/bin/clear";
+                        const char *argv[] = { path, 0 };
+                        const char *envp[] = { 0 };
+                        syscall3(20, (long)path, (long)argv, (long)envp);
+                        syscall1(0, 1);
+                    } else if (pid > 0) {
+                        int status;
+                        syscall3(9, pid, (long)&status, 0);
+                    }
+                    
                 } else {
                     s = unknown;
                     len = 0;
@@ -190,7 +314,8 @@ void _start(void) {
             }
         }
         else if (c >= 32 && c < 127) {
-            // Printable character
+            // Printable character - echo and store
+            syscall3(1, 1, (long)&c, 1);
             if (pos < 255) {
                 input[pos++] = c;
             }

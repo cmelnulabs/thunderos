@@ -125,6 +125,9 @@ struct process {
     sigset_t pending_signals;           // Pending signals (bitmask)
     sigset_t blocked_signals;           // Blocked signals (bitmask)
     sighandler_t signal_handlers[NSIG]; // Signal handler functions
+    
+    // Current working directory
+    char cwd[256];                      // Current working directory path
 };
 
 /**

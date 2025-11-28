@@ -366,6 +366,11 @@ void kernel_main(void) {
     
     // Halt CPU
     hal_uart_puts("[INFO] System halted\n");
+    
+    // Clear sscratch to avoid trap issues - we're now purely in kernel mode
+    // with no user processes, so sscratch should be 0 (indicates kernel trap)
+    __asm__ volatile("csrw sscratch, zero");
+    
     while (1) {
         __asm__ volatile("wfi");
     }

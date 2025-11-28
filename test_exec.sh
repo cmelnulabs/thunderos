@@ -11,7 +11,7 @@ timeout 12 qemu-system-riscv64 \
     -bios none \
     -kernel build/thunderos.elf \
     -global virtio-mmio.force-legacy=false \
-    -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \
+    -drive file=build/fs.img,if=none,format=raw,id=hd0 \
     -device virtio-blk-device,drive=hd0 2>&1 | tee exec_test_output.log &
 
 QEMU_PID=$!

@@ -37,8 +37,11 @@
 #define SYS_MMAP        24  // Map memory
 #define SYS_MUNMAP      25  // Unmap memory
 #define SYS_PIPE        26  // Create pipe
+#define SYS_GETDENTS    27  // Get directory entries
+#define SYS_CHDIR       28  // Change current directory
+#define SYS_GETCWD      29  // Get current working directory
 
-#define SYSCALL_COUNT   27
+#define SYSCALL_COUNT   30
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -92,5 +95,8 @@ uint64_t sys_sigreturn(void);
 uint64_t sys_mmap(void *addr, size_t length, int prot, int flags, int fd, uint64_t offset);
 uint64_t sys_munmap(void *addr, size_t length);
 uint64_t sys_pipe(int pipefd[2]);
+uint64_t sys_getdents(int fd, void *dirp, size_t count);
+uint64_t sys_chdir(const char *path);
+uint64_t sys_getcwd(char *buf, size_t size);
 
 #endif // SYSCALL_H

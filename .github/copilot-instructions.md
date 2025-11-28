@@ -222,7 +222,7 @@ cleanup:
    # Create test filesystem
    cd build
    mkdir -p testfs && echo "test" > testfs/test.txt
-   mkfs.ext2 -F -q -d testfs ext2-disk.img 10M
+   mkfs.ext2 -F -q -d testfs fs.img 10M
    cd ..
    
    # Run with correct QEMU flags
@@ -234,7 +234,7 @@ cleanup:
        -bios default \
        -kernel build/thunderos.elf \
        -global virtio-mmio.force-legacy=false \
-       -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \
+       -drive file=build/fs.img,if=none,format=raw,id=hd0 \
        -device virtio-blk-device,drive=hd0
    ```
    
@@ -281,7 +281,7 @@ qemu-system-riscv64 \
     -bios default \
     -kernel build/thunderos.elf \
     -global virtio-mmio.force-legacy=false \
-    -drive file=build/ext2-disk.img,if=none,format=raw,id=hd0 \
+    -drive file=build/fs.img,if=none,format=raw,id=hd0 \
     -device virtio-blk-device,drive=hd0
 ```
 

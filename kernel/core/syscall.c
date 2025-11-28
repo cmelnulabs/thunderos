@@ -754,6 +754,168 @@ uint64_t sys_pipe(int pipefd[2]) {
 }
 
 /**
+ * Directory entry structure for getdents
+ * Similar to Linux struct linux_dirent
+ */
+struct thunderos_dirent {
+    uint32_t d_ino;       /* Inode number */
+    uint16_t d_reclen;    /* Record length */
+    uint8_t  d_type;      /* File type */
+    char     d_name[256]; /* File name (null-terminated) */
+};
+
+/**
+ * sys_getdents - Get directory entries
+ * 
+ * Reads directory entries from an open directory file descriptor.
+ * 
+ * @param fd File descriptor of open directory
+ * @param dirp Buffer to store directory entries
+ * @param count Size of buffer in bytes
+ * @return Number of bytes read on success, 0 on end of directory, -1 on error
+ */
+uint64_t sys_getdents(int fd, void *dirp, size_t count) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    if (!dirp || count < sizeof(struct thunderos_dirent)) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Validate user pointer
+    if (!process_validate_user_ptr(proc, dirp, count, VM_WRITE)) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Get the file from fd
+    vfs_file_t *file = vfs_get_file(fd);
+    if (!file || !file->node) {
+        return SYSCALL_ERROR;
+    }
+    
+    vfs_node_t *node = file->node;
+    
+    // Must be a directory
+    if (node->type != VFS_TYPE_DIRECTORY) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Check for readdir operation
+    if (!node->ops || !node->ops->readdir) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Read directory entries starting from current position
+    uint8_t *buf = (uint8_t *)dirp;
+    size_t bytes_written = 0;
+    uint32_t index = file->pos;
+    
+    char name[256];
+    uint32_t inode_num;
+    
+    while (bytes_written + sizeof(struct thunderos_dirent) <= count) {
+        int ret = node->ops->readdir(node, index, name, &inode_num);
+        if (ret != 0) {
+            // No more entries
+            break;
+        }
+        
+        // Create dirent entry
+        struct thunderos_dirent *entry = (struct thunderos_dirent *)(buf + bytes_written);
+        entry->d_ino = inode_num;
+        entry->d_reclen = sizeof(struct thunderos_dirent);
+        entry->d_type = 0;  // DT_UNKNOWN for now
+        
+        // Copy name
+        uint32_t name_len = 0;
+        while (name[name_len] && name_len < 255) {
+            entry->d_name[name_len] = name[name_len];
+            name_len++;
+        }
+        entry->d_name[name_len] = '\0';
+        
+        bytes_written += sizeof(struct thunderos_dirent);
+        index++;
+    }
+    
+    // Update file position
+    file->pos = index;
+    
+    return bytes_written;
+}
+
+/**
+ * sys_chdir - Change current working directory
+ * 
+ * @param path Path to new working directory
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_chdir(const char *path) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    if (!is_valid_user_pointer(path, 1)) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Resolve the path to verify it exists and is a directory
+    vfs_node_t *node = vfs_resolve_path(path);
+    if (!node) {
+        return SYSCALL_ERROR;
+    }
+    
+    if (node->type != VFS_TYPE_DIRECTORY) {
+        return SYSCALL_ERROR;
+    }
+    
+    // Copy path to process cwd
+    size_t i = 0;
+    while (path[i] && i < VFS_MAX_PATH - 1) {
+        proc->cwd[i] = path[i];
+        i++;
+    }
+    proc->cwd[i] = '\0';
+    
+    return SYSCALL_SUCCESS;
+}
+
+/**
+ * sys_getcwd - Get current working directory
+ * 
+ * @param buf Buffer to store path
+ * @param size Size of buffer
+ * @return Pointer to buf on success, NULL on error
+ */
+uint64_t sys_getcwd(char *buf, size_t size) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return (uint64_t)NULL;
+    }
+    
+    if (!buf || size == 0) {
+        return (uint64_t)NULL;
+    }
+    
+    if (!process_validate_user_ptr(proc, buf, size, VM_WRITE)) {
+        return (uint64_t)NULL;
+    }
+    
+    // Copy cwd to buffer
+    size_t i = 0;
+    while (proc->cwd[i] && i < size - 1) {
+        buf[i] = proc->cwd[i];
+        i++;
+    }
+    buf[i] = '\0';
+    
+    return (uint64_t)buf;
+}
+
+/**
  * sys_fork - Create a child process
  * 
  * Creates a complete copy of the current process with its own address space.
@@ -981,6 +1143,18 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_PIPE:
             return_value = sys_pipe((int *)argument0);
+            break;
+            
+        case SYS_GETDENTS:
+            return_value = sys_getdents((int)argument0, (void *)argument1, (size_t)argument2);
+            break;
+            
+        case SYS_CHDIR:
+            return_value = sys_chdir((const char *)argument0);
+            break;
+            
+        case SYS_GETCWD:
+            return_value = sys_getcwd((char *)argument0, (size_t)argument1);
             break;
             
         case SYS_FORK:

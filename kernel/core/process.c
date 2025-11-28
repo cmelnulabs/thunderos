@@ -65,6 +65,8 @@ void process_init(void) {
     init_proc->exit_code = 0;
     init_proc->errno_value = 0;
     init_proc->trap_frame = NULL;
+    init_proc->cwd[0] = '/';
+    init_proc->cwd[1] = '\0';
     
     current_process = init_proc;
     
@@ -294,6 +296,8 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->parent = current_process;
     proc->exit_code = 0;
     proc->errno_value = 0;
+    proc->cwd[0] = '/';
+    proc->cwd[1] = '\0';
     
     // Initialize signals
     extern void signal_init_process(struct process *proc);
@@ -536,6 +540,11 @@ pid_t process_fork(struct trap_frame *current_tf) {
     child->priority = parent->priority;
     child->exit_code = 0;
     child->errno_value = 0;
+    
+    // Copy parent's current working directory
+    for (int i = 0; i < 256 && parent->cwd[i]; i++) {
+        child->cwd[i] = parent->cwd[i];
+    }
     
     // Allocate kernel stack for child
     child->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
@@ -798,6 +807,8 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     proc->parent = current_process;
     proc->exit_code = 0;
     proc->errno_value = 0;
+    proc->cwd[0] = '/';
+    proc->cwd[1] = '\0';
     
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
@@ -947,6 +958,8 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->parent = current_process;
     proc->exit_code = 0;
     proc->errno_value = 0;
+    proc->cwd[0] = '/';
+    proc->cwd[1] = '\0';
     
     // Setup memory isolation (VMAs for validation)
     if (process_setup_memory_isolation(proc) != 0) {
