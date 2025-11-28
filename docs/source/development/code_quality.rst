@@ -106,3 +106,35 @@ Refactoring Principles
 - **Reduce Complexity**: minimize nesting, extract helpers, and use early returns.
 - **Self-Documenting Code**: choose names and structure that reduce the need for long comments.
 - **Encapsulation**: move global state and symbol table logic into well-defined modules.
+
+Example: kernel/main.c Refactoring
+----------------------------------
+
+The ``kernel/main.c`` file demonstrates these principles in practice:
+
+**Before:**
+   - Single monolithic ``kernel_main()`` function (~230 lines)
+   - Magic numbers (e.g., ``8`` for VirtIO probe count)
+   - Single-letter variable names (``i``, ``ret``)
+   - Hardcoded address arrays
+
+**After:**
+   - Eight focused helper functions (all ``static``)
+   - Named constants (``VIRTIO_PROBE_COUNT``, ``VIRTIO_BASE_ADDRESS``)
+   - Descriptive names (``probe_index``, ``exit_status``, ``total_pages``)
+   - Forward declarations after constants section
+   - Clean ``kernel_main()`` as orchestrator (~30 lines)
+
+**Extracted Functions:**
+
+.. code-block:: c
+
+   static void print_boot_banner(void);
+   static void init_interrupts(void);
+   static void init_memory(void);
+   static int init_block_device(void);
+   static int init_filesystem(void);
+   static void launch_shell(void);
+   static void halt_cpu(void);
+
+This structure makes the boot sequence clear and each subsystem independently testable.

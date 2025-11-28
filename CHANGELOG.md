@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### Test Infrastructure Refactoring
+- **Removed obsolete test scripts**:
+  - Removed `build_user_test.sh`, `test_exec.sh`, `test_pipes_local.sh`, `test_shell_interactive.sh`
+  - Removed `tests/scripts/test_user_mode.sh` (functionality merged into other tests)
+- **Removed backup files**:
+  - Removed `Makefile.orig`, `kernel/main.c.bak`
+- **Improved build_userland.sh**:
+  - Added colorful visual output with progress indicators
+  - Organized programs into categories (Core Utilities, User Applications, Test Programs)
+  - Added build summary with program count and output directory
+  - Extracted common build logic into reusable `build_program()` function
+
+#### Clean Code Standards Applied to kernel/main.c
+- **Extracted helper functions** (all marked `static`):
+  - `print_boot_banner()` - Print welcome message and kernel address
+  - `init_interrupts()` - Initialize PLIC, CLINT, traps, and timer
+  - `init_memory()` - Initialize PMM, paging, and DMA allocator
+  - `run_memory_tests()` - Memory allocation tests (conditional)
+  - `init_block_device()` - Probe and initialize VirtIO devices
+  - `init_filesystem()` - Mount ext2 and register with VFS
+  - `launch_shell()` - Start user-mode or kernel shell
+  - `halt_cpu()` - Enter infinite WFI loop
+- **Replaced magic numbers with constants**:
+  - `VIRTIO_PROBE_COUNT` (was hardcoded `8`)
+  - `VIRTIO_BASE_ADDRESS` and `VIRTIO_ADDRESS_STRIDE` (replaced address array)
+- **Improved variable naming**:
+  - `i` → `probe_index`
+  - `status` → `exit_status`
+  - `total`/`free` → `total_pages`/`free_pages`
+  - `g_test_ext2_fs` → `g_root_ext2_fs`
+- **Added forward declarations** after constants section
+- **Initialized all variables** explicitly
+
 ## [0.5.0] - 2025-11-21 - "Communication"
 
 ### Overview

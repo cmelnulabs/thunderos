@@ -21,9 +21,9 @@ Or run individual test scripts:
    tests/scripts/run_all_tests.sh
    
    # Individual test suites
-   tests/scripts/test_boot.sh
-   tests/scripts/test_integration.sh
-   tests/scripts/test_user_mode.sh
+   tests/scripts/test_boot.sh          # Quick boot validation
+   tests/scripts/test_kernel.sh        # Comprehensive kernel test
+   tests/scripts/test_integration.sh   # Full integration tests
 
 Expected output:
 
@@ -65,9 +65,9 @@ ThunderOS includes comprehensive automated testing in the ``tests/`` directory:
    │   └── test_elf.c              # ELF loader validation
    ├── scripts/           # Automated test scripts
    │   ├── run_all_tests.sh       # Master test runner
-   │   ├── test_boot.sh           # Basic boot validation
-   │   ├── test_integration.sh    # Full system integration
-   │   └── test_user_mode.sh      # User-space testing
+   │   ├── test_boot.sh           # Quick boot validation (6 checks)
+   │   ├── test_kernel.sh         # Comprehensive kernel test (17 checks)
+   │   └── test_integration.sh    # Full system integration
    └── outputs/           # Test result logs
 
 **Unit Tests (Kernel-Embedded):**
@@ -98,9 +98,9 @@ ThunderOS uses kernel-embedded unit tests that run at boot when ``ENABLE_KERNEL_
 
 Automated QEMU-based tests verify end-to-end functionality:
 
-- ``test_boot.sh`` - Kernel boots, memory tests pass, drivers initialize
+- ``test_boot.sh`` - Quick boot validation (6 checks)
+- ``test_kernel.sh`` - Comprehensive kernel test (17 checks)
 - ``test_integration.sh`` - VirtIO, ext2, shell, file operations
-- ``test_user_mode.sh`` - User processes, syscalls, signals
 
 **Features:**
 
