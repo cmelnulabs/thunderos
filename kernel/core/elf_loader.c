@@ -243,8 +243,23 @@ int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
+    /* CRITICAL: Copy path to kernel buffer BEFORE we free user memory!
+     * The path pointer is in user space (e.g., shell's .rodata section).
+     * We will free the old process's pages during exec, which would make
+     * the path inaccessible. Copy it now while it's still valid. */
+    char path_buf[256];
+    size_t path_len = 0;
+    while (path[path_len] && path_len < sizeof(path_buf) - 1) {
+        path_buf[path_len] = path[path_len];
+        path_len++;
+    }
+    path_buf[path_len] = '\0';
+    
+    /* Use kernel buffer from now on */
+    const char *kpath = path_buf;
+
     /* Open file */
-    int fd = vfs_open(path, O_RDONLY);
+    int fd = vfs_open(kpath, O_RDONLY);
     if (fd < 0) {
         return -1;
     }
@@ -473,9 +488,9 @@ int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap
     tf->t5 = 0;
     tf->t6 = 0;
     
-    /* Extract program name from path */
-    const char *program_name = path;
-    for (const char *p = path; *p; p++) {
+    /* Extract program name from path (use kernel copy, not user pointer!) */
+    const char *program_name = kpath;
+    for (const char *p = kpath; *p; p++) {
         if (*p == '/') {
             program_name = p + 1;
         }

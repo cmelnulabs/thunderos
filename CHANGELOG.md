@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-11-29 - "Virtual Terminals"
+
+### Overview
+Seventh release of ThunderOS. Implements virtual terminal support with multiple independent shell instances, plus VirtIO GPU driver for future graphics support. Users can switch between terminals using ESC+1-6, with each terminal maintaining its own input buffer, screen buffer, and running shell.
+
+### Added
+
+#### Virtual Terminal System (`kernel/drivers/vterm.c`)
+- **6 Virtual Terminals (VT1-VT6)**:
+  - Independent 80x24 screen buffers per terminal
+  - Per-terminal input ring buffers (64 chars each)
+  - Screen state preserved during terminal switches
+  - All VT names shown in status bar from start
+- **Terminal Switching**:
+  - ESC+1 through ESC+6 to switch terminals
+  - Active terminal highlighted in status bar
+  - Inactive terminals dimmed in status bar
+  - Automatic screen redraw on switch
+
+#### Multi-Shell Support
+- **Two Active Shells at Boot**:
+  - VT1: Primary shell (PID 1)
+  - VT2: Secondary shell (PID 2)
+- **Per-Process Terminal Association**:
+  - `controlling_tty` field in process struct
+  - Inherited by child processes via fork()
+  - Preserved across execve()
+
+#### New System Calls
+- **SYS_GETTTY (31)**: Get controlling terminal number
+- **SYS_SETTTY (32)**: Set controlling terminal
+- **SYS_GETPROCS (33)**: Get process list information for `ps`
+- **SYS_UNAME (34)**: Get system information for `uname`
+
+#### New Userland Utilities
+- **ps**: List running processes (PID, PPID, TTY, STATE, CMD)
+- **uname**: Print system information (ThunderOS, version, arch)
+- **uptime**: Show system uptime since boot
+- **whoami**: Print current user (root)
+- **tty**: Print controlling terminal device name
+
+#### Input Buffering
+- **Timer-Driven Input Polling**:
+  - 100ms timer interrupt polls UART
+  - Input routed to active terminal's buffer
+  - Background terminals buffer input for later
+- **Hybrid Input Reading**:
+  - Active terminal: buffer + direct UART for responsiveness
+  - Inactive terminals: buffered input only
+
+#### VirtIO GPU Driver (`kernel/drivers/virtio_gpu.c`)
+- **2D Framebuffer Graphics**:
+  - VirtIO 1.0+ MMIO interface
+  - Default 800×600 resolution, auto-detect from display
+  - DMA-allocated framebuffer with physical backing
+- **GPU Resource Management**:
+  - Resource creation and backing storage
+  - Scanout configuration for display output
+  - Transfer and flush operations
+- **Pixel Operations**:
+  - `virtio_gpu_set_pixel()` / `virtio_gpu_get_pixel()`
+  - `virtio_gpu_clear()` for full screen clear
+  - `virtio_gpu_flush()` / `virtio_gpu_flush_region()`
+  - ARGB color format with automatic conversion
+
+### Changed
+
+#### Shell Refactoring (`userland/ush.c`)
+- Consolidated from `ush_flat.c` to single `ush.c`
+- Removed unused shell variants (`ush_minimal.c`, `ush_new.c`)
+- Refactored to follow code quality guidelines:
+  - Small, single-purpose static functions
+  - Descriptive variable names (no single letters)
+  - Named constants instead of magic numbers
+  - Clear section organization with forward declarations
+
+#### Process Management (`kernel/core/process.c`)
+- Added `controlling_tty` field to PCB
+- Added `process_get_by_index()` for ps utility
+- Added `process_get_max_count()` for iteration
+- Terminal association inherited on fork
+- Terminal preserved on exec
+
+#### System Calls (`kernel/core/syscall.c`)
+- `sys_read` for STDIN uses per-VT input buffers
+- Non-blocking reads with proper yielding
+- Terminal-aware input routing
+- **Total syscalls: 35** (up from 32 in v0.6.0)
+
 ## [0.6.0] - 2025-11-28 - "User Shell"
 
 ### Overview

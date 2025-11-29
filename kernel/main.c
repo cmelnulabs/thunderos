@@ -309,42 +309,45 @@ static int launch_shell_on_vt(int vt_index) {
 }
 
 /*
- * Launch user-mode shells on all virtual terminals.
+ * Launch user-mode shells on virtual terminals.
  */
 static void launch_shell(void) {
     hal_uart_puts("\n");
     hal_uart_puts("=================================\n");
-    hal_uart_puts("  Starting User-Mode Shell\n");
+    hal_uart_puts("  Starting User-Mode Shells\n");
     hal_uart_puts("=================================\n");
     hal_uart_puts("\n");
 
-    /* For now, launch just one shell on VT1 */
-    /* Multi-shell support requires per-terminal input queues */
-    int shell_pid = launch_shell_on_vt(0);  /* VT1 */
+    /* Launch shells on first 2 VTs for testing */
+    int num_shells = vterm_available() ? 2 : 1;
+    int shell_pids[6] = {-1, -1, -1, -1, -1, -1};
     
-    if (shell_pid < 0) {
-        hal_uart_puts("[FAIL] Failed to launch user-mode shell\n");
-        hal_uart_puts("Falling back to kernel shell...\n");
-        shell_init();
-        shell_run();
-        return;
+    for (int i = 0; i < num_shells; i++) {
+        shell_pids[i] = launch_shell_on_vt(i);
+        
+        if (shell_pids[i] < 0) {
+            hal_uart_puts("[WARN] Failed to launch shell on VT");
+            hal_uart_put_uint32(i + 1);
+            hal_uart_puts("\n");
+        } else {
+            hal_uart_puts("[OK] Shell on VT");
+            hal_uart_put_uint32(i + 1);
+            hal_uart_puts(" (PID ");
+            hal_uart_put_uint32(shell_pids[i]);
+            hal_uart_puts(")\n");
+        }
     }
-    
-    hal_uart_puts("[OK] User-mode shell launched (PID ");
-    hal_uart_put_uint32(shell_pid);
-    hal_uart_puts(")\n");
     
     if (vterm_available()) {
-        hal_uart_puts("[INFO] Switch terminals with F1-F6 or ESC+1-6\n");
+        hal_uart_puts("[INFO] Switch terminals with ESC+1 or ESC+2\n");
     }
 
-    /* Wait for shell to exit */
-    int exit_status = 0;
-    sys_waitpid(shell_pid, &exit_status, 0);
-
-    hal_uart_puts("[INFO] Shell exited with status ");
-    hal_uart_put_uint32(exit_status);
-    hal_uart_puts("\n");
+    /* Wait for all shells to exit (simple: just wait for first shell) */
+    if (shell_pids[0] > 0) {
+        int exit_status = 0;
+        sys_waitpid(shell_pids[0], &exit_status, 0);
+        hal_uart_puts("[INFO] Shell on VT1 exited\n");
+    }
 }
 
 /*

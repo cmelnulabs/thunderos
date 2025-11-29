@@ -96,6 +96,12 @@ build_program "touch"
 build_program "rm"
 build_program "clear"
 build_program "sleep"
+build_program "ps"
+build_program "uname"
+build_program "uptime"
+build_program "whoami"
+build_program "tty"
+build_program "kill"
 
 # User applications
 print_section "User Applications"
@@ -105,9 +111,9 @@ build_program "clock"
 # Build ush (user shell) - special case with multiple source files
 TOTAL_PROGRAMS=$((TOTAL_PROGRAMS + 1))
 print_building "ush (shell)"
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ush_flat.c" -o "${BUILD_DIR}/ush_flat.o" 2>/dev/null
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ush.c" -o "${BUILD_DIR}/ush.o" 2>/dev/null
 "${CC}" ${CFLAGS} -c "${USERLAND_DIR}/syscall.S" -o "${BUILD_DIR}/syscall.o" 2>/dev/null
-"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/ush_flat.o" "${BUILD_DIR}/syscall.o" -o "${BUILD_DIR}/ush" 2>/dev/null
+"${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/ush.o" "${BUILD_DIR}/syscall.o" -o "${BUILD_DIR}/ush" 2>/dev/null
 "${OBJCOPY}" -O binary "${BUILD_DIR}/ush" "${BUILD_DIR}/ush.bin" 2>/dev/null
 print_success
 

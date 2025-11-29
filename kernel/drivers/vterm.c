@@ -274,14 +274,14 @@ void vterm_draw_status_bar(void)
     for (int i = 0; i < VTERM_MAX_TERMINALS; i++) {
         vterm_t *t = &g_terminals[i];
         
-        /* Only show active or used terminals */
-        if (!t->active && i != g_active_terminal) {
-            continue;
-        }
-        
         /* Highlight current terminal */
         uint32_t tab_bg = (i == g_active_terminal) ? active_fg : bg;
         uint32_t tab_fg = (i == g_active_terminal) ? bg : fg;
+        
+        /* Dim inactive terminals */
+        if (!t->active && i != g_active_terminal) {
+            tab_fg = ansi_colors[8];  /* Dark gray for inactive */
+        }
         
         /* Draw " VTn " */
         font_draw_char(x, y, ' ', tab_fg, tab_bg);
@@ -1026,13 +1026,29 @@ int vterm_poll_input(void)
             /* Character was consumed by VT switch or escape processing */
             processed = 1;
         } else {
-            /* Regular character - buffer for userspace */
-            input_buffer_put(result);
+            /* Regular character - buffer to active terminal's input queue */
+            input_buffer_put_to(g_active_terminal, result);
             processed = 1;
         }
     }
     
     return processed;
+}
+
+/**
+ * Get a character that was buffered during polling for a specific terminal
+ */
+int vterm_get_buffered_input_for(int index)
+{
+    return input_buffer_get_from(index);
+}
+
+/**
+ * Check if there's buffered input available for a specific terminal
+ */
+int vterm_has_buffered_input_for(int index)
+{
+    return input_buffer_available_for(index);
 }
 
 /**

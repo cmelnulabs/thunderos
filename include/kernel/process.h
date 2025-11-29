@@ -198,6 +198,23 @@ struct process *process_find_zombie_child(struct process *parent, int target_pid
 int process_has_children(struct process *parent, int target_pid);
 
 /**
+ * Get process by index in process table
+ * 
+ * Used for iterating through all processes.
+ * 
+ * @param index Index in process table (0 to MAX_PROCS-1)
+ * @return Process pointer, or NULL if index invalid or slot unused
+ */
+struct process *process_get_by_index(int index);
+
+/**
+ * Get maximum number of processes
+ * 
+ * @return Maximum process count (MAX_PROCS)
+ */
+int process_get_max_count(void);
+
+/**
  * Sleep for a number of ticks
  * 
  * @param ticks Number of timer ticks to sleep

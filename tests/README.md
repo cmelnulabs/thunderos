@@ -1,6 +1,6 @@
 # ThunderOS Test Suite
 
-Automated test suite for ThunderOS v0.6.0+
+Automated test suite for ThunderOS v0.7.0+
 
 ## Directory Structure
 
@@ -9,7 +9,8 @@ tests/
 ├── unit/                      # Built-in kernel tests (C)
 │   ├── test_memory_mgmt.c    # Memory, DMA, paging tests
 │   ├── test_elf.c            # ELF loader tests
-│   └── test_memory_isolation.c # Memory isolation tests
+│   ├── test_memory_isolation.c # Memory isolation tests
+│   └── test_vterm.c          # Virtual terminal tests
 ├── scripts/                   # Automated test scripts
 │   ├── test_kernel.sh        # Comprehensive kernel test
 │   ├── test_boot.sh          # Quick boot test

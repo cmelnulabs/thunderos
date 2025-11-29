@@ -97,6 +97,12 @@ save_registers:
     csrr t0, sstatus
     sd t0, 256(sp)
     
+    # CRITICAL: Set SUM bit (bit 18) to allow supervisor access to user memory
+    # This is needed for syscalls that read/write user buffers (exec, read, write, etc.)
+    # Without this, the kernel will get page faults when accessing user memory
+    li t0, (1 << 18)
+    csrs sstatus, t0
+    
     # Call C trap handler with trap_frame pointer as argument
     mv a0, sp
     call trap_handler

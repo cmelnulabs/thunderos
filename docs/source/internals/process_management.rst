@@ -58,9 +58,33 @@ The PCB (``struct process``) contains all information needed to manage a process
        // Process tree
        struct process *parent;             // Parent process
        
+       // Terminal association (v0.7.0)
+       int controlling_tty;                // Virtual terminal index (-1 = none)
+       
        // Exit status
        int exit_code;                      // Exit code if state is ZOMBIE
    };
+
+Controlling Terminal
+~~~~~~~~~~~~~~~~~~~~
+
+Each process has a ``controlling_tty`` field (added in v0.7.0) that associates it with a virtual terminal:
+
+- **Value 0-5**: Virtual terminal index (VT1=0 through VT6=5)
+- **Value -1**: No controlling terminal (detached process)
+
+The controlling terminal determines:
+
+- Where standard input comes from (per-VT input buffer)
+- Where standard output/error goes (per-VT screen buffer)
+
+**Inheritance:**
+
+- ``fork()``: Child inherits parent's ``controlling_tty``
+- ``execve()``: Terminal association preserved across exec
+- Kernel processes: Default to VT1 (index 0)
+
+See :doc:`virtual_terminals` for more on the VT subsystem.
 
 Memory Layout
 ~~~~~~~~~~~~~

@@ -429,6 +429,36 @@ int process_has_children(struct process *parent, int target_pid) {
 }
 
 /**
+ * Get process by index in process table
+ * 
+ * Used for iterating through all processes (e.g., for ps command).
+ * 
+ * @param index Index in process table (0 to MAX_PROCS-1)
+ * @return Process pointer, or NULL if index invalid or slot unused
+ */
+struct process *process_get_by_index(int index) {
+    if (index < 0 || index >= MAX_PROCS) {
+        return NULL;
+    }
+    
+    struct process *p = &process_table[index];
+    if (p->state == PROC_UNUSED) {
+        return NULL;
+    }
+    
+    return p;
+}
+
+/**
+ * Get maximum number of processes
+ * 
+ * @return Maximum process count (MAX_PROCS)
+ */
+int process_get_max_count(void) {
+    return MAX_PROCS;
+}
+
+/**
  * User process sleep
  * 
  * Marks process as sleeping and yields to scheduler.
@@ -1029,12 +1059,12 @@ void forked_child_entry(void) {
         kernel_panic("forked_child_entry: invalid process state");
     }
     
-    // DON'T switch page table yet - user_return will load registers from trap frame
-    // which needs to be accessible. We'll switch to child's page table when
-    // returning FROM a trap (not when first entering user mode).
-    // The child already has its memory copied, so it should work fine with parent's PT.
-    
-    // NO: switch_page_table(proc->page_table);
+    // CRITICAL: Switch to child's page table BEFORE entering user mode!
+    // The child has its own copy of user memory (from fork). If we use the
+    // parent's page table, the child would read/write parent's memory instead
+    // of its own copy. The trap_frame is in kernel memory (kmalloc) so it's
+    // accessible regardless of which user page table is active.
+    switch_page_table(proc->page_table);
     
     // Setup sscratch with kernel stack pointer for trap entry
     uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;

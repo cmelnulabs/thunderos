@@ -4,16 +4,16 @@ A RISC-V operating system focused on AI acceleration and educational use.
 
 ## Current Status
 
-**Version 0.6.0 - "User Shell"** 🎯 Released!
+**Version 0.7.0 - "Virtual Terminals"** 🎯 Released!
 
-- ✅ **v0.6.0 Released** - User-mode shell with fork+exec
-- ✅ User-mode shell (ush) running from filesystem
-- ✅ Fork+exec process model for launching programs
-- ✅ Directory operations (mkdir, rmdir, cd, pwd)
-- ✅ File operations (touch, rm, cat, ls)
-- ✅ 9 userland utilities available
-- ✅ 32 system calls implemented
-- 🚧 **Next**: Graphics and virtual terminals (v0.7.0)
+- ✅ **v0.7.0 Released** - Virtual terminals and VirtIO GPU
+- ✅ 6 virtual terminals (VT1-VT6) with ESC+1-6 switching
+- ✅ Multiple independent shell instances (VT1 and VT2)
+- ✅ VirtIO GPU 2D driver for graphics support
+- ✅ Per-terminal input buffers and screen state
+- ✅ New utilities: ps, uname, uptime, whoami, tty
+- ✅ 35 system calls implemented
+- 🚧 **Next**: Framebuffer console, job control (v0.8.0)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.
 
@@ -123,9 +123,10 @@ Test suite validates:
 ### User-Space Programs
 
 Located in `userland/`:
-- **hello.c** - Simple hello world program
-- **cat.c** - Display file contents
-- **ls.c** - List directory contents
+- **Core utilities**: cat, ls, pwd, mkdir, rmdir, touch, rm, clear, sleep
+- **System utilities**: ps, uname, uptime, whoami, tty
+- **Shell**: ush (interactive shell with command history)
+- **Test programs**: hello, clock, signal_test, pipe_test
 
 Programs are compiled as RISC-V ELF64 executables and can be loaded from the ext2 filesystem.
 

@@ -43,8 +43,10 @@
 #define SYS_SETSID      30  // Set session ID (create new session)
 #define SYS_GETTTY      31  // Get controlling terminal
 #define SYS_SETTTY      32  // Set controlling terminal
+#define SYS_GETPROCS    33  // Get process list info
+#define SYS_UNAME       34  // Get system information
 
-#define SYSCALL_COUNT   33
+#define SYSCALL_COUNT   35
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -70,6 +72,26 @@ uint64_t syscall_handler_with_frame(struct trap_frame *tf,
                                     uint64_t syscall_num, 
                                     uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                     uint64_t arg3, uint64_t arg4, uint64_t arg5);
+
+/* Process info structure for SYS_GETPROCS */
+#define PROC_NAME_MAX 32
+typedef struct {
+    int pid;                    /* Process ID */
+    int ppid;                   /* Parent process ID */
+    int state;                  /* Process state (0=unused, 3=ready, 4=running, etc) */
+    int tty;                    /* Controlling terminal (-1 = none) */
+    unsigned long cpu_time;     /* CPU time in ticks */
+    char name[PROC_NAME_MAX];   /* Process name */
+} procinfo_t;
+
+/* System info structure for SYS_UNAME */
+typedef struct {
+    char sysname[64];           /* OS name */
+    char nodename[64];          /* Network node name */
+    char release[64];           /* OS release */
+    char version[64];           /* OS version */
+    char machine[64];           /* Hardware identifier */
+} utsname_t;
 
 // Individual syscall implementations
 uint64_t sys_exit(int status);
@@ -104,5 +126,7 @@ uint64_t sys_getcwd(char *buf, size_t size);
 uint64_t sys_setsid(void);
 uint64_t sys_gettty(void);
 uint64_t sys_settty(int tty);
+uint64_t sys_getprocs(procinfo_t *buf, size_t max_procs);
+uint64_t sys_uname(utsname_t *buf);
 
 #endif // SYSCALL_H

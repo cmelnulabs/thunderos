@@ -270,6 +270,22 @@ int vterm_get_input_terminal(void);
 int vterm_poll_input(void);
 
 /**
+ * Get a character that was buffered during polling for a specific terminal
+ * 
+ * @param index Terminal index (0 to VTERM_MAX_TERMINALS-1)
+ * @return Character from buffer, or -1 if buffer empty
+ */
+int vterm_get_buffered_input_for(int index);
+
+/**
+ * Check if there's buffered input available for a specific terminal
+ * 
+ * @param index Terminal index (0 to VTERM_MAX_TERMINALS-1)
+ * @return 1 if buffered input available, 0 otherwise
+ */
+int vterm_has_buffered_input_for(int index);
+
+/**
  * Get a character that was buffered during polling
  * 
  * @return Character from buffer, or -1 if buffer empty
