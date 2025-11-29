@@ -12,3 +12,4 @@ tests/*.log
 tests/outputs/
 test_output.txt
 *_output.txt
+DEBUG_JOURNAL.md
