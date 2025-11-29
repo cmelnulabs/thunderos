@@ -1,0 +1,104 @@
+/*
+ * tty - Print terminal name
+ * 
+ * Displays the name of the terminal connected to standard input.
+ */
+
+#define SYS_EXIT   0
+#define SYS_WRITE  1
+#define SYS_GETTTY 31
+
+typedef unsigned long size_t;
+
+/* System call wrappers */
+static inline long syscall0(long n) {
+    register long num asm("a7") = n;
+    register long arg0 asm("a0") = 0;
+    
+    asm volatile("ecall"
+                 : "+r"(arg0)
+                 : "r"(num)
+                 : "memory");
+    return arg0;
+}
+
+static inline long syscall1(long n, long a0) {
+    register long num asm("a7") = n;
+    register long arg0 asm("a0") = a0;
+    
+    asm volatile("ecall"
+                 : "+r"(arg0)
+                 : "r"(num)
+                 : "memory");
+    return arg0;
+}
+
+static inline long syscall3(long n, long a0, long a1, long a2) {
+    register long num asm("a7") = n;
+    register long arg0 asm("a0") = a0;
+    register long arg1 asm("a1") = a1;
+    register long arg2 asm("a2") = a2;
+    
+    asm volatile("ecall"
+                 : "+r"(arg0)
+                 : "r"(num), "r"(arg1), "r"(arg2)
+                 : "memory");
+    return arg0;
+}
+
+/* Helper functions */
+static size_t strlen(const char *s) {
+    size_t len = 0;
+    while (s[len]) len++;
+    return len;
+}
+
+static void print(const char *s) {
+    syscall3(SYS_WRITE, 1, (long)s, strlen(s));
+}
+
+static void print_int(int n) {
+    char buf[16];
+    int i = 0;
+    
+    if (n == 0) {
+        print("0");
+        return;
+    }
+    
+    while (n > 0) {
+        buf[i++] = '0' + (n % 10);
+        n /= 10;
+    }
+    
+    while (i > 0) {
+        char c = buf[--i];
+        syscall3(SYS_WRITE, 1, (long)&c, 1);
+    }
+}
+
+void _start(void) {
+    /* Initialize gp for global data access */
+    __asm__ volatile (
+        ".option push\n"
+        ".option norelax\n"
+        "1: auipc gp, %%pcrel_hi(__global_pointer$)\n"
+        "   addi gp, gp, %%pcrel_lo(1b)\n"
+        ".option pop\n"
+        ::: "gp"
+    );
+    
+    /* Get controlling terminal */
+    long tty = syscall0(SYS_GETTTY);
+    
+    if (tty < 0) {
+        print("not a tty\n");
+        syscall1(SYS_EXIT, 1);
+    }
+    
+    print("/dev/tty");
+    print_int((int)(tty + 1));  /* Convert 0-based to 1-based */
+    print("\n");
+    
+    syscall1(SYS_EXIT, 0);
+}

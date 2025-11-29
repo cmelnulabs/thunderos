@@ -24,6 +24,11 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-dev \
     libpixman-1-dev \
     libslirp-dev \
+    # VNC viewer support for GPU testing
+    novnc \
+    websockify \
+    # GitHub CLI for releases
+    gh \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies for QEMU build and documentation

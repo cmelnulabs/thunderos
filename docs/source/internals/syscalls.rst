@@ -8,7 +8,7 @@ System calls (syscalls) provide the interface between user-space programs and th
 
 **Current Status:**
 
-ThunderOS v0.6.0 implements **30 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, and directory navigation.
+ThunderOS v0.7.0 implements **35 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, directory navigation, and terminal control.
 
 **Key Features:**
 
@@ -1832,6 +1832,135 @@ Complete User Program
        write(STDOUT_FD, buf, i+1);
        
        exit(0);
+   }
+
+Terminal Control
+~~~~~~~~~~~~~~~~
+
+sys_gettty (31)
+^^^^^^^^^^^^^^^
+
+Get the controlling terminal number of the calling process.
+
+.. code-block:: c
+
+   int sys_gettty(void);
+
+**Return Value:**
+
+* Terminal number (0-5) on success
+* ``-1`` on error
+
+**Example:**
+
+.. code-block:: c
+
+   int tty = gettty();
+   printf("Running on VT%d\n", tty + 1);
+
+sys_settty (32)
+^^^^^^^^^^^^^^^
+
+Set the controlling terminal of the calling process.
+
+.. code-block:: c
+
+   int sys_settty(int tty);
+
+**Parameters:**
+
+* ``tty``: Terminal number (0-5)
+
+**Return Value:**
+
+* ``0`` on success
+* ``-1`` on error
+
+**Errno:**
+
+* ``THUNDEROS_EINVAL`` - Invalid terminal number
+
+Process Information
+~~~~~~~~~~~~~~~~~~~
+
+sys_getprocs (33)
+^^^^^^^^^^^^^^^^^
+
+Get information about running processes. Used by the ``ps`` utility.
+
+.. code-block:: c
+
+   int sys_getprocs(procinfo_t *procs, int max_procs);
+
+**Parameters:**
+
+* ``procs``: Array to receive process information
+* ``max_procs``: Maximum number of processes to return
+
+**Return Value:**
+
+* Number of processes returned on success
+* ``-1`` on error
+
+**Process Info Structure:**
+
+.. code-block:: c
+
+   typedef struct {
+       int pid;           // Process ID
+       int ppid;          // Parent process ID
+       int state;         // Process state (0=READY, 1=RUNNING, 2=SLEEPING)
+       int tty;           // Controlling terminal
+       char name[32];     // Process name
+   } procinfo_t;
+
+**Example:**
+
+.. code-block:: c
+
+   procinfo_t procs[32];
+   int count = getprocs(procs, 32);
+   for (int i = 0; i < count; i++) {
+       printf("%d %s\n", procs[i].pid, procs[i].name);
+   }
+
+sys_uname (34)
+^^^^^^^^^^^^^^
+
+Get system identification information. Used by the ``uname`` utility.
+
+.. code-block:: c
+
+   int sys_uname(utsname_t *buf);
+
+**Parameters:**
+
+* ``buf``: Buffer to receive system information
+
+**Return Value:**
+
+* ``0`` on success
+* ``-1`` on error
+
+**Utsname Structure:**
+
+.. code-block:: c
+
+   typedef struct {
+       char sysname[65];     // "ThunderOS"
+       char nodename[65];    // "thunderos"
+       char release[65];     // "0.7.0"
+       char version[65];     // "v0.7.0 Virtual Terminals"
+       char machine[65];     // "riscv64"
+   } utsname_t;
+
+**Example:**
+
+.. code-block:: c
+
+   utsname_t uts;
+   if (uname(&uts) == 0) {
+       printf("%s %s %s\n", uts.sysname, uts.release, uts.machine);
    }
 
 Testing

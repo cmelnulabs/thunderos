@@ -20,6 +20,11 @@
 #include "kernel/pipe.h"
 #include "kernel/elf_loader.h"
 #include "drivers/virtio_blk.h"
+#include "drivers/virtio_gpu.h"
+#include "drivers/framebuffer.h"
+#include "drivers/fbconsole.h"
+#include "drivers/vterm.h"
+#include "drivers/font.h"
 #include "fs/ext2.h"
 #include "fs/vfs.h"
 
@@ -46,6 +51,7 @@ static void print_boot_banner(void);
 static void init_interrupts(void);
 static void init_memory(void);
 static int init_block_device(void);
+static int init_gpu_device(void);
 static int init_filesystem(void);
 static void launch_shell(void);
 static void halt_cpu(void);
@@ -184,6 +190,62 @@ static int init_block_device(void) {
 }
 
 /*
+ * Probe and initialize VirtIO GPU device.
+ * Returns 0 on success, -1 if no device found.
+ */
+static int init_gpu_device(void) {
+    for (int probe_index = 0; probe_index < VIRTIO_PROBE_COUNT; probe_index++) {
+        uint64_t device_address = VIRTIO_BASE_ADDRESS + (probe_index * VIRTIO_ADDRESS_STRIDE);
+        int irq_number = probe_index + 1;
+
+        if (virtio_gpu_init(device_address, irq_number) == 0) {
+            /* Initialize framebuffer abstraction */
+            if (fb_init() == 0) {
+                hal_uart_puts("[OK] Framebuffer initialized\n");
+                
+                /* Initialize framebuffer console */
+                if (fbcon_init() == 0) {
+                    hal_uart_puts("[OK] Framebuffer console initialized\n");
+                    
+                    /* Initialize virtual terminals */
+                    if (vterm_init() == 0) {
+                        hal_uart_puts("[OK] Virtual terminals initialized (6 VTs, Alt+1-6 to switch)\n");
+                        
+                        /* Display boot message on VT1 */
+                        vterm_set_colors(14, 0);  /* Bright cyan on black */
+                        vterm_puts("========================================\n");
+                        vterm_puts("    ThunderOS - RISC-V AI OS\n");
+                        vterm_puts("    Virtual Terminal 1\n");
+                        vterm_puts("========================================\n\n");
+                        vterm_set_colors(7, 0);  /* Reset to default */
+                        vterm_flush();
+                    } else {
+                        /* Fall back to simple framebuffer console */
+                        fbcon_set_colors(FBCON_COLOR_BRIGHT_CYAN, FBCON_COLOR_BLACK);
+                        fbcon_puts("========================================\n");
+                        fbcon_puts("    ThunderOS - RISC-V AI OS\n");
+                        fbcon_puts("    Graphical Console Active\n");
+                        fbcon_puts("========================================\n\n");
+                        fbcon_reset_colors();
+                        fbcon_flush();
+                    }
+                }
+            }
+            return 0;
+        }
+    }
+
+    hal_uart_puts("[INFO] No VirtIO GPU device found - console only mode\n");
+    
+    /* Initialize virtual terminals even without GPU (for console multiplexing) */
+    if (vterm_init() == 0) {
+        hal_uart_puts("[OK] Virtual terminals initialized (UART mode, ESC+1-6 to switch)\n");
+    }
+    
+    return -1;
+}
+
+/*
  * Mount ext2 filesystem and register with VFS.
  * Returns 0 on success, -1 on failure.
  */
@@ -228,34 +290,64 @@ static int init_filesystem(void) {
 }
 
 /*
- * Launch user-mode shell or fall back to kernel shell.
+ * Launch a shell on a specific virtual terminal.
+ * Returns the PID of the launched shell, or -1 on error.
+ */
+static int launch_shell_on_vt(int vt_index) {
+    int shell_pid = elf_load_exec("/bin/ush", NULL, 0);
+    if (shell_pid < 0) {
+        return -1;
+    }
+    
+    /* Set the shell's controlling terminal */
+    struct process *shell_proc = process_get(shell_pid);
+    if (shell_proc) {
+        process_set_tty(shell_proc, vt_index);
+    }
+    
+    return shell_pid;
+}
+
+/*
+ * Launch user-mode shells on virtual terminals.
  */
 static void launch_shell(void) {
     hal_uart_puts("\n");
     hal_uart_puts("=================================\n");
-    hal_uart_puts("  Starting User-Mode Shell\n");
+    hal_uart_puts("  Starting User-Mode Shells\n");
     hal_uart_puts("=================================\n");
     hal_uart_puts("\n");
 
-    int shell_pid = elf_load_exec("/bin/ush", NULL, 0);
-    if (shell_pid < 0) {
-        hal_uart_puts("[FAIL] Failed to launch user-mode shell\n");
-        hal_uart_puts("Falling back to kernel shell...\n");
-        shell_init();
-        shell_run();
-        return;
+    /* Launch shells on first 2 VTs for testing */
+    int num_shells = vterm_available() ? 2 : 1;
+    int shell_pids[6] = {-1, -1, -1, -1, -1, -1};
+    
+    for (int i = 0; i < num_shells; i++) {
+        shell_pids[i] = launch_shell_on_vt(i);
+        
+        if (shell_pids[i] < 0) {
+            hal_uart_puts("[WARN] Failed to launch shell on VT");
+            hal_uart_put_uint32(i + 1);
+            hal_uart_puts("\n");
+        } else {
+            hal_uart_puts("[OK] Shell on VT");
+            hal_uart_put_uint32(i + 1);
+            hal_uart_puts(" (PID ");
+            hal_uart_put_uint32(shell_pids[i]);
+            hal_uart_puts(")\n");
+        }
+    }
+    
+    if (vterm_available()) {
+        hal_uart_puts("[INFO] Switch terminals with ESC+1 or ESC+2\n");
     }
 
-    hal_uart_puts("[OK] User-mode shell launched (PID ");
-    hal_uart_put_uint32(shell_pid);
-    hal_uart_puts(")\n");
-
-    int exit_status = 0;
-    sys_waitpid(shell_pid, &exit_status, 0);
-
-    hal_uart_puts("[INFO] Shell exited with status ");
-    hal_uart_put_uint32(exit_status);
-    hal_uart_puts("\n");
+    /* Wait for all shells to exit (simple: just wait for first shell) */
+    if (shell_pids[0] > 0) {
+        int exit_status = 0;
+        sys_waitpid(shell_pids[0], &exit_status, 0);
+        hal_uart_puts("[INFO] Shell on VT1 exited\n");
+    }
 }
 
 /*
@@ -294,6 +386,9 @@ void kernel_main(void) {
     if (init_block_device() == 0) {
         init_filesystem();
     }
+
+    /* Try to initialize GPU (optional - console works without it) */
+    init_gpu_device();
 
 #ifdef TEST_MODE
     hal_uart_puts("\n");

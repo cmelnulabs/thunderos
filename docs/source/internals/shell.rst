@@ -8,12 +8,48 @@ ThunderOS includes a user-mode interactive shell (``ush``) that runs entirely in
 Overview
 --------
 
-The user-mode shell (``ush`` v0.8.0) provides:
+The user-mode shell (``ush`` v0.7.0) provides:
 
-- **User-space execution**: Runs as a regular user process (PID 1)
+- **User-space execution**: Runs as regular user processes
 - **Fork+exec model**: Launches external programs via fork and exec
 - **Built-in commands**: Directory navigation, file operations
 - **External commands**: Executes ELF binaries from filesystem
+- **Multi-terminal support**: Independent shells on virtual terminals (v0.7.0)
+
+Multi-Terminal Support
+----------------------
+
+As of v0.7.0, ThunderOS runs multiple shell instances on separate virtual terminals:
+
+- **VT1**: Primary shell (PID 1)
+- **VT2**: Secondary shell (PID 2)
+- **Switching**: ESC+1 for VT1, ESC+2 for VT2
+
+Each shell maintains independent state:
+
+- Separate working directory
+- Separate command buffer
+- Separate input stream (via per-VT input buffers)
+
+.. code-block:: text
+
+    ┌──────────────────────────────────────────────────────────┐
+    │                   Virtual Terminal System                 │
+    │                                                           │
+    │   ┌────────────┐    ┌────────────┐    ┌────────────┐     │
+    │   │    VT1     │    │    VT2     │    │   VT3-6    │     │
+    │   │  Shell #1  │    │  Shell #2  │    │  (unused)  │     │
+    │   │   PID 1    │    │   PID 2    │    │            │     │
+    │   └────────────┘    └────────────┘    └────────────┘     │
+    │         │                 │                              │
+    │         └────────┬────────┘                              │
+    │                  ▼                                       │
+    │        ┌──────────────────┐                              │
+    │        │  ESC+1/2 Switch  │                              │
+    │        └──────────────────┘                              │
+    └──────────────────────────────────────────────────────────┘
+
+See :doc:`virtual_terminals` for detailed VT architecture.
 
 Shell Location
 --------------
@@ -115,9 +151,27 @@ External commands are executed via fork+exec:
    * - ``hello``
      - ``/bin/hello``
      - Hello world test program
+   * - ``clock``
+     - ``/bin/clock``
+     - Display elapsed time
    * - ``pwd``
      - ``/bin/pwd``
      - Print working directory
+   * - ``ps``
+     - ``/bin/ps``
+     - List running processes
+   * - ``uname``
+     - ``/bin/uname``
+     - Print system information
+   * - ``uptime``
+     - ``/bin/uptime``
+     - Show system uptime
+   * - ``whoami``
+     - ``/bin/whoami``
+     - Print current user
+   * - ``tty``
+     - ``/bin/tty``
+     - Print terminal name
 
 Fork+Exec Pattern
 ~~~~~~~~~~~~~~~~~
@@ -172,12 +226,13 @@ Implementation Details
 Source File
 ~~~~~~~~~~~
 
-The shell is implemented in ``userland/ush_flat.c`` using a "flat" coding style optimized for ``-O0`` compilation:
+The shell is implemented in ``userland/ush.c`` with clean, modular code:
 
-- All logic in ``_start()`` function to avoid stack frame issues
-- No function calls (syscall wrappers are external assembly)
-- Inline string operations
-- Static string constants
+- Organized into logical sections (string utils, history, parsing, execution)
+- Static helper functions with single responsibilities
+- Named constants instead of magic numbers
+- Descriptive variable names
+- Forward declarations for all helpers
 
 Global Pointer Initialization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

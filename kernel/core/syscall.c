@@ -13,6 +13,7 @@
 #include "kernel/scheduler.h"
 #include "kernel/panic.h"
 #include "kernel/elf_loader.h"
+#include "drivers/vterm.h"
 #include "fs/vfs.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -235,15 +236,62 @@ uint64_t sys_sbrk(int heap_increment) {
 /**
  * sys_sleep - Sleep for specified milliseconds
  * 
+ * Timer ticks are every 100ms (TIMER_INTERVAL_US = 100000).
+ * 
  * @param milliseconds Milliseconds to sleep
  * @return 0 on success
  */
 uint64_t sys_sleep(uint64_t milliseconds) {
-    (void)milliseconds;  // Suppress unused parameter warning
+    if (milliseconds == 0) {
+        return SYSCALL_SUCCESS;
+    }
     
-    // Not fully implemented - just yield for now
-    // TODO: Implement proper sleep with timer-based wakeup
-    process_yield();
+    /* Get current time */
+    extern uint64_t hal_timer_get_ticks(void);
+    uint64_t start_ticks = hal_timer_get_ticks();
+    
+    /* Each tick is 100ms = 100 milliseconds
+     * So to sleep N ms, we need N/100 ticks
+     * But to avoid losing precision, round up: (N + 99) / 100
+     */
+    uint64_t ticks_to_wait = (milliseconds + 99) / 100;
+    if (ticks_to_wait == 0) ticks_to_wait = 1;
+    
+    uint64_t target_ticks = start_ticks + ticks_to_wait;
+    
+    /* Enable interrupts so timer interrupts can fire during sleep.
+     * 
+     * When we enter a syscall via trap, interrupts are disabled by hardware.
+     * We need to re-enable them so the timer can update the tick count.
+     * 
+     * CRITICAL: Before enabling interrupts, we must clear sscratch.
+     * The trap entry uses sscratch to detect user vs kernel mode:
+     * - sscratch == 0 means we were in kernel mode
+     * - sscratch != 0 means we were in user mode (contains kernel stack)
+     * If we don't clear it, the trap handler will think we came from user
+     * mode and corrupt the stack.
+     * 
+     * Save sscratch first, then clear it, enable interrupts.
+     */
+    uint64_t saved_sscratch;
+    __asm__ volatile("csrrw %0, sscratch, zero" : "=r"(saved_sscratch));
+    
+    /* Enable SIE (Supervisor Interrupt Enable) bit in sstatus. */
+    __asm__ volatile("csrs sstatus, %0" :: "r"(1UL << 1));
+    
+    /* Wait until enough ticks have passed.
+     * Use WFI to wait for next interrupt instead of spinning.
+     */
+    while (hal_timer_get_ticks() < target_ticks) {
+        __asm__ volatile("wfi");
+    }
+    
+    /* Disable interrupts before restoring sscratch */
+    __asm__ volatile("csrc sstatus, %0" :: "r"(1UL << 1));
+    
+    /* Restore sscratch for proper return to user mode */
+    __asm__ volatile("csrw sscratch, %0" :: "r"(saved_sscratch));
+    
     return SYSCALL_SUCCESS;
 }
 
@@ -298,15 +346,17 @@ uint64_t sys_kill(int pid, int signal) {
 /**
  * sys_gettime - Get system time
  * 
+ * Timer ticks are every 100ms (TIMER_INTERVAL_US = 100000).
+ * 
  * @return Milliseconds since boot
  */
 uint64_t sys_gettime(void) {
-    // Get time from hardware timer
+    // Get time from hardware timer (each tick is 100ms)
     extern uint64_t hal_timer_get_ticks(void);
     uint64_t ticks = hal_timer_get_ticks();
     
-    // Convert ticks to milliseconds
-    return ticks / TICKS_PER_MS;
+    // Convert ticks to milliseconds (each tick = 100ms)
+    return ticks * 100;
 }
 
 /**
@@ -401,15 +451,63 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
     
     // Handle stdin separately
     if (file_descriptor == STDIN_FD) {
-        // Read from UART
+        // Read from input buffer or UART
         if (byte_count == 0) {
             return 0;
         }
         
-        // Read one character from UART
-        char c = hal_uart_getc();
-        buffer[0] = c;
-        return 1;
+        // Get this process's controlling terminal
+        int tty = process_get_tty(proc);
+        
+        // If vterm is available, use per-terminal input buffers
+        if (vterm_available() && tty >= 0) {
+            // Loop until we get input
+            while (1) {
+                // First check buffer (filled by timer interrupt)
+                if (vterm_has_buffered_input_for(tty)) {
+                    int buffered = vterm_get_buffered_input_for(tty);
+                    if (buffered >= 0) {
+                        buffer[0] = (char)buffered;
+                        return 1;
+                    }
+                }
+                
+                // If we're the active terminal, also check UART directly
+                // This provides immediate response without waiting for timer
+                if (tty == vterm_get_active_index() && hal_uart_data_available()) {
+                    int c = hal_uart_getc_nonblock();
+                    if (c >= 0) {
+                        // Process through VT system for escape sequences
+                        char result = vterm_process_input((char)c);
+                        if (result != 0) {
+                            buffer[0] = result;
+                            return 1;
+                        }
+                        // Character consumed (VT switch), continue loop
+                        continue;
+                    }
+                }
+                
+                // Nothing available, yield and try again
+                process_yield();
+            }
+        } else if (vterm_available()) {
+            // Fallback for processes without controlling terminal
+            while (!vterm_has_buffered_input()) {
+                process_yield();
+            }
+            int buffered = vterm_get_buffered_input();
+            if (buffered >= 0) {
+                buffer[0] = (char)buffered;
+                return 1;
+            }
+            return 0;
+        } else {
+            // No vterm - read directly from UART (fallback)
+            char c = hal_uart_getc();
+            buffer[0] = c;
+            return 1;
+        }
     }
     
     // Handle regular file descriptors
@@ -445,11 +543,33 @@ uint64_t sys_write(int file_descriptor, const char *buffer, size_t byte_count) {
         return SYSCALL_ERROR;
     }
     
-    // Handle stdout/stderr with UART
+    // Handle stdout/stderr with UART (and optional vterm)
     if (file_descriptor == STDOUT_FD || file_descriptor == STDERR_FD) {
-        int bytes_written = hal_uart_write(buffer, byte_count);
-        if (bytes_written != (int)byte_count) {
-            return SYSCALL_ERROR;
+        // If virtual terminals are available, write to process's controlling terminal
+        if (vterm_available()) {
+            int tty = process_get_tty(proc);
+            if (tty >= 0) {
+                /* Route output to process's controlling terminal */
+                for (size_t i = 0; i < byte_count; i++) {
+                    vterm_putc_to(tty, buffer[i]);
+                }
+                /* Only flush if writing to active terminal */
+                if (tty == vterm_get_active_index()) {
+                    vterm_flush();
+                }
+            } else {
+                /* No controlling terminal, write to active terminal */
+                for (size_t i = 0; i < byte_count; i++) {
+                    vterm_putc(buffer[i]);
+                }
+                vterm_flush();
+            }
+        } else {
+            // Fallback to UART only
+            int bytes_written = hal_uart_write(buffer, byte_count);
+            if (bytes_written != (int)byte_count) {
+                return SYSCALL_ERROR;
+            }
         }
         return byte_count;
     }
@@ -952,6 +1072,159 @@ uint64_t sys_getcwd(char *buf, size_t size) {
 }
 
 /**
+ * sys_setsid - Create a new session
+ * 
+ * Creates a new session with the calling process as the session leader.
+ * The process becomes the controlling process of a new terminal.
+ * 
+ * @return New session ID (process PID) on success, -1 on error
+ */
+uint64_t sys_setsid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    /* In a full implementation, setsid would:
+     * 1. Create new session
+     * 2. Become session leader
+     * 3. Disassociate from controlling terminal
+     * For now, just clear the controlling terminal
+     */
+    proc->controlling_tty = -1;
+    
+    /* Return process PID as session ID */
+    return proc->pid;
+}
+
+/**
+ * sys_gettty - Get controlling terminal
+ * 
+ * Returns the index of the process's controlling terminal.
+ * 
+ * @return Terminal index (0-5), or -1 if no controlling terminal
+ */
+uint64_t sys_gettty(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    return (uint64_t)proc->controlling_tty;
+}
+
+/**
+ * sys_settty - Set controlling terminal
+ * 
+ * Sets the controlling terminal for the current process.
+ * The terminal must be a valid virtual terminal index (0-5).
+ * 
+ * @param tty Terminal index to set, or -1 to detach
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_settty(int tty) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    /* Validate terminal index */
+    if (tty < -1 || tty >= 6) {  /* VTERM_MAX_TERMINALS = 6 */
+        return SYSCALL_ERROR;
+    }
+    
+    proc->controlling_tty = tty;
+    return 0;
+}
+
+/**
+ * sys_getprocs - Get information about running processes
+ * 
+ * Fills a user-provided buffer with information about all active processes.
+ * This is used by the 'ps' utility to display process status.
+ * 
+ * @param buf User buffer to store procinfo_t structures
+ * @param max_procs Maximum number of processes to return
+ * @return Number of processes returned, or -1 on error
+ */
+uint64_t sys_getprocs(procinfo_t *buf, size_t max_procs) {
+    if (!buf || max_procs == 0) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    /* Validate user buffer */
+    if (!is_valid_user_pointer(buf, max_procs * sizeof(procinfo_t))) {
+        set_errno(THUNDEROS_EFAULT);
+        return SYSCALL_ERROR;
+    }
+    
+    int max_count = process_get_max_count();
+    size_t count = 0;
+    
+    for (int i = 0; i < max_count && count < max_procs; i++) {
+        struct process *p = process_get_by_index(i);
+        if (p != NULL) {
+            buf[count].pid = p->pid;
+            buf[count].ppid = p->parent ? p->parent->pid : 0;
+            buf[count].state = p->state;
+            buf[count].tty = p->controlling_tty;
+            buf[count].cpu_time = p->cpu_time;
+            
+            /* Copy name safely */
+            for (int j = 0; j < PROC_NAME_MAX - 1 && p->name[j]; j++) {
+                buf[count].name[j] = p->name[j];
+            }
+            buf[count].name[PROC_NAME_MAX - 1] = '\0';
+            
+            count++;
+        }
+    }
+    
+    clear_errno();
+    return count;
+}
+
+/**
+ * sys_uname - Get system information
+ * 
+ * Returns information about the operating system.
+ * 
+ * @param buf User buffer to store utsname_t structure
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_uname(utsname_t *buf) {
+    if (!buf) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    /* Validate user buffer */
+    if (!is_valid_user_pointer(buf, sizeof(utsname_t))) {
+        set_errno(THUNDEROS_EFAULT);
+        return SYSCALL_ERROR;
+    }
+    
+    /* Helper to copy string safely */
+    #define COPY_STR(dst, src) do { \
+        int i; \
+        for (i = 0; i < 63 && (src)[i]; i++) (dst)[i] = (src)[i]; \
+        (dst)[i] = '\0'; \
+    } while(0)
+    
+    COPY_STR(buf->sysname, "ThunderOS");
+    COPY_STR(buf->nodename, "thunderos");
+    COPY_STR(buf->release, "0.7.0");
+    COPY_STR(buf->version, "v0.7.0 Virtual Terminals");
+    COPY_STR(buf->machine, "riscv64");
+    
+    #undef COPY_STR
+    
+    clear_errno();
+    return 0;
+}
+
+/**
  * sys_fork - Create a child process
  * 
  * Creates a complete copy of the current process with its own address space.
@@ -1191,6 +1464,26 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_GETCWD:
             return_value = sys_getcwd((char *)argument0, (size_t)argument1);
+            break;
+            
+        case SYS_SETSID:
+            return_value = sys_setsid();
+            break;
+            
+        case SYS_GETTTY:
+            return_value = sys_gettty();
+            break;
+            
+        case SYS_SETTTY:
+            return_value = sys_settty((int)argument0);
+            break;
+            
+        case SYS_GETPROCS:
+            return_value = sys_getprocs((procinfo_t *)argument0, (size_t)argument1);
+            break;
+            
+        case SYS_UNAME:
+            return_value = sys_uname((utsname_t *)argument0);
             break;
             
         case SYS_FORK:

@@ -9,6 +9,7 @@ This section documents the internal implementation details of ThunderOS.
 
    bootloader
    uart_driver
+   virtual_terminals
    trap_handler
    interrupt_handling
    syscalls
@@ -29,6 +30,7 @@ This section documents the internal implementation details of ThunderOS.
    linker_script
    registers
    virtio_block
+   virtio_gpu
    ext2_filesystem
    vfs
    pipes
@@ -104,6 +106,12 @@ Component Status
    * - :doc:`signals`
      - ✓ Done (v0.5.0)
      - POSIX-style signal handling for IPC and process control
+   * - :doc:`virtual_terminals`
+     - ✓ Done (v0.7.0)
+     - Multiple virtual terminals with per-terminal input buffering
+   * - :doc:`virtio_gpu`
+     - ✓ Done (v0.7.0)
+     - VirtIO GPU driver for 2D framebuffer graphics
    * - :doc:`testing_framework`
      - ✓ Done
      - KUnit-inspired testing framework for kernel

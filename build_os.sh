@@ -46,7 +46,7 @@ main() {
         ./build_userland.sh 2>/dev/null || echo "⚠ Userland build skipped"
         
         # Copy userland binaries if they exist
-        for prog in cat ls hello; do
+        for prog in cat ls hello clock pwd mkdir rmdir touch rm clear sleep ush ps uname uptime whoami tty kill; do
             if [[ -f "userland/build/${prog}" ]]; then
                 cp "userland/build/${prog}" build/testfs/bin/
                 echo "  Added /bin/${prog}"

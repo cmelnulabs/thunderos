@@ -128,6 +128,9 @@ struct process {
     
     // Current working directory
     char cwd[256];                      // Current working directory path
+    
+    // Console multiplexing
+    int controlling_tty;                // Controlling terminal index (-1 = none)
 };
 
 /**
@@ -193,6 +196,23 @@ struct process *process_find_zombie_child(struct process *parent, int target_pid
  * @return 1 if children exist, 0 otherwise
  */
 int process_has_children(struct process *parent, int target_pid);
+
+/**
+ * Get process by index in process table
+ * 
+ * Used for iterating through all processes.
+ * 
+ * @param index Index in process table (0 to MAX_PROCS-1)
+ * @return Process pointer, or NULL if index invalid or slot unused
+ */
+struct process *process_get_by_index(int index);
+
+/**
+ * Get maximum number of processes
+ * 
+ * @return Maximum process count (MAX_PROCS)
+ */
+int process_get_max_count(void);
 
 /**
  * Sleep for a number of ticks
@@ -379,5 +399,22 @@ void process_cleanup_vmas(struct process *proc);
  * @return 1 if valid, 0 if invalid
  */
 int process_validate_user_ptr(struct process *proc, const void *ptr, size_t size, uint32_t required_flags);
+
+/**
+ * Set the controlling terminal for a process
+ * 
+ * @param proc Process to set terminal for
+ * @param tty_index Terminal index (0 to VTERM_MAX_TERMINALS-1), or -1 for none
+ * @return 0 on success, -1 on error
+ */
+int process_set_tty(struct process *proc, int tty_index);
+
+/**
+ * Get the controlling terminal for a process
+ * 
+ * @param proc Process to get terminal for
+ * @return Terminal index, or -1 if none
+ */
+int process_get_tty(struct process *proc);
 
 #endif // PROCESS_H

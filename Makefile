@@ -95,8 +95,9 @@ QEMU_FLAGS += -bios none
 FS_IMG := $(BUILD_DIR)/fs.img
 FS_SIZE := 10M
 
-.PHONY: all clean run debug fs userland test test-quick
+.PHONY: all clean run debug fs userland test test-quick help
 
+# Default target - must be first
 all: $(KERNEL_ELF) $(KERNEL_BIN)
 	@echo ""
 	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -108,6 +109,46 @@ all: $(KERNEL_ELF) $(KERNEL_BIN)
 	@echo "  $(YELLOW)Run with:$(RESET) make qemu"
 	@echo "  $(YELLOW)Debug:$(RESET)    make debug"
 	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+
+# Help target - show available targets
+help:
+	@echo ""
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(CYAN)  ThunderOS Build System$(RESET)"
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Build Targets:$(RESET)"
+	@echo "  $(GREEN)make$(RESET)              Build kernel (ELF and binary)"
+	@echo "  $(GREEN)make all$(RESET)          Same as 'make'"
+	@echo "  $(GREEN)make clean$(RESET)        Remove all build artifacts"
+	@echo "  $(GREEN)make userland$(RESET)     Build userland programs only"
+	@echo "  $(GREEN)make fs$(RESET)           Build ext2 filesystem image"
+	@echo ""
+	@echo "$(BOLD)Run Targets:$(RESET)"
+	@echo "  $(GREEN)make run$(RESET)          Build and run in QEMU (text mode)"
+	@echo "  $(GREEN)make qemu$(RESET)         Same as 'make run'"
+	@echo "  $(GREEN)make qemu-gpu$(RESET)     Run with VirtIO GPU (VNC on :5900)"
+	@echo "  $(GREEN)make qemu-gpu-web$(RESET) Run with GPU + noVNC (http://localhost:6080)"
+	@echo ""
+	@echo "$(BOLD)Debug Targets:$(RESET)"
+	@echo "  $(GREEN)make debug$(RESET)        Run QEMU with GDB server (port 1234)"
+	@echo "  $(GREEN)make dump$(RESET)         Generate disassembly listing"
+	@echo ""
+	@echo "$(BOLD)Test Targets:$(RESET)"
+	@echo "  $(GREEN)make test$(RESET)         Run full test suite"
+	@echo "  $(GREEN)make test-quick$(RESET)   Run quick tests only"
+	@echo ""
+	@echo "$(BOLD)Build Options:$(RESET)"
+	@echo "  $(YELLOW)ENABLE_TESTS=1$(RESET)    Include kernel tests in build"
+	@echo "  $(YELLOW)TEST_MODE=1$(RESET)       Run tests and halt (no shell)"
+	@echo ""
+	@echo "$(BOLD)Examples:$(RESET)"
+	@echo "  $(CYAN)make run$(RESET)                    # Quick start"
+	@echo "  $(CYAN)make qemu-gpu-web$(RESET)           # Run with graphics"
+	@echo "  $(CYAN)make ENABLE_TESTS=1 test$(RESET)    # Run with kernel tests"
+	@echo ""
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo ""
 
 $(KERNEL_ELF): $(ALL_OBJS)
@@ -155,6 +196,7 @@ $(FS_IMG): userland
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"
+	@cp userland/build/clock $(BUILD_DIR)/testfs/bin/clock 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) clock not built"
 	@cp userland/build/mkdir $(BUILD_DIR)/testfs/bin/mkdir 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) mkdir not built"
 	@cp userland/build/rmdir $(BUILD_DIR)/testfs/bin/rmdir 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) rmdir not built"
 	@cp userland/build/pwd $(BUILD_DIR)/testfs/bin/pwd 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pwd not built"
@@ -163,6 +205,12 @@ $(FS_IMG): userland
 	@cp userland/build/clear $(BUILD_DIR)/testfs/bin/clear 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) clear not built"
 	@cp userland/build/sleep $(BUILD_DIR)/testfs/bin/sleep 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) sleep not built"
 	@cp userland/build/ush $(BUILD_DIR)/testfs/bin/ush 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ush not built"
+	@cp userland/build/ps $(BUILD_DIR)/testfs/bin/ps 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ps not built"
+	@cp userland/build/uname $(BUILD_DIR)/testfs/bin/uname 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) uname not built"
+	@cp userland/build/uptime $(BUILD_DIR)/testfs/bin/uptime 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) uptime not built"
+	@cp userland/build/whoami $(BUILD_DIR)/testfs/bin/whoami 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) whoami not built"
+	@cp userland/build/tty $(BUILD_DIR)/testfs/bin/tty 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) tty not built"
+	@cp userland/build/kill $(BUILD_DIR)/testfs/bin/kill 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) kill not built"
 	@cp userland/build/signal_test $(BUILD_DIR)/testfs/bin/signal_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) signal_test not built"
 	@cp userland/build/pipe_test $(BUILD_DIR)/testfs/bin/pipe_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_test not built"
 	@cp userland/build/pipe_simple_test $(BUILD_DIR)/testfs/bin/pipe_simple_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_simple_test not built"
@@ -230,6 +278,82 @@ qemu: userland fs
 		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found. Please install QEMU 10.1.2+"; \
 		exit 1; \
 	fi
+
+# Run with GPU support (opens graphical window)
+qemu-gpu: userland fs
+	@rm -f $(BUILD_DIR)/kernel/main.o
+	@$(MAKE) --no-print-directory TEST_MODE=0 all
+	@echo ""
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)  Starting ThunderOS in QEMU (with GPU)$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)VNC Display:$(RESET) Connect to localhost:5900 from host"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios none \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device \
+			-vnc :0; \
+	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		/tmp/qemu-10.1.2/build/qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios none \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device \
+			-vnc :0; \
+	else \
+		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
+		exit 1; \
+	fi
+
+# Run with GPU and web-based VNC viewer (no VNC client needed)
+qemu-gpu-web: userland fs
+	@rm -f $(BUILD_DIR)/kernel/main.o
+	@$(MAKE) --no-print-directory TEST_MODE=0 all
+	@echo ""
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)  Starting ThunderOS in QEMU (with Web VNC)$(RESET)"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)Open in browser:$(RESET) http://localhost:6080/vnc.html"
+	@echo "$(BOLD)$(MAGENTA)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@# Start websockify in background to bridge web to VNC
+	@websockify --web=/usr/share/novnc 6080 localhost:5900 &
+	@sleep 1
+	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios none \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device \
+			-vnc :0; \
+	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		/tmp/qemu-10.1.2/build/qemu-system-riscv64 -machine virt -m 128M \
+			-serial mon:stdio \
+			-bios none \
+			-kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-device virtio-gpu-device \
+			-vnc :0; \
+	else \
+		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
+		exit 1; \
+	fi
+	@# Clean up websockify
+	@pkill -f "websockify.*6080" 2>/dev/null || true
 
 debug: $(KERNEL_ELF)
 	@echo ""

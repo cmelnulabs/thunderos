@@ -11,6 +11,7 @@
 #include <kernel/config.h>
 #include <fs/vfs.h>
 #include <kernel/elf_loader.h>
+#include <drivers/vterm.h>
 
 #define MAX_CMD_LEN 256
 #define MAX_ARGS 16
@@ -354,6 +355,15 @@ void shell_run(void) {
     while (1) {
         /* Read character from UART */
         char input_char = hal_uart_getc();
+        
+        /* Process through virtual terminal system for Alt+Fn switching */
+        if (vterm_available()) {
+            input_char = vterm_process_input(input_char);
+            if (input_char == 0) {
+                /* Character was consumed by vterm (e.g., terminal switch) */
+                continue;
+            }
+        }
         
         /* Process character */
         shell_process_char(input_char);

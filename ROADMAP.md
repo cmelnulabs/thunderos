@@ -307,49 +307,109 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.7.0 - "Visual"
+## Version 0.7.0 - "Virtual Terminals" ✅ RELEASED
 
-**Focus:** Graphics and user interface
+**Status:** Released on November 29, 2025
 
-### Planned Features
-- [ ] Framebuffer console driver
-- [ ] VirtIO GPU driver
-- [ ] Bitmap font rendering (8x16 characters)
-- [ ] Basic graphics primitives (lines, rectangles, text)
-- [ ] Command history in shell
-- [ ] Virtual terminals (Alt+F1, Alt+F2, etc.)
-- [ ] Console multiplexing
+**Focus:** Multi-terminal support and shell multiplexing
+
+### Completed Features
+- ✅ Virtual terminal system (6 VTs available)
+  - ✅ Per-terminal screen buffers (80x24)
+  - ✅ Per-terminal input ring buffers (64 chars)
+  - ✅ Screen state preserved during switches
+  - ✅ All VT names shown in status bar from start
+- ✅ Terminal switching (ESC+1 through ESC+6)
+  - ✅ Automatic screen redraw on switch
+  - ✅ Active terminal highlighted in status bar
+  - ✅ Inactive terminals dimmed
+- ✅ Multi-shell support
+  - ✅ VT1: Primary shell (PID 1)
+  - ✅ VT2: Secondary shell (PID 2)
+  - ✅ Independent command buffers per terminal
+- ✅ Timer-driven input buffering
+  - ✅ 100ms polling interval
+  - ✅ Input routed to active terminal
+- ✅ Process-terminal association
+  - ✅ `controlling_tty` field in PCB
+  - ✅ Terminal inherited on fork
+  - ✅ Terminal preserved on exec
+- ✅ VirtIO GPU driver (2D framebuffer)
+  - ✅ VirtIO 1.0+ MMIO interface
+  - ✅ 800×600 resolution support
+  - ✅ DMA-allocated framebuffer
+  - ✅ GPU resource management
+- ✅ New system calls (35 total)
+  - ✅ `sys_gettty()` - Get controlling terminal
+  - ✅ `sys_settty()` - Set controlling terminal
+  - ✅ `sys_getprocs()` - Get process list
+  - ✅ `sys_uname()` - Get system info
+- ✅ New userland utilities
+  - ✅ ps - List running processes
+  - ✅ uname - Print system information
+  - ✅ uptime - Show system uptime
+  - ✅ whoami - Print current user
+  - ✅ tty - Print terminal name
+- ✅ Shell refactoring
+  - ✅ Consolidated to single `ush.c`
+  - ✅ Code quality improvements
+
+### Testing Completed
+- ✅ Terminal switching works reliably
+- ✅ Both shells operational simultaneously
+- ✅ Input correctly routed to active terminal
+- ✅ Clock continues on VT1 while working on VT2
+- ✅ No input race conditions
+
+### Deferred to v0.8.0
+- Framebuffer console driver (VirtIO GPU driver ready, needs font rendering)
+- Bitmap font rendering (8x16 character glyphs)
+- Background process support (requires I/O redirection for proper output isolation)
+- Ctrl+C signal handling (requires process groups for foreground identification)
 
 **Release Criteria:**
-- Graphical console works
-- Interactive shell with history
-- Can switch between multiple terminals
-- Works on real hardware with HDMI output
+- ✅ Can switch between multiple terminals
+- ✅ Multiple shells run independently
+- ✅ Input/output properly isolated per terminal
 
 ---
 
 ## Version 0.8.0 - "Compatibility"
 
-**Focus:** POSIX compatibility and advanced shell features
+**Focus:** POSIX compatibility, job control, and graphics console
 
 ### Planned Features
-- [ ] Relative path resolution in VFS (cd .., cd subdir, ./program)
-- [ ] Environment variables
-- [ ] Expanded syscall set (50+ syscalls)
-- [ ] File permissions and ownership
-- [ ] Simple shell scripting support
+
+#### Job Control & Signals
 - [ ] Process groups and sessions
-- [ ] Job control (background/foreground processes)
-- [ ] Pipes in shell syntax (cmd1 | cmd2)
+- [ ] Job control (background/foreground processes with `&`, `fg`, `bg`)
+- [ ] Ctrl+C sends SIGINT to foreground process group
+- [ ] Ctrl+Z sends SIGTSTP (job suspension)
+
+#### I/O & Shell
 - [ ] I/O redirection (>, <, >>)
+- [ ] Pipes in shell syntax (cmd1 | cmd2)
 - [ ] Command history (up/down arrows)
 - [ ] Tab completion
+- [ ] Simple shell scripting support
+
+#### Filesystem & POSIX
+- [ ] Relative path resolution in VFS (cd .., cd subdir, ./program)
+- [ ] Environment variables
+- [ ] File permissions and ownership
+- [ ] Expanded syscall set (50+ syscalls)
+
+#### Graphics Console (from v0.7.0)
+- [ ] Framebuffer console driver (uses VirtIO GPU)
+- [ ] Bitmap font rendering (8x16 characters)
+- [ ] GPU-backed virtual terminal rendering
 
 **Release Criteria:**
 - Can run simple POSIX programs
 - Basic shell scripts execute
 - Process tree management works
 - Shell features functional
+- Background processes with proper output redirection
 
 ---
 

@@ -403,11 +403,14 @@ page_table_t *create_user_page_table(void) {
         return NULL;
     }
     
-    // Map VirtIO MMIO region for block device access
-    // Kernel needs this during syscalls that access the filesystem
-    if (map_page(user_pt, 0x10008000, 0x10008000, PTE_KERNEL_DATA) != 0) {
-        kfree(user_pt);
-        return NULL;
+    // Map VirtIO MMIO regions for block device and GPU access
+    // Kernel needs this during syscalls that access filesystem and graphics
+    // Map all 8 VirtIO slots (0x10001000 - 0x10008000)
+    for (uintptr_t addr = 0x10001000; addr <= 0x10008000; addr += 0x1000) {
+        if (map_page(user_pt, addr, addr, PTE_KERNEL_DATA) != 0) {
+            kfree(user_pt);
+            return NULL;
+        }
     }
     
     // Map CLINT MMIO region for timer and interrupt handling

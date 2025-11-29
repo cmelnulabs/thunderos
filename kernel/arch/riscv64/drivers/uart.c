@@ -88,6 +88,17 @@ char hal_uart_getc(void) {
     return uart_read_reg(UART_RBR);
 }
 
+int hal_uart_data_available(void) {
+    return (uart_read_reg(UART_LSR) & LSR_DATA_READY) != 0;
+}
+
+int hal_uart_getc_nonblock(void) {
+    if ((uart_read_reg(UART_LSR) & LSR_DATA_READY) == 0) {
+        return -1;  // No data available
+    }
+    return (unsigned char)uart_read_reg(UART_RBR);
+}
+
 void hal_uart_put_uint32(uint32_t value) {
     // Convert to decimal string
     char buffer[11];  // Max 10 digits + null terminator

@@ -67,6 +67,7 @@ void process_init(void) {
     init_proc->trap_frame = NULL;
     init_proc->cwd[0] = '/';
     init_proc->cwd[1] = '\0';
+    init_proc->controlling_tty = 0;  /* Kernel console (VT1) */
     
     current_process = init_proc;
     
@@ -298,6 +299,7 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->errno_value = 0;
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
+    proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
     
     // Initialize signals
     extern void signal_init_process(struct process *proc);
@@ -427,6 +429,36 @@ int process_has_children(struct process *parent, int target_pid) {
 }
 
 /**
+ * Get process by index in process table
+ * 
+ * Used for iterating through all processes (e.g., for ps command).
+ * 
+ * @param index Index in process table (0 to MAX_PROCS-1)
+ * @return Process pointer, or NULL if index invalid or slot unused
+ */
+struct process *process_get_by_index(int index) {
+    if (index < 0 || index >= MAX_PROCS) {
+        return NULL;
+    }
+    
+    struct process *p = &process_table[index];
+    if (p->state == PROC_UNUSED) {
+        return NULL;
+    }
+    
+    return p;
+}
+
+/**
+ * Get maximum number of processes
+ * 
+ * @return Maximum process count (MAX_PROCS)
+ */
+int process_get_max_count(void) {
+    return MAX_PROCS;
+}
+
+/**
  * User process sleep
  * 
  * Marks process as sleeping and yields to scheduler.
@@ -540,6 +572,7 @@ pid_t process_fork(struct trap_frame *current_tf) {
     child->priority = parent->priority;
     child->exit_code = 0;
     child->errno_value = 0;
+    child->controlling_tty = parent->controlling_tty;  /* Inherit parent's TTY */
     
     // Copy parent's current working directory
     for (int i = 0; i < 256 && parent->cwd[i]; i++) {
@@ -809,6 +842,7 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     proc->errno_value = 0;
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
+    proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
     
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
@@ -960,6 +994,7 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->errno_value = 0;
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
+    proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
     
     // Setup memory isolation (VMAs for validation)
     if (process_setup_memory_isolation(proc) != 0) {
@@ -1024,12 +1059,12 @@ void forked_child_entry(void) {
         kernel_panic("forked_child_entry: invalid process state");
     }
     
-    // DON'T switch page table yet - user_return will load registers from trap frame
-    // which needs to be accessible. We'll switch to child's page table when
-    // returning FROM a trap (not when first entering user mode).
-    // The child already has its memory copied, so it should work fine with parent's PT.
-    
-    // NO: switch_page_table(proc->page_table);
+    // CRITICAL: Switch to child's page table BEFORE entering user mode!
+    // The child has its own copy of user memory (from fork). If we use the
+    // parent's page table, the child would read/write parent's memory instead
+    // of its own copy. The trap_frame is in kernel memory (kmalloc) so it's
+    // accessible regardless of which user page table is active.
+    switch_page_table(proc->page_table);
     
     // Setup sscratch with kernel stack pointer for trap entry
     uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
@@ -1304,4 +1339,39 @@ int process_validate_user_ptr(struct process *proc, const void *ptr, size_t size
     }
     
     return 1;
+}
+
+/**
+ * Set the controlling terminal for a process
+ * 
+ * @param proc Process to set terminal for
+ * @param tty_index Terminal index (0 to 5), or -1 for none
+ * @return 0 on success, -1 on error
+ */
+int process_set_tty(struct process *proc, int tty_index) {
+    if (!proc) {
+        return -1;
+    }
+    
+    /* Allow -1 (no controlling terminal) or 0-5 (valid VT index) */
+    if (tty_index < -1 || tty_index >= 6) {
+        return -1;
+    }
+    
+    proc->controlling_tty = tty_index;
+    return 0;
+}
+
+/**
+ * Get the controlling terminal for a process
+ * 
+ * @param proc Process to get terminal for
+ * @return Terminal index, or -1 if none or error
+ */
+int process_get_tty(struct process *proc) {
+    if (!proc) {
+        return -1;
+    }
+    
+    return proc->controlling_tty;
 }
