@@ -312,12 +312,12 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 **Focus:** Graphics and user interface
 
 ### Planned Features
-- [ ] Framebuffer console driver
-- [ ] VirtIO GPU driver
-- [ ] Bitmap font rendering (8x16 characters)
-- [ ] Basic graphics primitives (lines, rectangles, text)
-- [ ] Command history in shell
-- [ ] Virtual terminals (Alt+F1, Alt+F2, etc.)
+- [x] Framebuffer console driver
+- [x] VirtIO GPU driver
+- [x] Bitmap font rendering (8x16 characters)
+- [x] Basic graphics primitives (lines, rectangles, text)
+- [x] Command history in shell
+- [x] Virtual terminals (Alt+F1, Alt+F2, etc.)
 - [ ] Console multiplexing
 
 **Release Criteria:**

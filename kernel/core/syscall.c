@@ -13,6 +13,7 @@
 #include "kernel/scheduler.h"
 #include "kernel/panic.h"
 #include "kernel/elf_loader.h"
+#include "drivers/vterm.h"
 #include "fs/vfs.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -407,7 +408,17 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
         }
         
         // Read one character from UART
-        char c = hal_uart_getc();
+        char c;
+        do {
+            c = hal_uart_getc();
+            
+            // Process through virtual terminal for Alt+Fn switching
+            if (vterm_available()) {
+                c = vterm_process_input(c);
+                // If character was consumed (e.g., terminal switch), get another
+            }
+        } while (c == 0 && vterm_available());
+        
         buffer[0] = c;
         return 1;
     }
@@ -445,11 +456,20 @@ uint64_t sys_write(int file_descriptor, const char *buffer, size_t byte_count) {
         return SYSCALL_ERROR;
     }
     
-    // Handle stdout/stderr with UART
+    // Handle stdout/stderr with UART (and optional vterm)
     if (file_descriptor == STDOUT_FD || file_descriptor == STDERR_FD) {
-        int bytes_written = hal_uart_write(buffer, byte_count);
-        if (bytes_written != (int)byte_count) {
-            return SYSCALL_ERROR;
+        // If virtual terminals are available, write to active VT
+        if (vterm_available()) {
+            for (size_t i = 0; i < byte_count; i++) {
+                vterm_putc(buffer[i]);
+            }
+            vterm_flush();
+        } else {
+            // Fallback to UART only
+            int bytes_written = hal_uart_write(buffer, byte_count);
+            if (bytes_written != (int)byte_count) {
+                return SYSCALL_ERROR;
+            }
         }
         return byte_count;
     }

@@ -1,11 +1,16 @@
 /*
  * Flat user shell - all logic in _start() to avoid nested stack frames with -O0
+ * Features: command history (up/down arrows), basic editing
  */
 
 extern long syscall0(long n);
 extern long syscall1(long n, long a0);
 extern long syscall2(long n, long a0, long a1);
 extern long syscall3(long n, long a0, long a1, long a2);
+
+// History settings
+#define HISTORY_SIZE 16
+#define MAX_CMD_LEN 256
 
 void _start(void) {
     // Initialize gp
@@ -56,6 +61,20 @@ void _start(void) {
     char input[256];
     int pos = 0;
     
+    // Command history
+    char history[HISTORY_SIZE][MAX_CMD_LEN];
+    int history_count = 0;      // Number of commands in history
+    int history_index = 0;      // Current position when browsing
+    int browsing_history = 0;   // Flag: are we browsing history?
+    
+    // Escape sequence state
+    int escape_state = 0;       // 0=normal, 1=got ESC, 2=got ESC[
+    
+    // Initialize history
+    for (int i = 0; i < HISTORY_SIZE; i++) {
+        history[i][0] = '\0';
+    }
+    
     // Show initial prompt
     s = prompt; len = 0; while (s[len]) len++; syscall3(1, 1, (long)prompt, len);
     
@@ -69,6 +88,91 @@ void _start(void) {
             continue;
         }
         
+        // Handle escape sequences for arrow keys
+        if (escape_state == 1) {
+            // Got ESC, expecting '['
+            if (c == '[') {
+                escape_state = 2;
+                continue;
+            } else {
+                // Not an escape sequence we recognize
+                escape_state = 0;
+                // Fall through to process 'c' normally
+            }
+        } else if (escape_state == 2) {
+            // Got ESC[, expecting A (up) or B (down)
+            escape_state = 0;
+            if (c == 'A') {
+                // Up arrow - go back in history
+                if (history_count > 0) {
+                    if (!browsing_history) {
+                        // Save current input and start browsing
+                        browsing_history = 1;
+                        history_index = history_count;
+                    }
+                    if (history_index > 0) {
+                        history_index--;
+                        // Clear current line
+                        while (pos > 0) {
+                            const char *bs = "\b \b";
+                            syscall3(1, 1, (long)bs, 3);
+                            pos--;
+                        }
+                        // Copy history entry to input
+                        int i = 0;
+                        while (history[history_index][i]) {
+                            input[i] = history[history_index][i];
+                            i++;
+                        }
+                        input[i] = '\0';
+                        pos = i;
+                        // Display it
+                        syscall3(1, 1, (long)input, pos);
+                    }
+                }
+                continue;
+            } else if (c == 'B') {
+                // Down arrow - go forward in history
+                if (browsing_history && history_index < history_count - 1) {
+                    history_index++;
+                    // Clear current line
+                    while (pos > 0) {
+                        const char *bs = "\b \b";
+                        syscall3(1, 1, (long)bs, 3);
+                        pos--;
+                    }
+                    // Copy history entry to input
+                    int i = 0;
+                    while (history[history_index][i]) {
+                        input[i] = history[history_index][i];
+                        i++;
+                    }
+                    input[i] = '\0';
+                    pos = i;
+                    // Display it
+                    syscall3(1, 1, (long)input, pos);
+                } else if (browsing_history && history_index >= history_count - 1) {
+                    // At end of history, clear line
+                    browsing_history = 0;
+                    while (pos > 0) {
+                        const char *bs = "\b \b";
+                        syscall3(1, 1, (long)bs, 3);
+                        pos--;
+                    }
+                    input[0] = '\0';
+                }
+                continue;
+            }
+            // Not an arrow key, ignore the sequence
+            continue;
+        }
+        
+        // Check for ESC (start of escape sequence)
+        if (c == 0x1B) {
+            escape_state = 1;
+            continue;
+        }
+        
         // Echo character
         if (c == '\r' || c == '\n') {
             // Echo a proper newline sequence
@@ -78,7 +182,50 @@ void _start(void) {
             // End of line
             input[pos] = '\0';
             
+            // Reset history browsing state
+            browsing_history = 0;
+            
             if (pos > 0) {
+                // Add command to history (if not empty and different from last)
+                int add_to_history = 1;
+                if (history_count > 0) {
+                    // Check if same as last command
+                    int same = 1;
+                    int i = 0;
+                    while (input[i] && history[history_count - 1][i]) {
+                        if (input[i] != history[history_count - 1][i]) {
+                            same = 0;
+                            break;
+                        }
+                        i++;
+                    }
+                    if (input[i] != history[history_count - 1][i]) same = 0;
+                    if (same) add_to_history = 0;
+                }
+                
+                if (add_to_history) {
+                    // Shift history if full
+                    if (history_count >= HISTORY_SIZE) {
+                        for (int i = 0; i < HISTORY_SIZE - 1; i++) {
+                            int j = 0;
+                            while (history[i + 1][j]) {
+                                history[i][j] = history[i + 1][j];
+                                j++;
+                            }
+                            history[i][j] = '\0';
+                        }
+                        history_count = HISTORY_SIZE - 1;
+                    }
+                    // Copy input to history
+                    int i = 0;
+                    while (input[i] && i < MAX_CMD_LEN - 1) {
+                        history[history_count][i] = input[i];
+                        i++;
+                    }
+                    history[history_count][i] = '\0';
+                    history_count++;
+                }
+                
                 // Parse command - find first space or end
                 int cmd_len = 0;
                 while (cmd_len < pos && input[cmd_len] != ' ') cmd_len++;

@@ -23,6 +23,7 @@
 #include "drivers/virtio_gpu.h"
 #include "drivers/framebuffer.h"
 #include "drivers/fbconsole.h"
+#include "drivers/vterm.h"
 #include "drivers/font.h"
 #include "fs/ext2.h"
 #include "fs/vfs.h"
@@ -206,14 +207,28 @@ static int init_gpu_device(void) {
                 if (fbcon_init() == 0) {
                     hal_uart_puts("[OK] Framebuffer console initialized\n");
                     
-                    /* Display boot message on graphical console */
-                    fbcon_set_colors(FBCON_COLOR_BRIGHT_CYAN, FBCON_COLOR_BLACK);
-                    fbcon_puts("========================================\n");
-                    fbcon_puts("    ThunderOS - RISC-V AI OS\n");
-                    fbcon_puts("    Graphical Console Active\n");
-                    fbcon_puts("========================================\n\n");
-                    fbcon_reset_colors();
-                    fbcon_flush();
+                    /* Initialize virtual terminals */
+                    if (vterm_init() == 0) {
+                        hal_uart_puts("[OK] Virtual terminals initialized (6 VTs, Alt+1-6 to switch)\n");
+                        
+                        /* Display boot message on VT1 */
+                        vterm_set_colors(14, 0);  /* Bright cyan on black */
+                        vterm_puts("========================================\n");
+                        vterm_puts("    ThunderOS - RISC-V AI OS\n");
+                        vterm_puts("    Virtual Terminal 1\n");
+                        vterm_puts("========================================\n\n");
+                        vterm_set_colors(7, 0);  /* Reset to default */
+                        vterm_flush();
+                    } else {
+                        /* Fall back to simple framebuffer console */
+                        fbcon_set_colors(FBCON_COLOR_BRIGHT_CYAN, FBCON_COLOR_BLACK);
+                        fbcon_puts("========================================\n");
+                        fbcon_puts("    ThunderOS - RISC-V AI OS\n");
+                        fbcon_puts("    Graphical Console Active\n");
+                        fbcon_puts("========================================\n\n");
+                        fbcon_reset_colors();
+                        fbcon_flush();
+                    }
                 }
             }
             return 0;
