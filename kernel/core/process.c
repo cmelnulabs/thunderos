@@ -574,12 +574,14 @@ pid_t process_fork(struct trap_frame *current_tf) {
     child->errno_value = 0;
     child->controlling_tty = parent->controlling_tty;  /* Inherit parent's TTY */
     
-    // Copy parent's current working directory
-    for (int i = 0; i < 256 && parent->cwd[i]; i++) {
-        child->cwd[i] = parent->cwd[i];
+    /* Copy parent's current working directory with proper null termination */
+    int cwd_index = 0;
+    for (cwd_index = 0; cwd_index < 255 && parent->cwd[cwd_index]; cwd_index++) {
+        child->cwd[cwd_index] = parent->cwd[cwd_index];
     }
+    child->cwd[cwd_index] = '\0';
     
-    // Allocate kernel stack for child
+    /* Allocate kernel stack for child */
     child->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
     if (!child->kernel_stack) {
         hal_uart_puts("process_fork: failed to allocate kernel stack\n");

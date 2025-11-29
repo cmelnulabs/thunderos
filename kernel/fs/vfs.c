@@ -7,13 +7,190 @@
 #include "../../include/mm/kmalloc.h"
 #include "../../include/kernel/errno.h"
 #include "../../include/kernel/pipe.h"
+#include "../../include/kernel/process.h"
 #include <stddef.h>
+
+/* ========================================================================
+ * Constants
+ * ======================================================================== */
+
+#define PATH_COMPONENT_MAX   64    /* Maximum number of path components */
+#define COMPONENT_NAME_MAX   256   /* Maximum length of a single component */
+
+/* ========================================================================
+ * Global state
+ * ======================================================================== */
 
 /* Global file descriptor table (per-process would be better, but global for now) */
 static vfs_file_t g_file_table[VFS_MAX_OPEN_FILES];
 
 /* Root filesystem */
 static vfs_filesystem_t *g_root_fs = NULL;
+
+/* ========================================================================
+ * Forward declarations
+ * ======================================================================== */
+
+static int normalize_build_absolute(const char *path, char *working, size_t working_size);
+static int normalize_resolve_components(const char *working, char *normalized, size_t size);
+
+/* ========================================================================
+ * Path normalization helpers
+ * ======================================================================== */
+
+/**
+ * normalize_build_absolute - Build absolute path from relative path and cwd
+ * 
+ * @param path Input path (relative or absolute)
+ * @param working Output buffer for absolute path
+ * @param working_size Size of output buffer
+ * @return 0 on success, -1 on error (errno set)
+ */
+static int normalize_build_absolute(const char *path, char *working, size_t working_size) {
+    size_t pos = 0;
+    
+    if (path[0] != '/') {
+        /* Relative path - prepend current working directory */
+        struct process *current_process = process_current();
+        if (current_process && current_process->cwd[0]) {
+            const char *cwd = current_process->cwd;
+            while (*cwd && pos < working_size - 1) {
+                working[pos++] = *cwd++;
+            }
+        } else {
+            /* Default to root if no cwd set */
+            working[pos++] = '/';
+        }
+        
+        /* Ensure trailing slash for concatenation */
+        if (pos > 0 && working[pos - 1] != '/' && pos < working_size - 1) {
+            working[pos++] = '/';
+        }
+    }
+    
+    /* Append the input path */
+    while (*path && pos < working_size - 1) {
+        working[pos++] = *path++;
+    }
+    working[pos] = '\0';
+    
+    return 0;
+}
+
+/**
+ * normalize_resolve_components - Resolve . and .. in path components
+ * 
+ * Uses a stack-based approach: push regular components, pop for ..
+ * 
+ * @param working Input absolute path
+ * @param normalized Output buffer for resolved path
+ * @param size Size of output buffer
+ * @return 0 on success, -1 on error (errno set)
+ */
+static int normalize_resolve_components(const char *working, char *normalized, size_t size) {
+    /* Component storage - each component is a null-terminated string */
+    static char component_storage[PATH_COMPONENT_MAX][COMPONENT_NAME_MAX];
+    int component_count = 0;
+    
+    const char *cursor = working;
+    if (*cursor == '/') {
+        cursor++;  /* Skip leading slash */
+    }
+    
+    while (*cursor) {
+        /* Find component boundaries */
+        const char *component_start = cursor;
+        while (*cursor && *cursor != '/') {
+            cursor++;
+        }
+        
+        size_t component_length = cursor - component_start;
+        
+        if (component_length == 0) {
+            /* Empty component (double slash), skip */
+        } else if (component_length == 1 && component_start[0] == '.') {
+            /* Current directory ".", skip */
+        } else if (component_length == 2 && component_start[0] == '.' && component_start[1] == '.') {
+            /* Parent directory "..", pop if possible */
+            if (component_count > 0) {
+                component_count--;
+            }
+            /* At root, silently ignore (can't go above root) */
+        } else {
+            /* Regular component, copy to storage */
+            if (component_count < PATH_COMPONENT_MAX) {
+                size_t copy_len = component_length;
+                if (copy_len >= COMPONENT_NAME_MAX) {
+                    copy_len = COMPONENT_NAME_MAX - 1;
+                }
+                for (size_t i = 0; i < copy_len; i++) {
+                    component_storage[component_count][i] = component_start[i];
+                }
+                component_storage[component_count][copy_len] = '\0';
+                component_count++;
+            }
+        }
+        
+        if (*cursor == '/') {
+            cursor++;
+        }
+    }
+    
+    /* Build the normalized path from components */
+    size_t output_pos = 0;
+    normalized[output_pos++] = '/';
+    
+    for (int component_index = 0; component_index < component_count; component_index++) {
+        const char *component = component_storage[component_index];
+        while (*component && output_pos < size - 1) {
+            normalized[output_pos++] = *component++;
+        }
+        
+        /* Add separator between components (not after last) */
+        if (component_index < component_count - 1 && output_pos < size - 1) {
+            normalized[output_pos++] = '/';
+        }
+    }
+    normalized[output_pos] = '\0';
+    
+    return 0;
+}
+
+/* ========================================================================
+ * Public path resolution API
+ * ======================================================================== */
+
+/**
+ * vfs_normalize_path - Convert relative path to absolute, resolve . and ..
+ * 
+ * @param path Input path (relative or absolute)
+ * @param normalized Output buffer for normalized absolute path
+ * @param size Size of output buffer
+ * @return 0 on success, -1 on error
+ * 
+ * @errno THUNDEROS_EINVAL - Invalid parameters
+ */
+int vfs_normalize_path(const char *path, char *normalized, size_t size) {
+    if (!path || !normalized || size == 0) {
+        set_errno(THUNDEROS_EINVAL);
+        return -1;
+    }
+    
+    /* Working buffer for intermediate absolute path */
+    char working_buffer[VFS_MAX_PATH];
+    
+    /* Step 1: Build absolute path from relative + cwd */
+    if (normalize_build_absolute(path, working_buffer, VFS_MAX_PATH) < 0) {
+        return -1;
+    }
+    
+    /* Step 2: Resolve . and .. components */
+    if (normalize_resolve_components(working_buffer, normalized, size) < 0) {
+        return -1;
+    }
+    
+    return 0;
+}
 
 /**
  * Initialize VFS
@@ -102,76 +279,86 @@ vfs_file_t *vfs_get_file(int fd) {
 }
 
 /**
- * Resolve a path to a VFS node
- * Currently only supports absolute paths from root
+ * vfs_resolve_path - Resolve a path to a VFS node
+ * 
+ * Supports both absolute and relative paths. Relative paths are resolved
+ * against the current process's working directory.
+ * 
+ * @param path Path to resolve (absolute or relative)
+ * @return VFS node on success, NULL on error (errno set)
+ * 
+ * @errno THUNDEROS_EFS_NOTMNT - No root filesystem mounted
+ * @errno THUNDEROS_EINVAL - Invalid path
+ * @errno THUNDEROS_ENOENT - Path component not found
  */
 vfs_node_t *vfs_resolve_path(const char *path) {
     if (!g_root_fs) {
-        hal_uart_puts("vfs: No root filesystem mounted\n");
         set_errno(THUNDEROS_EFS_NOTMNT);
         return NULL;
     }
     
-    if (!path || path[0] != '/') {
-        hal_uart_puts("vfs: Path must be absolute (start with /)\n");
+    if (!path) {
         set_errno(THUNDEROS_EINVAL);
         return NULL;
     }
     
-    /* Root directory */
-    if (path[1] == '\0') {
+    /* Normalize path (handles relative paths, ., ..) */
+    char normalized_path[VFS_MAX_PATH];
+    if (vfs_normalize_path(path, normalized_path, VFS_MAX_PATH) < 0) {
+        /* errno already set by vfs_normalize_path */
+        return NULL;
+    }
+    
+    /* Root directory special case */
+    if (normalized_path[0] == '/' && normalized_path[1] == '\0') {
         return g_root_fs->root;
     }
     
-    /* Skip leading slash */
-    path++;
+    /* Skip leading slash and walk the path */
+    const char *cursor = normalized_path + 1;
+    vfs_node_t *current_node = g_root_fs->root;
+    char component_name[COMPONENT_NAME_MAX];
     
-    /* Start from root */
-    vfs_node_t *current = g_root_fs->root;
-    char component[VFS_MAX_PATH];
-    uint32_t comp_idx = 0;
-    
-    while (*path) {
+    while (*cursor) {
         /* Extract path component */
-        comp_idx = 0;
-        while (*path && *path != '/') {
-            if (comp_idx < VFS_MAX_PATH - 1) {
-                component[comp_idx++] = *path;
+        uint32_t name_index = 0;
+        while (*cursor && *cursor != '/') {
+            if (name_index < COMPONENT_NAME_MAX - 1) {
+                component_name[name_index++] = *cursor;
             }
-            path++;
+            cursor++;
         }
-        component[comp_idx] = '\0';
+        component_name[name_index] = '\0';
         
-        if (comp_idx == 0) {
-            /* Skip empty components (e.g., "//") */
-            if (*path == '/') {
-                path++;
+        if (name_index == 0) {
+            /* Skip empty components (shouldn't happen after normalize) */
+            if (*cursor == '/') {
+                cursor++;
             }
             continue;
         }
         
         /* Lookup component in current directory */
-        if (!current->ops || !current->ops->lookup) {
-            hal_uart_puts("vfs: No lookup operation\n");
+        if (!current_node->ops || !current_node->ops->lookup) {
             set_errno(THUNDEROS_EIO);
             return NULL;
         }
         
-        vfs_node_t *next = current->ops->lookup(current, component);
-        if (!next) {
+        vfs_node_t *next_node = current_node->ops->lookup(current_node, component_name);
+        if (!next_node) {
             /* errno already set by lookup */
             return NULL;
         }
         
-        current = next;
+        current_node = next_node;
         
         /* Skip separator */
-        if (*path == '/') {
-            path++;
+        if (*cursor == '/') {
+            cursor++;
         }
     }
     
-    return current;
+    return current_node;
 }
 
 /**
@@ -183,15 +370,22 @@ int vfs_open(const char *path, uint32_t flags) {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
+    /* Normalize path to absolute */
+    char normalized[VFS_MAX_PATH];
+    if (vfs_normalize_path(path, normalized, sizeof(normalized)) != 0) {
+        /* errno already set */
+        return -1;
+    }
+    
     /* Resolve path */
-    vfs_node_t *node = vfs_resolve_path(path);
+    vfs_node_t *node = vfs_resolve_path(normalized);
     
     /* If file doesn't exist and O_CREAT is set, create it */
     if (!node && (flags & O_CREAT)) {
         /* Extract parent directory and filename */
         /* For now, only support files in root directory */
-        if (path[0] == '/' && path[1] != '\0') {
-            const char *filename = path + 1;
+        if (normalized[0] == '/' && normalized[1] != '\0') {
+            const char *filename = normalized + 1;
             
             /* Check if filename contains '/' */
             const char *p = filename;
@@ -212,7 +406,7 @@ int vfs_open(const char *path, uint32_t flags) {
                 }
                 
                 /* Try to resolve again */
-                node = vfs_resolve_path(path);
+                node = vfs_resolve_path(normalized);
             }
         }
     }
@@ -435,12 +629,19 @@ int vfs_mkdir(const char *path, uint32_t mode) {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
+    /* Normalize path to absolute */
+    char normalized[VFS_MAX_PATH];
+    if (vfs_normalize_path(path, normalized, sizeof(normalized)) != 0) {
+        /* errno already set */
+        return -1;
+    }
+    
     /* For now, only support directories in root */
-    if (path[0] != '/' || path[1] == '\0') {
+    if (normalized[0] != '/' || normalized[1] == '\0') {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    const char *dirname = path + 1;
+    const char *dirname = normalized + 1;
     
     /* Check if name contains '/' */
     const char *p = dirname;
@@ -467,12 +668,19 @@ int vfs_rmdir(const char *path) {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
+    /* Normalize path to absolute */
+    char normalized[VFS_MAX_PATH];
+    if (vfs_normalize_path(path, normalized, sizeof(normalized)) != 0) {
+        /* errno already set */
+        return -1;
+    }
+    
     /* For now, only support directories in root */
-    if (path[0] != '/' || path[1] == '\0') {
+    if (normalized[0] != '/' || normalized[1] == '\0') {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    const char *dirname = path + 1;
+    const char *dirname = normalized + 1;
     
     vfs_node_t *root = g_root_fs->root;
     if (!root->ops || !root->ops->rmdir) {
@@ -491,12 +699,19 @@ int vfs_unlink(const char *path) {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
+    /* Normalize path to absolute */
+    char normalized[VFS_MAX_PATH];
+    if (vfs_normalize_path(path, normalized, sizeof(normalized)) != 0) {
+        /* errno already set */
+        return -1;
+    }
+    
     /* For now, only support files in root */
-    if (path[0] != '/' || path[1] == '\0') {
+    if (normalized[0] != '/' || normalized[1] == '\0') {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    const char *filename = path + 1;
+    const char *filename = normalized + 1;
     
     vfs_node_t *root = g_root_fs->root;
     if (!root->ops || !root->ops->unlink) {

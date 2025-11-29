@@ -980,10 +980,13 @@ uint64_t sys_getdents(int fd, void *dirp, size_t count) {
 /**
  * sys_chdir - Change current working directory
  * 
- * @param path Path to new working directory (must be absolute)
+ * Supports both absolute and relative paths. The path is normalized
+ * before storing in the process control block.
+ * 
+ * @param path Path to new working directory (absolute or relative)
  * @return 0 on success, -1 on error
  * 
- * @errno THUNDEROS_EINVAL - Invalid path or not absolute
+ * @errno THUNDEROS_EINVAL - Invalid path
  * @errno THUNDEROS_ENOENT - Path does not exist
  * @errno THUNDEROS_ENOTDIR - Path is not a directory
  */
@@ -999,8 +1002,15 @@ uint64_t sys_chdir(const char *path) {
         return SYSCALL_ERROR;
     }
     
-    // Resolve the path to verify it exists and is a directory
-    vfs_node_t *node = vfs_resolve_path(path);
+    /* Normalize the path (handles relative paths, ., ..) */
+    char normalized_path[VFS_MAX_PATH];
+    if (vfs_normalize_path(path, normalized_path, VFS_MAX_PATH) < 0) {
+        /* errno already set by vfs_normalize_path */
+        return SYSCALL_ERROR;
+    }
+    
+    /* Resolve the normalized path to verify it exists and is a directory */
+    vfs_node_t *node = vfs_resolve_path(normalized_path);
     if (!node) {
         /* errno already set by vfs_resolve_path */
         return SYSCALL_ERROR;
@@ -1011,13 +1021,13 @@ uint64_t sys_chdir(const char *path) {
         return SYSCALL_ERROR;
     }
     
-    // Copy path to process cwd
-    size_t i = 0;
-    while (path[i] && i < VFS_MAX_PATH - 1) {
-        proc->cwd[i] = path[i];
-        i++;
+    /* Store the normalized absolute path in process cwd */
+    size_t path_index = 0;
+    while (normalized_path[path_index] && path_index < VFS_MAX_PATH - 1) {
+        proc->cwd[path_index] = normalized_path[path_index];
+        path_index++;
     }
-    proc->cwd[i] = '\0';
+    proc->cwd[path_index] = '\0';
     
     clear_errno();
     return SYSCALL_SUCCESS;
