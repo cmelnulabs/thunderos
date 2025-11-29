@@ -124,9 +124,9 @@ Test suite validates:
 
 Located in `userland/`:
 - **Core utilities**: cat, ls, pwd, mkdir, rmdir, touch, rm, clear, sleep
-- **System utilities**: ps, uname, uptime, whoami, tty
+- **System utilities**: ps, uname, uptime, whoami, tty, kill
 - **Shell**: ush (interactive shell with command history)
-- **Test programs**: hello, clock, signal_test, pipe_test
+- **Test programs**: hello, clock, signal_test, pipe_test, fork_test
 
 Programs are compiled as RISC-V ELF64 executables and can be loaded from the ext2 filesystem.
 
