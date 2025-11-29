@@ -1,8 +1,106 @@
 # ThunderOS User Shell Debugging Journal
 
-## Status: ✅ WORKING (Nov 28, 2025)
+## Status: ✅ FIXED (Nov 29, 2025)
 
-The user-mode shell is now fully functional! All commands work correctly including fork+exec.
+Console multiplexing and clock program now working!
+
+---
+
+## Fixed: sys_sleep hangs (Nov 29, 2025)
+
+### Root Cause
+When a syscall trap occurs, RISC-V hardware automatically clears `sstatus.SIE` (supervisor interrupt enable). This means during `sys_sleep`'s busy-wait loop, timer interrupts could NOT fire, so `hal_timer_get_ticks()` never incremented.
+
+### Solution
+Enable interrupts during the sleep loop in `sys_sleep`:
+```c
+uint64_t sys_sleep(uint64_t milliseconds) {
+    // ... setup ...
+    
+    /* Enable interrupts so timer can fire during sleep */
+    asm volatile("csrsi sstatus, 0x2");  // Set SIE bit
+    
+    /* Wait for timer ticks */
+    while (hal_timer_get_ticks() < target_ticks) {
+        asm volatile("wfi");  // Wait for interrupt
+    }
+    
+    /* Disable interrupts before returning */
+    asm volatile("csrci sstatus, 0x2");  // Clear SIE bit
+    
+    return SYSCALL_SUCCESS;
+}
+```
+
+### Result
+Clock now works correctly, printing incrementing seconds:
+```
+ush> clock
+=== Clock Started ===
+1
+2
+3
+...
+```
+
+---
+
+## Current Debug Session: Console Multiplexing & Clock Program
+
+### Goal
+Implement console multiplexing so each process can output to its own VT, and create a clock program to test it.
+
+### What Was Implemented
+1. **Console Multiplexing**
+   - Per-process `controlling_tty` field in process struct
+   - `vterm_putc_to(int tty, char c)` - write to specific VT
+   - UART-only mode for vterm (no GPU required)
+   - Input polling in timer interrupt for VT switching
+
+2. **Clock Program** (`userland/clock.c`)
+   - Prints elapsed seconds every second
+   - Uses `sys_gettime()` and `sys_sleep(100)`
+
+3. **Timer/Sleep Fixes**
+   - Fixed `sys_gettime()` - was dividing by TICKS_PER_MS (10000) but ticks are 100ms intervals
+   - Fixed to: `return ticks * 100;` (each tick = 100ms)
+   - Fixed `sys_sleep()` - was multiplying by TICKS_PER_MS
+   - Fixed to: `ticks_to_wait = (milliseconds + 99) / 100;`
+
+### Current Bug: sys_sleep hangs
+**Symptom:** Clock prints "Sleeping 100ms..." then hangs forever
+**Test output:**
+```
+ush> clock
+=== Clock Started ===
+Start time: 400 ms
+Sleeping 100ms...
+[hangs forever]
+```
+
+**Analysis:**
+- `sys_sleep(100)` calls `process_yield()` in a loop
+- `process_yield()` calls `schedule()`
+- Clock is forked from shell, shell is waiting in `waitpid`
+- Only two processes: shell (blocked) and clock (yielding)
+- When clock yields, scheduler should pick it back up
+
+**Hypothesis:** Clock yields but never gets scheduled again because:
+1. Shell is blocked in waitpid (state != PROC_RUNNING)
+2. Clock yields and is enqueued
+3. Scheduler picks clock... but something goes wrong
+
+**Next Steps to Try:**
+- [ ] Check if clock is being enqueued correctly after yield
+- [ ] Check scheduler_pick_next() logic
+- [ ] Add debug output to schedule() to trace what's happening
+- [ ] Check if clock's state is correct after yield
+
+---
+
+## Previous Session: Working Shell (Nov 28, 2025)
+
+The user-mode shell is fully functional! All commands work correctly including fork+exec.
 
 ---
 
@@ -15,7 +113,7 @@ The user-mode shell is now fully functional! All commands work correctly includi
 
 ---
 
-## Bugs Fixed This Session
+## Bugs Fixed (Nov 28)
 
 ### Bug 1: sscratch not restored on trap return to user mode
 **File:** `kernel/arch/riscv64/trap_entry.S`

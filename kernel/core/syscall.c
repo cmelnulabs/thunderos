@@ -236,15 +236,48 @@ uint64_t sys_sbrk(int heap_increment) {
 /**
  * sys_sleep - Sleep for specified milliseconds
  * 
+ * Timer ticks are every 100ms (TIMER_INTERVAL_US = 100000).
+ * 
  * @param milliseconds Milliseconds to sleep
  * @return 0 on success
  */
 uint64_t sys_sleep(uint64_t milliseconds) {
-    (void)milliseconds;  // Suppress unused parameter warning
+    if (milliseconds == 0) {
+        return SYSCALL_SUCCESS;
+    }
     
-    // Not fully implemented - just yield for now
-    // TODO: Implement proper sleep with timer-based wakeup
-    process_yield();
+    /* Get current time */
+    extern uint64_t hal_timer_get_ticks(void);
+    uint64_t start_ticks = hal_timer_get_ticks();
+    
+    /* Each tick is 100ms = 100 milliseconds
+     * So to sleep N ms, we need N/100 ticks
+     * But to avoid losing precision, round up: (N + 99) / 100
+     */
+    uint64_t ticks_to_wait = (milliseconds + 99) / 100;
+    if (ticks_to_wait == 0) ticks_to_wait = 1;
+    
+    uint64_t target_ticks = start_ticks + ticks_to_wait;
+    
+    /* Enable interrupts so timer interrupts can fire during sleep.
+     * 
+     * When we enter a syscall via trap, interrupts are disabled by hardware.
+     * We need to re-enable them so the timer can update the tick count.
+     * 
+     * Enable SIE (Supervisor Interrupt Enable) bit in sstatus.
+     */
+    __asm__ volatile("csrs sstatus, %0" :: "r"(1UL << 1));
+    
+    /* Wait until enough ticks have passed.
+     * Use WFI to wait for next interrupt instead of spinning.
+     */
+    while (hal_timer_get_ticks() < target_ticks) {
+        __asm__ volatile("wfi");
+    }
+    
+    /* Disable interrupts again before returning from syscall */
+    __asm__ volatile("csrc sstatus, %0" :: "r"(1UL << 1));
+    
     return SYSCALL_SUCCESS;
 }
 
@@ -299,15 +332,17 @@ uint64_t sys_kill(int pid, int signal) {
 /**
  * sys_gettime - Get system time
  * 
+ * Timer ticks are every 100ms (TIMER_INTERVAL_US = 100000).
+ * 
  * @return Milliseconds since boot
  */
 uint64_t sys_gettime(void) {
-    // Get time from hardware timer
+    // Get time from hardware timer (each tick is 100ms)
     extern uint64_t hal_timer_get_ticks(void);
     uint64_t ticks = hal_timer_get_ticks();
     
-    // Convert ticks to milliseconds
-    return ticks / TICKS_PER_MS;
+    // Convert ticks to milliseconds (each tick = 100ms)
+    return ticks * 100;
 }
 
 /**
@@ -407,8 +442,17 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
             return 0;
         }
         
-        // Read one character from UART
+        // First check for buffered input from timer interrupt polling
         char c;
+        if (vterm_available() && vterm_has_buffered_input()) {
+            int buffered = vterm_get_buffered_input();
+            if (buffered >= 0) {
+                buffer[0] = (char)buffered;
+                return 1;
+            }
+        }
+        
+        // Read one character from UART
         do {
             c = hal_uart_getc();
             
@@ -458,12 +502,25 @@ uint64_t sys_write(int file_descriptor, const char *buffer, size_t byte_count) {
     
     // Handle stdout/stderr with UART (and optional vterm)
     if (file_descriptor == STDOUT_FD || file_descriptor == STDERR_FD) {
-        // If virtual terminals are available, write to active VT
+        // If virtual terminals are available, write to process's controlling terminal
         if (vterm_available()) {
-            for (size_t i = 0; i < byte_count; i++) {
-                vterm_putc(buffer[i]);
+            int tty = process_get_tty(proc);
+            if (tty >= 0) {
+                /* Route output to process's controlling terminal */
+                for (size_t i = 0; i < byte_count; i++) {
+                    vterm_putc_to(tty, buffer[i]);
+                }
+                /* Only flush if writing to active terminal */
+                if (tty == vterm_get_active_index()) {
+                    vterm_flush();
+                }
+            } else {
+                /* No controlling terminal, write to active terminal */
+                for (size_t i = 0; i < byte_count; i++) {
+                    vterm_putc(buffer[i]);
+                }
+                vterm_flush();
             }
-            vterm_flush();
         } else {
             // Fallback to UART only
             int bytes_written = hal_uart_write(buffer, byte_count);
@@ -972,6 +1029,72 @@ uint64_t sys_getcwd(char *buf, size_t size) {
 }
 
 /**
+ * sys_setsid - Create a new session
+ * 
+ * Creates a new session with the calling process as the session leader.
+ * The process becomes the controlling process of a new terminal.
+ * 
+ * @return New session ID (process PID) on success, -1 on error
+ */
+uint64_t sys_setsid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    /* In a full implementation, setsid would:
+     * 1. Create new session
+     * 2. Become session leader
+     * 3. Disassociate from controlling terminal
+     * For now, just clear the controlling terminal
+     */
+    proc->controlling_tty = -1;
+    
+    /* Return process PID as session ID */
+    return proc->pid;
+}
+
+/**
+ * sys_gettty - Get controlling terminal
+ * 
+ * Returns the index of the process's controlling terminal.
+ * 
+ * @return Terminal index (0-5), or -1 if no controlling terminal
+ */
+uint64_t sys_gettty(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    return (uint64_t)proc->controlling_tty;
+}
+
+/**
+ * sys_settty - Set controlling terminal
+ * 
+ * Sets the controlling terminal for the current process.
+ * The terminal must be a valid virtual terminal index (0-5).
+ * 
+ * @param tty Terminal index to set, or -1 to detach
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_settty(int tty) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return SYSCALL_ERROR;
+    }
+    
+    /* Validate terminal index */
+    if (tty < -1 || tty >= 6) {  /* VTERM_MAX_TERMINALS = 6 */
+        return SYSCALL_ERROR;
+    }
+    
+    proc->controlling_tty = tty;
+    return 0;
+}
+
+/**
  * sys_fork - Create a child process
  * 
  * Creates a complete copy of the current process with its own address space.
@@ -1211,6 +1334,18 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_GETCWD:
             return_value = sys_getcwd((char *)argument0, (size_t)argument1);
+            break;
+            
+        case SYS_SETSID:
+            return_value = sys_setsid();
+            break;
+            
+        case SYS_GETTTY:
+            return_value = sys_gettty();
+            break;
+            
+        case SYS_SETTTY:
+            return_value = sys_settty((int)argument0);
             break;
             
         case SYS_FORK:

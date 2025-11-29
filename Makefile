@@ -95,8 +95,9 @@ QEMU_FLAGS += -bios none
 FS_IMG := $(BUILD_DIR)/fs.img
 FS_SIZE := 10M
 
-.PHONY: all clean run debug fs userland test test-quick
+.PHONY: all clean run debug fs userland test test-quick help
 
+# Default target - must be first
 all: $(KERNEL_ELF) $(KERNEL_BIN)
 	@echo ""
 	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
@@ -108,6 +109,46 @@ all: $(KERNEL_ELF) $(KERNEL_BIN)
 	@echo "  $(YELLOW)Run with:$(RESET) make qemu"
 	@echo "  $(YELLOW)Debug:$(RESET)    make debug"
 	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+
+# Help target - show available targets
+help:
+	@echo ""
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(CYAN)  ThunderOS Build System$(RESET)"
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Build Targets:$(RESET)"
+	@echo "  $(GREEN)make$(RESET)              Build kernel (ELF and binary)"
+	@echo "  $(GREEN)make all$(RESET)          Same as 'make'"
+	@echo "  $(GREEN)make clean$(RESET)        Remove all build artifacts"
+	@echo "  $(GREEN)make userland$(RESET)     Build userland programs only"
+	@echo "  $(GREEN)make fs$(RESET)           Build ext2 filesystem image"
+	@echo ""
+	@echo "$(BOLD)Run Targets:$(RESET)"
+	@echo "  $(GREEN)make run$(RESET)          Build and run in QEMU (text mode)"
+	@echo "  $(GREEN)make qemu$(RESET)         Same as 'make run'"
+	@echo "  $(GREEN)make qemu-gpu$(RESET)     Run with VirtIO GPU (VNC on :5900)"
+	@echo "  $(GREEN)make qemu-gpu-web$(RESET) Run with GPU + noVNC (http://localhost:6080)"
+	@echo ""
+	@echo "$(BOLD)Debug Targets:$(RESET)"
+	@echo "  $(GREEN)make debug$(RESET)        Run QEMU with GDB server (port 1234)"
+	@echo "  $(GREEN)make dump$(RESET)         Generate disassembly listing"
+	@echo ""
+	@echo "$(BOLD)Test Targets:$(RESET)"
+	@echo "  $(GREEN)make test$(RESET)         Run full test suite"
+	@echo "  $(GREEN)make test-quick$(RESET)   Run quick tests only"
+	@echo ""
+	@echo "$(BOLD)Build Options:$(RESET)"
+	@echo "  $(YELLOW)ENABLE_TESTS=1$(RESET)    Include kernel tests in build"
+	@echo "  $(YELLOW)TEST_MODE=1$(RESET)       Run tests and halt (no shell)"
+	@echo ""
+	@echo "$(BOLD)Examples:$(RESET)"
+	@echo "  $(CYAN)make run$(RESET)                    # Quick start"
+	@echo "  $(CYAN)make qemu-gpu-web$(RESET)           # Run with graphics"
+	@echo "  $(CYAN)make ENABLE_TESTS=1 test$(RESET)    # Run with kernel tests"
+	@echo ""
+	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo ""
 
 $(KERNEL_ELF): $(ALL_OBJS)
@@ -155,6 +196,7 @@ $(FS_IMG): userland
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"
+	@cp userland/build/clock $(BUILD_DIR)/testfs/bin/clock 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) clock not built"
 	@cp userland/build/mkdir $(BUILD_DIR)/testfs/bin/mkdir 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) mkdir not built"
 	@cp userland/build/rmdir $(BUILD_DIR)/testfs/bin/rmdir 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) rmdir not built"
 	@cp userland/build/pwd $(BUILD_DIR)/testfs/bin/pwd 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pwd not built"

@@ -128,6 +128,9 @@ struct process {
     
     // Current working directory
     char cwd[256];                      // Current working directory path
+    
+    // Console multiplexing
+    int controlling_tty;                // Controlling terminal index (-1 = none)
 };
 
 /**
@@ -379,5 +382,22 @@ void process_cleanup_vmas(struct process *proc);
  * @return 1 if valid, 0 if invalid
  */
 int process_validate_user_ptr(struct process *proc, const void *ptr, size_t size, uint32_t required_flags);
+
+/**
+ * Set the controlling terminal for a process
+ * 
+ * @param proc Process to set terminal for
+ * @param tty_index Terminal index (0 to VTERM_MAX_TERMINALS-1), or -1 for none
+ * @return 0 on success, -1 on error
+ */
+int process_set_tty(struct process *proc, int tty_index);
+
+/**
+ * Get the controlling terminal for a process
+ * 
+ * @param proc Process to get terminal for
+ * @return Terminal index, or -1 if none
+ */
+int process_get_tty(struct process *proc);
 
 #endif // PROCESS_H

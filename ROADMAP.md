@@ -318,7 +318,14 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - [x] Basic graphics primitives (lines, rectangles, text)
 - [x] Command history in shell
 - [x] Virtual terminals (Alt+F1, Alt+F2, etc.)
-- [ ] Console multiplexing
+- [x] Console multiplexing
+
+### Console Multiplexing Details
+- Per-process controlling terminal assignment
+- Output routed to process's assigned terminal
+- Input only delivered to foreground terminal process
+- Kernel console on VT1 for system messages
+- New syscalls: settty, gettty, setsid
 
 **Release Criteria:**
 - Graphical console works

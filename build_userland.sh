@@ -100,6 +100,7 @@ build_program "sleep"
 # User applications
 print_section "User Applications"
 build_program "hello"
+build_program "clock"
 
 # Build ush (user shell) - special case with multiple source files
 TOTAL_PROGRAMS=$((TOTAL_PROGRAMS + 1))

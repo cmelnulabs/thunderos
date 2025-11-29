@@ -32,7 +32,7 @@ void _start(void) {
     const char *prompt = "ush> ";
     
     // Command strings  
-    const char *help_response = "Available commands:\n  help  - Show this help\n  echo  - Echo arguments\n  cat   - Display file contents\n  ls    - List directory\n  cd    - Change directory\n  pwd   - Print working directory\n  mkdir - Create directory\n  rmdir - Remove directory\n  clear - Clear screen\n  hello - Run hello program\n  exit  - Exit shell\n";
+    const char *help_response = "Available commands:\n  help  - Show this help\n  echo  - Echo arguments\n  cat   - Display file contents\n  ls    - List directory\n  cd    - Change directory\n  pwd   - Print working directory\n  mkdir - Create directory\n  rmdir - Remove directory\n  clear - Clear screen\n  hello - Run hello program\n  clock - Display elapsed time\n  exit  - Exit shell\n";
     const char *goodbye = "Goodbye!\n";
     const char *unknown = "Unknown command (try 'help')\n";
     const char *usage_cat = "Usage: cat <filename>\n";
@@ -240,6 +240,7 @@ void _start(void) {
                 int is_echo = (cmd_len == 4 && input[0] == 'e' && input[1] == 'c' && input[2] == 'h' && input[3] == 'o');
                 int is_cat = (cmd_len == 3 && input[0] == 'c' && input[1] == 'a' && input[2] == 't');
                 int is_hello = (cmd_len == 5 && input[0] == 'h' && input[1] == 'e' && input[2] == 'l' && input[3] == 'l' && input[4] == 'o');
+                int is_clock = (cmd_len == 5 && input[0] == 'c' && input[1] == 'l' && input[2] == 'o' && input[3] == 'c' && input[4] == 'k');
                 int is_ls = (cmd_len == 2 && input[0] == 'l' && input[1] == 's');
                 int is_cd = (cmd_len == 2 && input[0] == 'c' && input[1] == 'd');
                 int is_mkdir = (cmd_len == 5 && input[0] == 'm' && input[1] == 'k' && input[2] == 'd' && input[3] == 'i' && input[4] == 'r');
@@ -323,6 +324,28 @@ void _start(void) {
                         syscall1(0, 1);
                     } else if (pid > 0) {
                         // Parent - wait for child (SYS_WAIT = 9)
+                        int status;
+                        syscall3(9, pid, (long)&status, 0);
+                    }
+                    
+                } else if (is_clock) {
+                    // Fork and exec clock program (runs until killed)
+                    long pid = syscall0(7);  // SYS_FORK
+                    if (pid == 0) {
+                        // Child process - exec /bin/clock
+                        const char *path = "/bin/clock";
+                        const char *argv[] = { path, 0 };
+                        const char *envp[] = { 0 };
+                        syscall3(20, (long)path, (long)argv, (long)envp);  // SYS_EXECVE
+                        // If exec fails, exit
+                        const char *exec_fail = "Failed to exec clock\n";
+                        s = exec_fail;
+                        len = 0;
+                        while (s[len]) len++;
+                        syscall3(1, 1, (long)exec_fail, len);
+                        syscall1(0, 1);
+                    } else if (pid > 0) {
+                        // Parent - wait for child
                         int status;
                         syscall3(9, pid, (long)&status, 0);
                     }

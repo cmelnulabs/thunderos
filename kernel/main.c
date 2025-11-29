@@ -236,6 +236,12 @@ static int init_gpu_device(void) {
     }
 
     hal_uart_puts("[INFO] No VirtIO GPU device found - console only mode\n");
+    
+    /* Initialize virtual terminals even without GPU (for console multiplexing) */
+    if (vterm_init() == 0) {
+        hal_uart_puts("[OK] Virtual terminals initialized (UART mode, ESC+1-6 to switch)\n");
+    }
+    
     return -1;
 }
 
@@ -284,7 +290,26 @@ static int init_filesystem(void) {
 }
 
 /*
- * Launch user-mode shell or fall back to kernel shell.
+ * Launch a shell on a specific virtual terminal.
+ * Returns the PID of the launched shell, or -1 on error.
+ */
+static int launch_shell_on_vt(int vt_index) {
+    int shell_pid = elf_load_exec("/bin/ush", NULL, 0);
+    if (shell_pid < 0) {
+        return -1;
+    }
+    
+    /* Set the shell's controlling terminal */
+    struct process *shell_proc = process_get(shell_pid);
+    if (shell_proc) {
+        process_set_tty(shell_proc, vt_index);
+    }
+    
+    return shell_pid;
+}
+
+/*
+ * Launch user-mode shells on all virtual terminals.
  */
 static void launch_shell(void) {
     hal_uart_puts("\n");
@@ -293,7 +318,10 @@ static void launch_shell(void) {
     hal_uart_puts("=================================\n");
     hal_uart_puts("\n");
 
-    int shell_pid = elf_load_exec("/bin/ush", NULL, 0);
+    /* For now, launch just one shell on VT1 */
+    /* Multi-shell support requires per-terminal input queues */
+    int shell_pid = launch_shell_on_vt(0);  /* VT1 */
+    
     if (shell_pid < 0) {
         hal_uart_puts("[FAIL] Failed to launch user-mode shell\n");
         hal_uart_puts("Falling back to kernel shell...\n");
@@ -301,11 +329,16 @@ static void launch_shell(void) {
         shell_run();
         return;
     }
-
+    
     hal_uart_puts("[OK] User-mode shell launched (PID ");
     hal_uart_put_uint32(shell_pid);
     hal_uart_puts(")\n");
+    
+    if (vterm_available()) {
+        hal_uart_puts("[INFO] Switch terminals with F1-F6 or ESC+1-6\n");
+    }
 
+    /* Wait for shell to exit */
     int exit_status = 0;
     sys_waitpid(shell_pid, &exit_status, 0);
 

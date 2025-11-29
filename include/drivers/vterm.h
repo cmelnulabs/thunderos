@@ -186,4 +186,101 @@ int vterm_available(void);
  */
 void vterm_draw_status_bar(void);
 
+/*
+ * Console Multiplexing Support
+ * 
+ * These functions enable routing output to specific terminals based on
+ * the source (kernel, process). The kernel console is always VT1 (index 0).
+ */
+
+/* Kernel console is always VT1 (index 0) */
+#define VTERM_KERNEL_CONSOLE    0
+
+/**
+ * Write a character to a specific virtual terminal
+ * 
+ * Used for console multiplexing to route output to non-active terminals.
+ * 
+ * @param index Terminal index (0 to VTERM_MAX_TERMINALS-1)
+ * @param c Character to write
+ */
+void vterm_putc_to(int index, char c);
+
+/**
+ * Write a string to a specific virtual terminal
+ * 
+ * @param index Terminal index (0 to VTERM_MAX_TERMINALS-1)
+ * @param str String to write
+ */
+void vterm_puts_to(int index, const char *str);
+
+/**
+ * Write formatted output to the kernel console (VT1)
+ * 
+ * All kernel messages (printk, errors, etc.) go to VT1.
+ * 
+ * @param str String to write
+ */
+void vterm_kernel_puts(const char *str);
+
+/**
+ * Write a character to the kernel console (VT1)
+ * 
+ * @param c Character to write
+ */
+void vterm_kernel_putc(char c);
+
+/**
+ * Get input from a specific terminal
+ * 
+ * Returns input only if it came from the specified terminal.
+ * Used for per-terminal input routing.
+ * 
+ * @param index Terminal index to check
+ * @return Character if input available for this terminal, 0 otherwise
+ */
+char vterm_getc_from(int index);
+
+/**
+ * Set the terminal that should receive input
+ * 
+ * When keyboard input arrives, it goes to the currently active terminal.
+ * This function is called automatically on terminal switch.
+ * 
+ * @param index Terminal index to receive input
+ */
+void vterm_set_input_terminal(int index);
+
+/**
+ * Get the terminal currently receiving input
+ * 
+ * @return Terminal index receiving input
+ */
+int vterm_get_input_terminal(void);
+
+/**
+ * Poll for keyboard input and handle VT switching
+ * 
+ * This is called from timer interrupt to allow VT switching
+ * even when no process is reading input. Regular characters
+ * are buffered for later consumption.
+ * 
+ * @return 1 if input was processed, 0 if no input
+ */
+int vterm_poll_input(void);
+
+/**
+ * Get a character that was buffered during polling
+ * 
+ * @return Character from buffer, or -1 if buffer empty
+ */
+int vterm_get_buffered_input(void);
+
+/**
+ * Check if there's buffered input available
+ * 
+ * @return 1 if buffered input available, 0 otherwise
+ */
+int vterm_has_buffered_input(void);
+
 #endif /* VTERM_H */

@@ -67,6 +67,7 @@ void process_init(void) {
     init_proc->trap_frame = NULL;
     init_proc->cwd[0] = '/';
     init_proc->cwd[1] = '\0';
+    init_proc->controlling_tty = 0;  /* Kernel console (VT1) */
     
     current_process = init_proc;
     
@@ -298,6 +299,7 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->errno_value = 0;
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
+    proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
     
     // Initialize signals
     extern void signal_init_process(struct process *proc);
@@ -540,6 +542,7 @@ pid_t process_fork(struct trap_frame *current_tf) {
     child->priority = parent->priority;
     child->exit_code = 0;
     child->errno_value = 0;
+    child->controlling_tty = parent->controlling_tty;  /* Inherit parent's TTY */
     
     // Copy parent's current working directory
     for (int i = 0; i < 256 && parent->cwd[i]; i++) {
@@ -809,6 +812,7 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     proc->errno_value = 0;
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
+    proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
     
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
@@ -960,6 +964,7 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->errno_value = 0;
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
+    proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
     
     // Setup memory isolation (VMAs for validation)
     if (process_setup_memory_isolation(proc) != 0) {
@@ -1304,4 +1309,39 @@ int process_validate_user_ptr(struct process *proc, const void *ptr, size_t size
     }
     
     return 1;
+}
+
+/**
+ * Set the controlling terminal for a process
+ * 
+ * @param proc Process to set terminal for
+ * @param tty_index Terminal index (0 to 5), or -1 for none
+ * @return 0 on success, -1 on error
+ */
+int process_set_tty(struct process *proc, int tty_index) {
+    if (!proc) {
+        return -1;
+    }
+    
+    /* Allow -1 (no controlling terminal) or 0-5 (valid VT index) */
+    if (tty_index < -1 || tty_index >= 6) {
+        return -1;
+    }
+    
+    proc->controlling_tty = tty_index;
+    return 0;
+}
+
+/**
+ * Get the controlling terminal for a process
+ * 
+ * @param proc Process to get terminal for
+ * @return Terminal index, or -1 if none or error
+ */
+int process_get_tty(struct process *proc) {
+    if (!proc) {
+        return -1;
+    }
+    
+    return proc->controlling_tty;
 }

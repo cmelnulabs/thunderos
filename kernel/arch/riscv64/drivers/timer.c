@@ -7,6 +7,7 @@
 
 #include "hal/hal_timer.h"
 #include "hal/hal_uart.h"
+#include "drivers/vterm.h"
 
 #define TIMER_FREQ 10000000UL  // 10 MHz
 
@@ -53,6 +54,12 @@ void hal_timer_handle_interrupt(void) {
     
     // Schedule next interrupt BEFORE calling scheduler
     hal_timer_set_next(timer_interval_us);
+    
+    // Poll for keyboard input (VT switching, etc.)
+    // This allows switching terminals even when processes don't read input
+    if (vterm_available()) {
+        vterm_poll_input();
+    }
     
     // Preemptive multitasking
     extern void schedule(void);

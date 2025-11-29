@@ -59,6 +59,22 @@ int hal_uart_write(const char *buffer, unsigned int count);
 char hal_uart_getc(void);
 
 /**
+ * Check if UART has data available to read
+ * 
+ * @return 1 if data available, 0 otherwise
+ */
+int hal_uart_data_available(void);
+
+/**
+ * Read a single character from UART (non-blocking)
+ * 
+ * Returns immediately if no data available.
+ * 
+ * @return Character received, or -1 if no data available
+ */
+int hal_uart_getc_nonblock(void);
+
+/**
  * Write a 32-bit unsigned integer as decimal to UART
  * 
  * @param value Value to write

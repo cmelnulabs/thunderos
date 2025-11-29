@@ -40,8 +40,11 @@
 #define SYS_GETDENTS    27  // Get directory entries
 #define SYS_CHDIR       28  // Change current directory
 #define SYS_GETCWD      29  // Get current working directory
+#define SYS_SETSID      30  // Set session ID (create new session)
+#define SYS_GETTTY      31  // Get controlling terminal
+#define SYS_SETTTY      32  // Set controlling terminal
 
-#define SYSCALL_COUNT   30
+#define SYSCALL_COUNT   33
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -98,5 +101,8 @@ uint64_t sys_pipe(int pipefd[2]);
 uint64_t sys_getdents(int fd, void *dirp, size_t count);
 uint64_t sys_chdir(const char *path);
 uint64_t sys_getcwd(char *buf, size_t size);
+uint64_t sys_setsid(void);
+uint64_t sys_gettty(void);
+uint64_t sys_settty(int tty);
 
 #endif // SYSCALL_H

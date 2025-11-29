@@ -21,6 +21,9 @@ static vterm_t g_terminals[VTERM_MAX_TERMINALS];
 /* Currently active terminal index */
 static int g_active_terminal = 0;
 
+/* Track which terminal should receive input (for console multiplexing) */
+static int g_input_terminal = 0;
+
 /* Input processing state */
 static vterm_input_state_t g_input_state = {0};
 
@@ -122,14 +125,7 @@ int vterm_init(void)
         return 0;
     }
     
-    /* Check if framebuffer console is available */
-    if (!fbcon_available()) {
-        /* Fall back to UART-only mode */
-        hal_uart_puts("[INFO] Virtual terminals require framebuffer - disabled\n");
-        RETURN_ERRNO(THUNDEROS_ENODEV);
-    }
-    
-    /* Initialize all terminals */
+    /* Initialize all terminals (works with or without framebuffer) */
     for (int i = 0; i < VTERM_MAX_TERMINALS; i++) {
         init_terminal(&g_terminals[i], i);
     }
@@ -142,10 +138,12 @@ int vterm_init(void)
     g_active_terminal = 0;
     g_initialized = 1;
     
-    /* Draw initial screen */
-    vterm_refresh();
-    vterm_draw_status_bar();
-    vterm_flush();
+    /* If framebuffer is available, draw initial screen */
+    if (fbcon_available()) {
+        vterm_refresh();
+        vterm_draw_status_bar();
+        vterm_flush();
+    }
     
     clear_errno();
     return 0;
@@ -334,6 +332,9 @@ int vterm_switch(int index)
     /* Switch to new terminal */
     g_active_terminal = index;
     g_terminals[index].active = 1;
+    
+    /* Update input terminal tracking */
+    g_input_terminal = index;
     
     /* Refresh display */
     vterm_refresh();
@@ -564,7 +565,11 @@ void vterm_flush(void)
         return;
     }
     
-    fb_flush();
+    /* Only flush to framebuffer if available */
+    if (fbcon_available()) {
+        fb_flush();
+    }
+    /* In UART-only mode, output is already immediate */
 }
 
 /**
@@ -705,4 +710,345 @@ char vterm_process_input(char c)
     
     /* Regular character */
     return c;
+}
+
+/*
+ * Console Multiplexing Implementation
+ * 
+ * These functions enable routing output to specific terminals,
+ * independent of which terminal is currently displayed.
+ */
+
+/**
+ * Internal function to write character to a specific terminal
+ */
+static void vterm_putc_internal(vterm_t *term, int index, char c)
+{
+    if (!term) return;
+    
+    /* Mark terminal as active (has content) */
+    term->active = 1;
+    
+    /* Handle control characters */
+    switch (c) {
+    case '\n':
+        /* Move to next line */
+        term->cursor_row++;
+        term->cursor_col = 0;
+        if (term->cursor_row >= term->rows) {
+            /* Scroll up */
+            for (uint32_t row = 0; row < term->rows - 1; row++) {
+                for (uint32_t col = 0; col < term->cols; col++) {
+                    term->buffer[row][col] = term->buffer[row + 1][col];
+                }
+            }
+            /* Clear bottom row */
+            for (uint32_t col = 0; col < term->cols; col++) {
+                term->buffer[term->rows - 1][col].ch = ' ';
+                term->buffer[term->rows - 1][col].fg_color = term->fg_color;
+                term->buffer[term->rows - 1][col].bg_color = term->bg_color;
+                term->buffer[term->rows - 1][col].attrs = VTERM_ATTR_NONE;
+            }
+            term->cursor_row = term->rows - 1;
+        }
+        /* Redraw if this is the active terminal */
+        if (index == g_active_terminal) {
+            vterm_refresh();
+        }
+        return;
+        
+    case '\r':
+        term->cursor_col = 0;
+        return;
+        
+    case '\b':
+        if (term->cursor_col > 0) {
+            term->cursor_col--;
+            term->buffer[term->cursor_row][term->cursor_col].ch = ' ';
+            if (index == g_active_terminal) {
+                vterm_draw_cell(term->cursor_col, term->cursor_row, 
+                               &term->buffer[term->cursor_row][term->cursor_col]);
+            }
+        }
+        return;
+        
+    case '\t':
+        /* Tab to next 8-column boundary */
+        do {
+            vterm_putc_internal(term, index, ' ');
+        } while (term->cursor_col % 8 != 0 && term->cursor_col < term->cols);
+        return;
+        
+    case '\0':
+        return;
+    }
+    
+    /* Skip non-printable characters */
+    if (c < 0x20 || c > 0x7E) {
+        return;
+    }
+    
+    /* Store character in buffer */
+    term->buffer[term->cursor_row][term->cursor_col].ch = c;
+    term->buffer[term->cursor_row][term->cursor_col].fg_color = term->fg_color;
+    term->buffer[term->cursor_row][term->cursor_col].bg_color = term->bg_color;
+    term->buffer[term->cursor_row][term->cursor_col].attrs = term->attrs;
+    
+    /* Draw to screen if this is the active terminal */
+    if (index == g_active_terminal) {
+        vterm_draw_cell(term->cursor_col, term->cursor_row,
+                       &term->buffer[term->cursor_row][term->cursor_col]);
+    }
+    
+    /* Advance cursor */
+    term->cursor_col++;
+    if (term->cursor_col >= term->cols) {
+        term->cursor_row++;
+        term->cursor_col = 0;
+        if (term->cursor_row >= term->rows) {
+            /* Scroll */
+            for (uint32_t row = 0; row < term->rows - 1; row++) {
+                for (uint32_t col = 0; col < term->cols; col++) {
+                    term->buffer[row][col] = term->buffer[row + 1][col];
+                }
+            }
+            for (uint32_t col = 0; col < term->cols; col++) {
+                term->buffer[term->rows - 1][col].ch = ' ';
+                term->buffer[term->rows - 1][col].fg_color = term->fg_color;
+                term->buffer[term->rows - 1][col].bg_color = term->bg_color;
+                term->buffer[term->rows - 1][col].attrs = VTERM_ATTR_NONE;
+            }
+            term->cursor_row = term->rows - 1;
+            if (index == g_active_terminal) {
+                vterm_refresh();
+            }
+        }
+    }
+}
+
+/**
+ * Write a character to a specific virtual terminal
+ */
+void vterm_putc_to(int index, char c)
+{
+    if (!g_initialized) {
+        /* Fallback to UART */
+        hal_uart_putc(c);
+        return;
+    }
+    
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) {
+        /* Default to active terminal */
+        index = g_active_terminal;
+    }
+    
+    vterm_t *term = &g_terminals[index];
+    vterm_putc_internal(term, index, c);
+    
+    /* In UART-only mode, echo to UART if writing to active terminal */
+    if (!fbcon_available() && index == g_active_terminal) {
+        hal_uart_putc(c);
+    }
+}
+
+/**
+ * Write a string to a specific virtual terminal
+ */
+void vterm_puts_to(int index, const char *str)
+{
+    if (!str) return;
+    
+    while (*str) {
+        vterm_putc_to(index, *str++);
+    }
+    
+    /* Flush if writing to active terminal */
+    if (g_initialized && index == g_active_terminal) {
+        vterm_flush();
+    }
+}
+
+/**
+ * Write a character to the kernel console (VT1)
+ */
+void vterm_kernel_putc(char c)
+{
+    /* Kernel console is always VT1 (index 0) */
+    vterm_putc_to(VTERM_KERNEL_CONSOLE, c);
+    
+    /* Also echo to UART for debugging */
+    hal_uart_putc(c);
+}
+
+/**
+ * Write a string to the kernel console (VT1)
+ */
+void vterm_kernel_puts(const char *str)
+{
+    if (!str) return;
+    
+    while (*str) {
+        vterm_kernel_putc(*str++);
+    }
+    
+    /* Flush if kernel console is visible */
+    if (g_initialized && g_active_terminal == VTERM_KERNEL_CONSOLE) {
+        vterm_flush();
+    }
+}
+
+/**
+ * Set the terminal that should receive input
+ */
+void vterm_set_input_terminal(int index)
+{
+    if (index >= 0 && index < VTERM_MAX_TERMINALS) {
+        g_input_terminal = index;
+    }
+}
+
+/**
+ * Get the terminal currently receiving input
+ */
+int vterm_get_input_terminal(void)
+{
+    return g_input_terminal;
+}
+
+/**
+ * Get input from a specific terminal
+ * 
+ * Returns 0 if input is not destined for this terminal.
+ */
+char vterm_getc_from(int index)
+{
+    /* Input goes to the currently active terminal */
+    if (index != g_active_terminal) {
+        return 0;
+    }
+    
+    /* Read character from UART */
+    char c = hal_uart_getc();
+    
+    /* Process through terminal system for VT switching */
+    c = vterm_process_input(c);
+    
+    return c;
+}
+
+/*
+ * Per-terminal input buffers for console multiplexing.
+ * Each VT has its own input queue so multiple shells can run independently.
+ */
+#define INPUT_BUFFER_SIZE 64
+
+typedef struct {
+    char buffer[INPUT_BUFFER_SIZE];
+    volatile int head;
+    volatile int tail;
+} vterm_input_buffer_t;
+
+static vterm_input_buffer_t g_input_buffers[VTERM_MAX_TERMINALS];
+
+/**
+ * Check if input buffer for a terminal has data
+ */
+static int input_buffer_available_for(int index)
+{
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) return 0;
+    return g_input_buffers[index].head != g_input_buffers[index].tail;
+}
+
+/**
+ * Get character from a terminal's input buffer
+ * Returns -1 if empty
+ */
+static int input_buffer_get_from(int index)
+{
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) return -1;
+    vterm_input_buffer_t *buf = &g_input_buffers[index];
+    if (buf->head == buf->tail) {
+        return -1;
+    }
+    char c = buf->buffer[buf->tail];
+    buf->tail = (buf->tail + 1) % INPUT_BUFFER_SIZE;
+    return (unsigned char)c;
+}
+
+/**
+ * Put character in a terminal's input buffer
+ * Returns 0 on success, -1 if full
+ */
+static int input_buffer_put_to(int index, char c)
+{
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) return -1;
+    vterm_input_buffer_t *buf = &g_input_buffers[index];
+    int next = (buf->head + 1) % INPUT_BUFFER_SIZE;
+    if (next == buf->tail) {
+        return -1;  /* Buffer full */
+    }
+    buf->buffer[buf->head] = c;
+    buf->head = next;
+    return 0;
+}
+
+/* Legacy single-buffer functions for backward compatibility */
+static int input_buffer_available(void)
+{
+    return input_buffer_available_for(g_active_terminal);
+}
+
+static int input_buffer_get(void)
+{
+    return input_buffer_get_from(g_active_terminal);
+}
+
+/**
+ * Poll for keyboard input and handle VT switching
+ * 
+ * This is called from timer interrupt to allow VT switching
+ * even when no process is reading input. Regular characters
+ * are buffered to the ACTIVE terminal's input queue.
+ */
+int vterm_poll_input(void)
+{
+    int processed = 0;
+    
+    /* Read all available UART data */
+    while (hal_uart_data_available()) {
+        int c = hal_uart_getc_nonblock();
+        if (c < 0) break;
+        
+        /* Process through VT system */
+        char result = vterm_process_input((char)c);
+        
+        if (result == 0) {
+            /* Character was consumed by VT switch or escape processing */
+            processed = 1;
+        } else {
+            /* Regular character - buffer for userspace */
+            input_buffer_put(result);
+            processed = 1;
+        }
+    }
+    
+    return processed;
+}
+
+/**
+ * Get a character that was buffered during polling
+ * Called from sys_read to get pre-buffered input
+ * Returns -1 if buffer empty
+ */
+int vterm_get_buffered_input(void)
+{
+    return input_buffer_get();
+}
+
+/**
+ * Check if there's buffered input available
+ */
+int vterm_has_buffered_input(void)
+{
+    return input_buffer_available();
 }
