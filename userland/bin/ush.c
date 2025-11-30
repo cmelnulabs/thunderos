@@ -953,6 +953,44 @@ static void handle_external_command(const char *binary_name, int arg_start, int 
 }
 
 /**
+ * Try to execute command as a path (handles ./ ../ and absolute paths)
+ * Returns 1 if it looks like a path and was attempted, 0 if not a path
+ */
+static int try_execute_as_path(int cmd_len, int arg_start, int input_len) {
+    /* Check if command starts with / (absolute) or . (relative) */
+    char first = g_expanded_buffer[0];
+    
+    if (first != '/' && first != '.') {
+        return 0;  /* Not a path */
+    }
+    
+    /* Check for ./ or ../ prefix */
+    if (first == '.') {
+        if (cmd_len < 2) {
+            return 0;  /* Just "." is not valid */
+        }
+        char second = g_expanded_buffer[1];
+        if (second != '/' && second != '.') {
+            return 0;  /* Not ./ or ../ */
+        }
+        if (second == '.' && (cmd_len < 3 || g_expanded_buffer[2] != '/')) {
+            return 0;  /* Not ../ */
+        }
+    }
+    
+    /* Copy command to path buffer */
+    int path_idx = 0;
+    for (int i = 0; i < cmd_len && path_idx < PATH_BUFFER_SIZE - 1; i++) {
+        g_path_buffer[path_idx++] = g_expanded_buffer[i];
+    }
+    g_path_buffer[path_idx] = '\0';
+    
+    /* Try to execute it */
+    exec_external_with_args(g_path_buffer, arg_start, input_len);
+    return 1;
+}
+
+/**
  * Write string to file descriptor
  */
 static void write_to_fd(long fd, const char *str) {
@@ -1139,8 +1177,15 @@ static void execute_script_line(char *line) {
         handle_external_command("touch", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "rm")) {
         handle_external_command("rm", arg_start, expanded_len);
-    } else if (expanded_len > 0) {
-        print_string(MSG_UNKNOWN_CMD);
+    } else if (cmd_len > 0) {
+        /* Try to execute as path (./program, ../program, /path/to/program) */
+        if (!try_execute_as_path(cmd_len, arg_start, expanded_len)) {
+            /* Not a path - try as command in /bin */
+            char saved = g_expanded_buffer[cmd_len];
+            g_expanded_buffer[cmd_len] = '\0';
+            handle_external_command(g_expanded_buffer, arg_start, expanded_len);
+            g_expanded_buffer[cmd_len] = saved;
+        }
     }
     
     /* Close opened file descriptors */
@@ -1434,8 +1479,16 @@ static void process_command(void) {
         handle_external_command("rm", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "sleep")) {
         handle_external_command("sleep", arg_start, expanded_len);
-    } else {
-        print_string(MSG_UNKNOWN_CMD);
+    } else if (cmd_len > 0) {
+        /* Try to execute as path (./program, ../program, /path/to/program) */
+        if (!try_execute_as_path(cmd_len, arg_start, expanded_len)) {
+            /* Not a path - try as command in /bin */
+            /* Null-terminate command name temporarily */
+            char saved = g_expanded_buffer[cmd_len];
+            g_expanded_buffer[cmd_len] = '\0';
+            handle_external_command(g_expanded_buffer, arg_start, expanded_len);
+            g_expanded_buffer[cmd_len] = saved;
+        }
     }
     
     /* Close opened file descriptors */
