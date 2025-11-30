@@ -101,6 +101,15 @@ int signal_send(struct process *proc, int signum) {
         return -1;
     }
     
+    // Handle SIGCONT specially - must immediately wake stopped process
+    // because a stopped process won't return to usermode to receive the signal
+    if (signum == SIGCONT && proc->state == PROC_STOPPED) {
+        signal_default_cont(proc);
+        // Don't mark as pending - it's already handled
+        clear_errno();
+        return 0;
+    }
+    
     // Add signal to pending set
     proc->pending_signals |= (1UL << signum);
     

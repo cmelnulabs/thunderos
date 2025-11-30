@@ -601,6 +601,11 @@ void vterm_flush(void)
  */
 char vterm_process_input(char c)
 {
+    /* DEBUG: Log every character received */
+    // hal_uart_puts("[IN] ");
+    // hal_uart_putc(c >= 32 && c < 127 ? c : '?');
+    // hal_uart_puts("\n");
+    
     /* Simple Alt+number detection: ESC followed by 1-6 */
     if (g_input_state.in_escape) {
         g_input_state.escape_buf[g_input_state.escape_len++] = c;
@@ -622,6 +627,21 @@ char vterm_process_input(char c)
             return 0;
         }
         
+        /* ESC [ sequence */
+        if (g_input_state.escape_len == 1 && c == '[') {
+            /* Wait for more characters */
+            return 0;
+        }
+        
+        /* First character after ESC is not a valid sequence start - abort and pass through */
+        if (g_input_state.escape_len == 1) {
+            g_input_state.in_escape = 0;
+            g_input_state.escape_len = 0;
+            /* Pass the ESC and the character to userspace */
+            input_buffer_put_to(g_active_terminal, 0x1B);
+            return c;
+        }
+        
         if (g_input_state.escape_len == 2 && g_input_state.escape_buf[0] == 'O') {
             g_input_state.in_escape = 0;
             g_input_state.escape_len = 0;
@@ -641,14 +661,10 @@ char vterm_process_input(char c)
                 vterm_switch(3);
                 return 0;
             }
-            /* Unknown sequence, pass through */
+            /* Unknown ESC O x sequence, pass through */
+            input_buffer_put_to(g_active_terminal, 0x1B);
+            input_buffer_put_to(g_active_terminal, 'O');
             return c;
-        }
-        
-        /* ESC [ sequence */
-        if (g_input_state.escape_len == 1 && c == '[') {
-            /* Wait for more characters */
-            return 0;
         }
         
         /* Check for arrow keys: ESC [ A/B/C/D - pass through to userspace */
@@ -701,24 +717,29 @@ char vterm_process_input(char c)
                 return 0;  /* Consume unknown function key */
             }
             
-            /* Keep accumulating */
-            if (g_input_state.escape_len < 7) {
+            /* Keep accumulating if it looks like a valid sequence in progress */
+            if (g_input_state.escape_len < 7 && (c >= '0' && c <= '9')) {
                 return 0;
             }
             
-            /* Sequence too long, abort */
+            /* Invalid character in CSI sequence, abort and pass through */
+            /* Save the accumulated digits before resetting */
+            int saved_len = g_input_state.escape_len;
             g_input_state.in_escape = 0;
             g_input_state.escape_len = 0;
-            return 0;
+            /* Pass ESC [ and any accumulated digits to userspace */
+            input_buffer_put_to(g_active_terminal, 0x1B);
+            input_buffer_put_to(g_active_terminal, '[');
+            for (int i = 1; i < saved_len - 1; i++) {
+                input_buffer_put_to(g_active_terminal, g_input_state.escape_buf[i]);
+            }
+            return c;
         }
         
-        /* Unknown escape sequence - timeout or invalid */
-        if (g_input_state.escape_len > 6) {
-            g_input_state.in_escape = 0;
-            g_input_state.escape_len = 0;
-        }
-        
-        return 0;  /* Still processing escape */
+        /* Sequence too long, abort */
+        g_input_state.in_escape = 0;
+        g_input_state.escape_len = 0;
+        return 0;
     }
     
     /* Start of escape sequence */

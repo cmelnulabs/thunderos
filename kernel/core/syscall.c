@@ -500,18 +500,27 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
                 
                 // If we're the active terminal, also check UART directly
                 // This provides immediate response without waiting for timer
+                // Disable interrupts briefly to avoid race with timer polling
                 if (tty == vterm_get_active_index() && hal_uart_data_available()) {
-                    int c = hal_uart_getc_nonblock();
-                    if (c >= 0) {
-                        // Process through VT system for escape sequences
-                        char result = vterm_process_input((char)c);
-                        if (result != 0) {
-                            buffer[0] = result;
-                            return 1;
+                    // Disable interrupts to prevent timer from also reading UART
+                    int old_state = interrupt_save_disable();
+                    
+                    // Double-check UART still has data after disabling interrupts
+                    if (hal_uart_data_available()) {
+                        int c = hal_uart_getc_nonblock();
+                        if (c >= 0) {
+                            // Process through VT system for escape sequences
+                            char result = vterm_process_input((char)c);
+                            interrupt_restore(old_state);
+                            if (result != 0) {
+                                buffer[0] = result;
+                                return 1;
+                            }
+                            // Character consumed (VT switch), continue loop
+                            continue;
                         }
-                        // Character consumed (VT switch), continue loop
-                        continue;
                     }
+                    interrupt_restore(old_state);
                 }
                 
                 // Nothing available, yield and try again

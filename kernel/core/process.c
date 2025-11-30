@@ -521,7 +521,7 @@ void process_wakeup(struct process *proc) {
     if (!proc) return;
     
     lock_acquire(&process_lock);
-    if (proc->state == PROC_SLEEPING) {
+    if (proc->state == PROC_SLEEPING || proc->state == PROC_STOPPED) {
         proc->state = PROC_READY;
         scheduler_enqueue(proc);
     }
