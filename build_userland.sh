@@ -13,7 +13,7 @@ readonly BUILD_DIR="${USERLAND_DIR}/build"
 
 readonly CFLAGS="-march=rv64gc -mabi=lp64d -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall"
 readonly LDFLAGS="-nostdlib -static"
-readonly LDSCRIPT="${USERLAND_DIR}/user.ld"
+readonly LDSCRIPT="${USERLAND_DIR}/lib/user.ld"
 
 # User program entry point address
 #readonly USER_ENTRY_POINT="0xf000"
@@ -69,11 +69,12 @@ print_footer() {
 build_program() {
     local name="$1"
     local source="${2:-$1}"  # Use name as source if not specified
+    local subdir="${3:-core}"  # Default to core directory
     
     TOTAL_PROGRAMS=$((TOTAL_PROGRAMS + 1))
     print_building "$name"
     
-    "${CC}" ${CFLAGS} -c "${USERLAND_DIR}/${source}.c" -o "${BUILD_DIR}/${source}.o" 2>/dev/null
+    "${CC}" ${CFLAGS} -c "${USERLAND_DIR}/${subdir}/${source}.c" -o "${BUILD_DIR}/${source}.o" 2>/dev/null
     "${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/${source}.o" -o "${BUILD_DIR}/${name}" 2>/dev/null
     "${OBJCOPY}" -O binary "${BUILD_DIR}/${name}" "${BUILD_DIR}/${name}.bin" 2>/dev/null
     
@@ -87,40 +88,43 @@ print_header
 
 # Core utilities
 print_section "Core Utilities"
-build_program "ls"
-build_program "cat"
-build_program "pwd"
-build_program "mkdir"
-build_program "rmdir"
-build_program "touch"
-build_program "rm"
-build_program "clear"
-build_program "sleep"
-build_program "ps"
-build_program "uname"
-build_program "uptime"
-build_program "whoami"
-build_program "tty"
-build_program "kill"
+build_program "ls" "ls" "core"
+build_program "cat" "cat" "core"
+build_program "pwd" "pwd" "core"
+build_program "mkdir" "mkdir" "core"
+build_program "rmdir" "rmdir" "core"
+build_program "touch" "touch" "core"
+build_program "rm" "rm" "core"
+build_program "clear" "clear" "core"
+build_program "sleep" "sleep" "core"
+
+# System utilities
+print_section "System Utilities"
+build_program "ps" "ps" "system"
+build_program "uname" "uname" "system"
+build_program "uptime" "uptime" "system"
+build_program "whoami" "whoami" "system"
+build_program "tty" "tty" "system"
+build_program "kill" "kill" "system"
 
 # User applications
 print_section "User Applications"
-build_program "hello"
-build_program "clock"
+build_program "hello" "hello" "tests"
+build_program "clock" "clock" "tests"
 
 # Build ush (user shell) - special case with multiple source files
 TOTAL_PROGRAMS=$((TOTAL_PROGRAMS + 1))
 print_building "ush (shell)"
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/ush.c" -o "${BUILD_DIR}/ush.o" 2>/dev/null
-"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/syscall.S" -o "${BUILD_DIR}/syscall.o" 2>/dev/null
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/bin/ush.c" -o "${BUILD_DIR}/ush.o" 2>/dev/null
+"${CC}" ${CFLAGS} -c "${USERLAND_DIR}/lib/syscall.S" -o "${BUILD_DIR}/syscall.o" 2>/dev/null
 "${LD}" ${LDFLAGS} -T"${LDSCRIPT}" "${BUILD_DIR}/ush.o" "${BUILD_DIR}/syscall.o" -o "${BUILD_DIR}/ush" 2>/dev/null
 "${OBJCOPY}" -O binary "${BUILD_DIR}/ush" "${BUILD_DIR}/ush.bin" 2>/dev/null
 print_success
 
 # Test programs
 print_section "Test Programs"
-build_program "signal_test"
-build_program "pipe_test"
-build_program "pipe_simple_test"
+build_program "signal_test" "signal_test" "tests"
+build_program "pipe_test" "pipe_test" "tests"
+build_program "pipe_simple_test" "pipe_simple_test" "tests"
 
 print_footer
