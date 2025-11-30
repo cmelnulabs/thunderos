@@ -327,20 +327,26 @@ uint64_t sys_getppid(void) {
  * sys_kill - Send signal to process
  * 
  * @param pid Target process ID
- * @param signal Signal number (ignored for now)
+ * @param signal Signal number to send
  * @return 0 on success, -1 on error
  */
 uint64_t sys_kill(int pid, int signal) {
-    (void)signal;  // Signals not implemented yet
-    
     if (pid <= 0) {
         return SYSCALL_ERROR;
     }
     
-    // Find process by PID and terminate it
-    // TODO: Implement process_find_by_pid() and proper signal handling
-    // For now, just return error
-    return SYSCALL_ERROR;
+    /* Find target process */
+    extern struct process *process_get(int pid);
+    struct process *target = process_get(pid);
+    if (!target) {
+        return SYSCALL_ERROR;  /* No such process */
+    }
+    
+    /* Send signal to target process */
+    extern int signal_send(struct process *proc, int signum);
+    int result = signal_send(target, signal);
+    
+    return (result == 0) ? 0 : SYSCALL_ERROR;
 }
 
 /**
