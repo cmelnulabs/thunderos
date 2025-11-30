@@ -268,10 +268,10 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
   - ✅ Per-process cwd tracking
 - ✅ Directory operations
   - ✅ `sys_mkdir()` - Create directory
-  - ✅ `sys_rmdir()` - Remove directory
+  - ⚠️ `sys_rmdir()` - Remove directory (syscall exists, ext2 stub)
   - ✅ `sys_getdents()` - Read directory entries
-- ✅ File operations
-  - ✅ `sys_unlink()` - Remove file
+- ⚠️ File operations
+  - ⚠️ `sys_unlink()` - Remove file (syscall exists, ext2 stub)
 - ✅ User-mode shell (ush)
   - ✅ Runs entirely in user space
   - ✅ Fork+exec for external commands
@@ -282,9 +282,9 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
   - ✅ cat - Display file contents
   - ✅ pwd - Print working directory
   - ✅ mkdir - Create directory
-  - ✅ rmdir - Remove directory
+  - ⚠️ rmdir - Remove directory (requires ext2 implementation)
   - ✅ touch - Create empty file
-  - ✅ rm - Remove file
+  - ⚠️ rm - Remove file (requires ext2 implementation)
   - ✅ clear - Clear screen
   - ✅ sleep - Sleep for seconds
 - ✅ Test infrastructure improvements
@@ -394,6 +394,8 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - [ ] Simple shell scripting support
 
 #### Filesystem & POSIX
+- [ ] ext2 file removal (`ext2_remove_file`)
+- [ ] ext2 directory removal (`ext2_remove_dir`)
 - [ ] Relative path resolution in VFS (cd .., cd subdir, ./program)
 - [ ] Environment variables
 - [ ] File permissions and ownership
