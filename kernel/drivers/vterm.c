@@ -63,6 +63,7 @@ static const uint32_t ansi_colors[16] = {
 static void vterm_scroll_up(vterm_t *term);
 static void vterm_newline(vterm_t *term);
 static void vterm_draw_cell(uint32_t col, uint32_t row, vterm_cell_t *cell);
+static int input_buffer_put_to(int index, char c);
 
 /**
  * Initialize a single terminal
@@ -643,6 +644,20 @@ char vterm_process_input(char c)
         if (g_input_state.escape_len == 1 && c == '[') {
             /* Wait for more characters */
             return 0;
+        }
+        
+        /* Check for arrow keys: ESC [ A/B/C/D - pass through to userspace */
+        if (g_input_state.escape_len == 2 && g_input_state.escape_buf[0] == '[') {
+            if (c == 'A' || c == 'B' || c == 'C' || c == 'D') {
+                /* Arrow key - pass the entire sequence to userspace */
+                g_input_state.in_escape = 0;
+                g_input_state.escape_len = 0;
+                /* Buffer the entire escape sequence for userspace */
+                input_buffer_put_to(g_active_terminal, 0x1B);  /* ESC */
+                input_buffer_put_to(g_active_terminal, '[');
+                input_buffer_put_to(g_active_terminal, c);     /* A/B/C/D */
+                return 0;  /* Consumed - chars are in buffer */
+            }
         }
         
         /* Check for ESC [ 1 x ~ format (F1-F6) */
