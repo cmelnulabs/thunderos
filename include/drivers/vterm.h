@@ -60,6 +60,9 @@ typedef struct {
     
     /* Is terminal active (has been written to) */
     int active;
+    
+    /* Foreground process ID for signal delivery (Ctrl+C) */
+    int fg_pid;
 } vterm_t;
 
 /* Keyboard input state for escape sequence processing */
@@ -298,5 +301,30 @@ int vterm_get_buffered_input(void);
  * @return 1 if buffered input available, 0 otherwise
  */
 int vterm_has_buffered_input(void);
+
+/**
+ * Set the foreground process for a terminal
+ * 
+ * The foreground process receives signals like SIGINT (Ctrl+C).
+ * 
+ * @param index Terminal index (0 to VTERM_MAX_TERMINALS-1)
+ * @param pid Process ID to set as foreground (-1 to clear)
+ */
+void vterm_set_fg_pid(int index, int pid);
+
+/**
+ * Get the foreground process for a terminal
+ * 
+ * @param index Terminal index (0 to VTERM_MAX_TERMINALS-1)
+ * @return Foreground process ID, or -1 if none
+ */
+int vterm_get_fg_pid(int index);
+
+/**
+ * Set the foreground process for the active terminal
+ * 
+ * @param pid Process ID to set as foreground (-1 to clear)
+ */
+void vterm_set_active_fg_pid(int pid);
 
 #endif /* VTERM_H */

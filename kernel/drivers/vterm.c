@@ -12,6 +12,8 @@
 #include <drivers/font.h>
 #include <kernel/errno.h>
 #include <kernel/kstring.h>
+#include <kernel/signal.h>
+#include <kernel/process.h>
 #include <hal/hal_uart.h>
 #include <stddef.h>
 
@@ -114,6 +116,9 @@ static void init_terminal(vterm_t *term, int index)
     
     /* Mark as inactive until written to */
     term->active = (index == 0) ? 1 : 0;
+    
+    /* No foreground process initially */
+    term->fg_pid = -1;
 }
 
 /**
@@ -723,6 +728,22 @@ char vterm_process_input(char c)
         return 0;
     }
     
+    /* Handle Ctrl+C - send SIGINT to foreground process */
+    if (c == 0x03) {  /* Ctrl+C */
+        vterm_t *term = &g_terminals[g_active_terminal];
+        if (term->fg_pid > 0) {
+            struct process *fg_proc = process_get(term->fg_pid);
+            if (fg_proc && fg_proc->state != PROC_UNUSED) {
+                signal_send(fg_proc, SIGINT);
+                /* Echo ^C to show it was received */
+                vterm_putc('^');
+                vterm_putc('C');
+                vterm_putc('\n');
+            }
+        }
+        return 0;  /* Consumed */
+    }
+    
     /* Regular character */
     return c;
 }
@@ -1082,4 +1103,34 @@ int vterm_get_buffered_input(void)
 int vterm_has_buffered_input(void)
 {
     return input_buffer_available();
+}
+
+/**
+ * Set the foreground process for a terminal
+ */
+void vterm_set_fg_pid(int index, int pid)
+{
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) {
+        return;
+    }
+    g_terminals[index].fg_pid = pid;
+}
+
+/**
+ * Get the foreground process for a terminal
+ */
+int vterm_get_fg_pid(int index)
+{
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) {
+        return -1;
+    }
+    return g_terminals[index].fg_pid;
+}
+
+/**
+ * Set the foreground process for the active terminal
+ */
+void vterm_set_active_fg_pid(int pid)
+{
+    g_terminals[g_active_terminal].fg_pid = pid;
 }

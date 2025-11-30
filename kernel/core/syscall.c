@@ -880,6 +880,27 @@ uint64_t sys_pipe(int pipefd[2]) {
 }
 
 /**
+ * sys_dup2 - Duplicate a file descriptor
+ * 
+ * Makes newfd be the copy of oldfd, closing newfd first if necessary.
+ * Used for I/O redirection in shells (e.g., redirecting stdin/stdout to pipes).
+ * 
+ * @param oldfd The file descriptor to duplicate
+ * @param newfd The target file descriptor number
+ * @return newfd on success, -1 on error
+ * 
+ * @errno THUNDEROS_EBADF - oldfd is not a valid file descriptor
+ * @errno THUNDEROS_EINVAL - newfd is out of range
+ */
+uint64_t sys_dup2(int oldfd, int newfd) {
+    int result = vfs_dup2(oldfd, newfd);
+    if (result < 0) {
+        return SYSCALL_ERROR;
+    }
+    return result;
+}
+
+/**
  * Directory entry structure for getdents
  * Similar to Linux struct linux_dirent
  */
@@ -1501,6 +1522,19 @@ uint64_t syscall_handler(uint64_t syscall_number,
         case SYS_UNAME:
             return_value = sys_uname((utsname_t *)argument0);
             break;
+            
+        case SYS_DUP2:
+            return_value = sys_dup2((int)argument0, (int)argument1);
+            break;
+            
+        case SYS_SETFGPID: {
+            /* Set foreground process for current terminal */
+            extern void vterm_set_active_fg_pid(int pid);
+            int pid = (int)argument0;
+            vterm_set_active_fg_pid(pid);
+            return_value = 0;
+            break;
+        }
             
         case SYS_FORK:
             // Fork is handled in syscall_handler_with_frame

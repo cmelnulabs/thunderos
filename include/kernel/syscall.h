@@ -45,8 +45,10 @@
 #define SYS_SETTTY      32  // Set controlling terminal
 #define SYS_GETPROCS    33  // Get process list info
 #define SYS_UNAME       34  // Get system information
+#define SYS_DUP2        35  // Duplicate file descriptor
+#define SYS_SETFGPID    36  // Set foreground process for terminal (Ctrl+C target)
 
-#define SYSCALL_COUNT   35
+#define SYSCALL_COUNT   37
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)

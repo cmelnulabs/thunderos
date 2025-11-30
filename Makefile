@@ -193,6 +193,21 @@ $(FS_IMG): userland
 	@mkdir -p $(BUILD_DIR)/testfs/bin
 	@echo "Hello from ThunderOS ext2 filesystem!" > $(BUILD_DIR)/testfs/test.txt
 	@echo "This is a sample file for testing." > $(BUILD_DIR)/testfs/README.txt
+	@# Create startup script
+	@echo "# ThunderOS Startup Script" > $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo ================================" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo   Welcome to ThunderOS!" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo ================================" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "export PATH=/bin" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "export HOME=/" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "export USER=root" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo System ready." >> $(BUILD_DIR)/testfs/startup.sh
+	@# Create demo script
+	@echo "# ThunderOS Demo Script" > $(BUILD_DIR)/testfs/demo.sh
+	@echo "echo === System Demo ===" >> $(BUILD_DIR)/testfs/demo.sh
+	@echo "ls /" >> $(BUILD_DIR)/testfs/demo.sh
+	@echo "pwd" >> $(BUILD_DIR)/testfs/demo.sh
+	@echo "echo === Demo Complete ===" >> $(BUILD_DIR)/testfs/demo.sh
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"

@@ -56,6 +56,7 @@ void _start(long argc, char **argv) {
         syscall(SYS_EXIT, 1, 0, 0);
     }
     
-    syscall(SYS_SLEEP, seconds, 0, 0);
+    /* SYS_SLEEP takes milliseconds, so convert seconds to ms */
+    syscall(SYS_SLEEP, seconds * 1000, 0, 0);
     syscall(SYS_EXIT, 0, 0, 0);
 }

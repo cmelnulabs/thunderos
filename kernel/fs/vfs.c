@@ -268,6 +268,54 @@ void vfs_free_fd(int fd) {
 }
 
 /**
+ * Duplicate a file descriptor
+ * 
+ * Makes newfd be the copy of oldfd, closing newfd first if necessary.
+ * 
+ * @param oldfd The file descriptor to duplicate
+ * @param newfd The target file descriptor number
+ * @return newfd on success, -1 on error
+ */
+int vfs_dup2(int oldfd, int newfd) {
+    /* Validate newfd range */
+    if (newfd < 0 || newfd >= VFS_MAX_OPEN_FILES) {
+        set_errno(THUNDEROS_EINVAL);
+        return -1;
+    }
+    
+    /* Get the source file */
+    if (oldfd < 0 || oldfd >= VFS_MAX_OPEN_FILES || !g_file_table[oldfd].in_use) {
+        set_errno(THUNDEROS_EBADF);
+        return -1;
+    }
+    
+    /* If oldfd == newfd, just return newfd */
+    if (oldfd == newfd) {
+        return newfd;
+    }
+    
+    vfs_file_t *old_file = &g_file_table[oldfd];
+    vfs_file_t *new_file = &g_file_table[newfd];
+    
+    /* Close newfd if it's open */
+    if (new_file->in_use) {
+        vfs_close(newfd);
+    }
+    
+    /* Copy the file descriptor */
+    new_file->node = old_file->node;
+    new_file->flags = old_file->flags;
+    new_file->pos = old_file->pos;
+    new_file->in_use = 1;
+    new_file->pipe = old_file->pipe;
+    new_file->type = old_file->type;
+    
+    /* Note: Pipe reference counting is handled by vfs_close */
+    
+    return newfd;
+}
+
+/**
  * Get file structure from descriptor
  */
 vfs_file_t *vfs_get_file(int fd) {
@@ -277,7 +325,6 @@ vfs_file_t *vfs_get_file(int fd) {
     }
     return &g_file_table[fd];
 }
-
 /**
  * vfs_resolve_path - Resolve a path to a VFS node
  * 

@@ -131,6 +131,7 @@ int vfs_close(int fd);
 int vfs_read(int fd, void *buffer, uint32_t size);
 int vfs_write(int fd, const void *buffer, uint32_t size);
 int vfs_seek(int fd, int offset, int whence);
+int vfs_dup2(int oldfd, int newfd);
 
 /* Directory operations */
 int vfs_mkdir(const char *path, uint32_t mode);

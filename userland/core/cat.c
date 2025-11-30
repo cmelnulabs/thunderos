@@ -1,6 +1,8 @@
 /*
  * cat - Concatenate files and print to stdout
- * Simple implementation using open/read/write syscalls
+ * 
+ * Usage: cat [file...]
+ * If no files specified, reads from stdin (for pipe support)
  */
 
 // ThunderOS syscall numbers
@@ -10,7 +12,8 @@
 #define SYS_OPEN 13
 #define SYS_CLOSE 14
 
-#define AT_FDCWD -100
+#define STDIN_FD 0
+#define STDOUT_FD 1
 #define O_RDONLY 0
 #define READ_BUFFER_SIZE 512
 
@@ -40,31 +43,60 @@ static size_t strlen(const char *s) {
 }
 
 static void print(const char *s) {
-    syscall(SYS_WRITE, 1, (long)s, strlen(s));
+    syscall(SYS_WRITE, STDOUT_FD, (long)s, strlen(s));
 }
 
-void _start(void) {
+// Read from fd and write to stdout
+static void cat_fd(int fd) {
     char buf[READ_BUFFER_SIZE];
     
-    // For now, cat just reads test.txt as a demo
-    const char *filename = "test.txt";
-    
+    while (1) {
+        long nread = syscall(SYS_READ, fd, (long)buf, sizeof(buf));
+        if (nread <= 0) break;
+        
+        syscall(SYS_WRITE, STDOUT_FD, (long)buf, nread);
+    }
+}
+
+// Read file and write to stdout
+static int cat_file(const char *filename) {
     int fd = syscall(SYS_OPEN, (long)filename, O_RDONLY, 0);
     if (fd < 0) {
         print("cat: ");
         print(filename);
         print(": No such file or directory\n");
-        syscall(SYS_EXIT, 1, 0, 0);
+        return 1;
     }
     
-    // Read and write file contents
-    while (1) {
-        long nread = syscall(SYS_READ, fd, (long)buf, sizeof(buf));
-        if (nread <= 0) break;
-        
-        syscall(SYS_WRITE, 1, (long)buf, nread);
-    }
-    
+    cat_fd(fd);
     syscall(SYS_CLOSE, fd, 0, 0);
-    syscall(SYS_EXIT, 0, 0, 0);
+    return 0;
+}
+
+void _start(int argc, char **argv) {
+    /* Initialize global pointer for RISC-V */
+    __asm__ volatile (
+        ".option push\n"
+        ".option norelax\n"
+        "1: auipc gp, %%pcrel_hi(__global_pointer$)\n"
+        "   addi gp, gp, %%pcrel_lo(1b)\n"
+        ".option pop\n"
+        ::: "gp"
+    );
+    
+    int exit_code = 0;
+    
+    if (argc <= 1) {
+        /* No arguments - read from stdin (for pipes) */
+        cat_fd(STDIN_FD);
+    } else {
+        /* Cat each file */
+        for (int i = 1; i < argc; i++) {
+            if (cat_file(argv[i]) != 0) {
+                exit_code = 1;
+            }
+        }
+    }
+    
+    syscall(SYS_EXIT, exit_code, 0, 0);
 }
