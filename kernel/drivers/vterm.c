@@ -744,6 +744,22 @@ char vterm_process_input(char c)
         return 0;  /* Consumed */
     }
     
+    /* Handle Ctrl+Z - send SIGTSTP to foreground process (suspend) */
+    if (c == 0x1A) {  /* Ctrl+Z */
+        vterm_t *term = &g_terminals[g_active_terminal];
+        if (term->fg_pid > 0) {
+            struct process *fg_proc = process_get(term->fg_pid);
+            if (fg_proc && fg_proc->state != PROC_UNUSED) {
+                signal_send(fg_proc, SIGTSTP);
+                /* Echo ^Z to show it was received */
+                vterm_putc('^');
+                vterm_putc('Z');
+                vterm_putc('\n');
+            }
+        }
+        return 0;  /* Consumed */
+    }
+    
     /* Regular character */
     return c;
 }

@@ -67,6 +67,12 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define CHAR_BACKSPACE      127
 #define CHAR_BACKSPACE_ALT  '\b'
 
+/* Wait status macros */
+#define WIFSTOPPED(status)  (((status) & 0xff) == 0x7f)
+#define WSTOPSIG(status)    (((status) >> 8) & 0xff)
+#define WIFEXITED(status)   (((status) & 0x7f) == 0)
+#define WEXITSTATUS(status) (((status) >> 8) & 0xff)
+
 /* Escape sequence parser states */
 #define ESC_STATE_NORMAL    0
 #define ESC_STATE_GOT_ESC   1
@@ -729,12 +735,19 @@ static void exec_external_with_args(const char *path, int arg_start, int input_l
         print_string(MSG_EXEC_FAIL);
         syscall1(SYS_EXIT, 1);
     } else if (child_pid > 0) {
-        /* Parent - set child as foreground process for Ctrl+C */
+        /* Parent - set child as foreground process for Ctrl+C/Ctrl+Z */
         syscall1(SYS_SETFGPID, child_pid);
         
         /* Wait for child */
         int exit_status = 0;
         syscall3(SYS_WAIT, child_pid, (long)&exit_status, 0);
+        
+        /* Check if child was stopped (Ctrl+Z) */
+        if (WIFSTOPPED(exit_status)) {
+            print_string("[Stopped] ");
+            print_string(path);
+            print_string(NEWLINE);
+        }
         
         /* Clear foreground process (back to shell) */
         syscall1(SYS_SETFGPID, -1);

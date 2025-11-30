@@ -171,26 +171,37 @@ void signal_default_ignore(struct process *proc) {
 /**
  * Default signal handler: stop process
  * 
- * Changes process state to SLEEPING and notifies parent with SIGCHLD.
+ * Changes process state to STOPPED and notifies parent with SIGCHLD.
+ * Used for SIGTSTP (Ctrl+Z), SIGSTOP, SIGTTIN, SIGTTOU.
  * 
  * @param proc Process to stop
  */
 void signal_default_stop(struct process *proc) {
     if (!proc) return;
     
-    // Change state to SLEEPING (stopped)
-    proc->state = PROC_SLEEPING;
+    // Change state to STOPPED
+    proc->state = PROC_STOPPED;
     
-    // Notify parent with SIGCHLD
+    // Store exit status with stop signal info (for waitpid)
+    // Upper byte = signal number, lower byte = 0x7f indicates stopped
+    proc->exit_code = (SIGTSTP << 8) | 0x7f;
+    
+    // Notify parent with SIGCHLD so it can detect the stop
     if (proc->parent) {
         signal_send(proc->parent, SIGCHLD);
+        // Wake parent if it's waiting
+        if (proc->parent->state == PROC_SLEEPING) {
+            extern void process_wakeup(struct process *p);
+            process_wakeup(proc->parent);
+        }
     }
 }
 
 /**
  * Default signal handler: continue process
  * 
- * Wakes up a stopped process by changing state from SLEEPING to READY.
+ * Wakes up a stopped process by changing state from STOPPED to READY.
+ * Used for SIGCONT to resume a process stopped by Ctrl+Z.
  * 
  * @param proc Process to continue
  */
@@ -198,8 +209,8 @@ void signal_default_cont(struct process *proc) {
     if (!proc) return;
     
     // If process was stopped, wake it up
-    if (proc->state == PROC_SLEEPING) {
-        extern void process_wakeup(struct process *proc);
+    if (proc->state == PROC_STOPPED) {
+        extern void process_wakeup(struct process *p);
         process_wakeup(proc);
     }
 }

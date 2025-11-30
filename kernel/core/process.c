@@ -429,6 +429,37 @@ int process_has_children(struct process *parent, int target_pid) {
 }
 
 /**
+ * Find a stopped child process
+ * 
+ * Used by waitpid with WUNTRACED option to detect stopped children.
+ * 
+ * @param parent Parent process
+ * @param target_pid PID to search for (-1 for any child)
+ * @return Stopped child process, or NULL if none found
+ */
+struct process *process_find_stopped_child(struct process *parent, int target_pid) {
+    if (!parent) return NULL;
+    
+    lock_acquire(&process_lock);
+    
+    // Search through process table for stopped children
+    for (int i = 0; i < MAX_PROCS; i++) {
+        struct process *proc = &process_table[i];
+        
+        if (proc->state == PROC_STOPPED && proc->parent == parent) {
+            // Found a stopped child
+            if (target_pid == -1 || proc->pid == target_pid) {
+                lock_release(&process_lock);
+                return proc;
+            }
+        }
+    }
+    
+    lock_release(&process_lock);
+    return NULL;
+}
+
+/**
  * Get process by index in process table
  * 
  * Used for iterating through all processes (e.g., for ps command).
@@ -520,6 +551,7 @@ void process_dump(void) {
                 case PROC_READY: state_str = "READY"; break;
                 case PROC_RUNNING: state_str = "RUNNING"; break;
                 case PROC_SLEEPING: state_str = "SLEEPING"; break;
+                case PROC_STOPPED: state_str = "STOPPED"; break;
                 case PROC_ZOMBIE: state_str = "ZOMBIE"; break;
             }
             hal_uart_puts(state_str);

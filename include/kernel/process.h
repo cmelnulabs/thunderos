@@ -26,6 +26,7 @@ typedef enum {
     PROC_READY,         // Ready to run
     PROC_RUNNING,       // Currently running
     PROC_SLEEPING,      // Waiting for event
+    PROC_STOPPED,       // Stopped by signal (Ctrl+Z)
     PROC_ZOMBIE         // Exited but not yet cleaned up
 } proc_state_t;
 

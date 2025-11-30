@@ -103,12 +103,12 @@ uint64_t sys_waitpid(int pid, int *wstatus, int options) {
         return SYSCALL_ERROR;
     }
     
-    // Find zombie child process
+    // Find zombie or stopped child process
     while (1) {
         struct process *child = NULL;
         int found_child = 0;
         
-        // Search for matching child process
+        // First check for zombie children (exited)
         extern struct process *process_find_zombie_child(struct process *parent, int target_pid);
         child = process_find_zombie_child(current, pid);
         
@@ -128,6 +128,26 @@ uint64_t sys_waitpid(int pid, int *wstatus, int options) {
             return child_pid;
         }
         
+        // Check for stopped children (Ctrl+Z)
+        extern struct process *process_find_stopped_child(struct process *parent, int target_pid);
+        child = process_find_stopped_child(current, pid);
+        
+        if (child) {
+            // Found stopped child - report it but don't reap
+            pid_t child_pid = child->pid;
+            
+            // Store stop status if requested (signal << 8 | 0x7f)
+            if (wstatus) {
+                *wstatus = child->exit_code;  // Already set by signal_default_stop
+            }
+            
+            // Clear the stopped status so we don't report it again
+            // (Process stays stopped until SIGCONT)
+            child->exit_code = 0;
+            
+            return child_pid;
+        }
+        
         // Check if parent has any children at all
         extern int process_has_children(struct process *parent, int target_pid);
         found_child = process_has_children(current, pid);
@@ -137,7 +157,7 @@ uint64_t sys_waitpid(int pid, int *wstatus, int options) {
             return SYSCALL_ERROR;
         }
         
-        // Child exists but hasn't exited yet - sleep and try again
+        // Child exists but hasn't exited/stopped yet - sleep and try again
         current->state = PROC_SLEEPING;
         scheduler_yield();
         current->state = PROC_RUNNING;
