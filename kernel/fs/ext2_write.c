@@ -474,11 +474,12 @@ static int add_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode, uint32_t dir_in
 
 /**
  * Create a new file in a directory
- * Returns inode number on success, 0 on error
+ * Returns inode number on success, 0 on error (errno set)
  */
 uint32_t ext2_create_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name, uint32_t mode) {
     if (!fs || !name || dir_inode_num == 0) {
         hal_uart_puts("ext2: Invalid parameters to ext2_create_file\n");
+        set_errno(THUNDEROS_EINVAL);
         return 0;
     }
     
@@ -487,12 +488,14 @@ uint32_t ext2_create_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *nam
     int ret = ext2_read_inode(fs, dir_inode_num, &dir_inode);
     if (ret < 0) {
         hal_uart_puts("ext2: Failed to read parent directory inode\n");
+        /* errno already set by ext2_read_inode */
         return 0;
     }
     
     /* Verify directory inode */
     if ((dir_inode.i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
         hal_uart_puts("ext2: Parent is not a directory\n");
+        set_errno(THUNDEROS_ENOTDIR);
         return 0;
     }
     
@@ -500,6 +503,7 @@ uint32_t ext2_create_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *nam
     uint32_t existing = ext2_lookup(fs, &dir_inode, name);
     if (existing != 0) {
         hal_uart_puts("ext2: File already exists\n");
+        set_errno(THUNDEROS_EEXIST);
         return 0;
     }
     
@@ -507,6 +511,7 @@ uint32_t ext2_create_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *nam
     uint32_t new_inode_num = ext2_alloc_inode(fs, 0);
     if (new_inode_num == 0) {
         hal_uart_puts("ext2: Failed to allocate inode\n");
+        /* errno already set by ext2_alloc_inode */
         return 0;
     }
     
@@ -548,11 +553,12 @@ uint32_t ext2_create_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *nam
 
 /**
  * Create a new directory
- * Returns inode number on success, 0 on error
+ * Returns inode number on success, 0 on error (errno set)
  */
 uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name, uint32_t mode) {
     if (!fs || !name || dir_inode_num == 0) {
         hal_uart_puts("ext2: Invalid parameters to ext2_create_dir\n");
+        set_errno(THUNDEROS_EINVAL);
         return 0;
     }
     
@@ -561,12 +567,14 @@ uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name
     int ret = ext2_read_inode(fs, dir_inode_num, &dir_inode);
     if (ret < 0) {
         hal_uart_puts("ext2: Failed to read parent directory inode\n");
+        /* errno already set by ext2_read_inode */
         return 0;
     }
     
     /* Verify parent is a directory */
     if ((dir_inode.i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
         hal_uart_puts("ext2: Parent is not a directory\n");
+        set_errno(THUNDEROS_ENOTDIR);
         return 0;
     }
     
@@ -574,6 +582,7 @@ uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name
     uint32_t existing = ext2_lookup(fs, &dir_inode, name);
     if (existing != 0) {
         hal_uart_puts("ext2: Directory already exists\n");
+        set_errno(THUNDEROS_EEXIST);
         return 0;
     }
     
@@ -581,6 +590,7 @@ uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name
     uint32_t new_inode_num = ext2_alloc_inode(fs, 0);
     if (new_inode_num == 0) {
         hal_uart_puts("ext2: Failed to allocate inode\n");
+        /* errno already set by ext2_alloc_inode */
         return 0;
     }
     
@@ -605,6 +615,7 @@ uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name
     uint32_t dir_block = ext2_alloc_block(fs, 0);
     if (dir_block == 0) {
         hal_uart_puts("ext2: Failed to allocate block for directory\n");
+        /* errno already set by ext2_alloc_block */
         ext2_free_inode(fs, new_inode_num);
         return 0;
     }
@@ -615,6 +626,7 @@ uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name
     uint8_t *dir_data = (uint8_t *)kmalloc(fs->block_size);
     if (!dir_data) {
         hal_uart_puts("ext2: Failed to allocate directory data buffer\n");
+        set_errno(THUNDEROS_ENOMEM);
         ext2_free_block(fs, dir_block);
         ext2_free_inode(fs, new_inode_num);
         return 0;
@@ -797,6 +809,7 @@ static int remove_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode,
     int ret = ext2_read_file(fs, dir_inode, 0, dir_buffer, dir_size);
     if (ret < 0) {
         kfree(dir_buffer);
+        /* errno already set by ext2_read_file */
         return -1;
     }
     
@@ -951,6 +964,7 @@ int ext2_remove_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     ext2_inode_t file_inode;
     ret = ext2_read_inode(fs, file_inode_num, &file_inode);
     if (ret < 0) {
+        /* errno already set by ext2_read_inode */
         return -1;
     }
     
@@ -962,6 +976,7 @@ int ext2_remove_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     /* Remove directory entry first */
     ret = remove_dir_entry(fs, &dir_inode, dir_inode_num, name);
     if (ret < 0) {
+        /* errno already set by remove_dir_entry */
         return -1;
     }
     
@@ -985,13 +1000,14 @@ int ext2_remove_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
         /* Free the inode */
         ret = ext2_free_inode(fs, file_inode_num);
         if (ret < 0) {
-            /* errno already set */
+            /* errno already set by ext2_free_inode */
             return -1;
         }
     } else {
         /* Just update the link count */
         ret = ext2_write_inode(fs, file_inode_num, &file_inode);
         if (ret < 0) {
+            /* errno already set by ext2_write_inode */
             return -1;
         }
     }
@@ -1024,6 +1040,7 @@ int ext2_remove_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     ext2_inode_t parent_inode;
     int ret = ext2_read_inode(fs, dir_inode_num, &parent_inode);
     if (ret < 0) {
+        /* errno already set by ext2_read_inode */
         return -1;
     }
     
@@ -1042,6 +1059,7 @@ int ext2_remove_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     ext2_inode_t target_inode;
     ret = ext2_read_inode(fs, target_inode_num, &target_inode);
     if (ret < 0) {
+        /* errno already set by ext2_read_inode */
         return -1;
     }
     
@@ -1053,6 +1071,7 @@ int ext2_remove_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     /* Check if directory is empty */
     ret = is_dir_empty(fs, &target_inode);
     if (ret < 0) {
+        /* errno already set by is_dir_empty */
         return -1;
     }
     if (ret == 0) {
@@ -1062,6 +1081,7 @@ int ext2_remove_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     /* Remove directory entry from parent */
     ret = remove_dir_entry(fs, &parent_inode, dir_inode_num, name);
     if (ret < 0) {
+        /* errno already set by remove_dir_entry */
         return -1;
     }
     
@@ -1088,6 +1108,7 @@ int ext2_remove_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
     /* Free the inode */
     ret = ext2_free_inode(fs, target_inode_num);
     if (ret < 0) {
+        /* errno already set by ext2_free_inode */
         return -1;
     }
     
