@@ -72,7 +72,22 @@ static int ext2_vfs_write(vfs_node_t *node, uint32_t offset, const void *buffer,
     ext2_fs_t *ext2_fs = (ext2_fs_t *)node->fs->fs_data;
     ext2_inode_t *inode = (ext2_inode_t *)node->fs_data;
     
-    return ext2_write_file(ext2_fs, inode, offset, buffer, size);
+    int bytes_written = ext2_write_file(ext2_fs, inode, offset, buffer, size);
+    if (bytes_written < 0) {
+        /* errno already set by ext2_write_file */
+        return -1;
+    }
+    
+    /* Write updated inode back to disk (size, blocks, etc. were modified) */
+    if (ext2_write_inode(ext2_fs, node->inode, inode) != 0) {
+        /* errno already set by ext2_write_inode */
+        return -1;
+    }
+    
+    /* Update VFS node size */
+    node->size = inode->i_size;
+    
+    return bytes_written;
 }
 
 /**

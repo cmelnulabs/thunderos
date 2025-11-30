@@ -40,12 +40,21 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define INPUT_BUFFER_SIZE   256
 #define READ_BUFFER_SIZE    256
 #define PATH_BUFFER_SIZE    64
+#define MAX_ENV_VARS        32
+#define MAX_ENV_NAME        32
+#define MAX_ENV_VALUE       128
+#define EXPANDED_CMD_SIZE   512
 
 #define STDIN_FD            0
 #define STDOUT_FD           1
 
-#define O_RDONLY            0
+#define O_RDONLY            0x0000
+#define O_WRONLY            0x0001
+#define O_CREAT             0x0040
+#define O_TRUNC             0x0200
+#define O_APPEND            0x0400
 #define DIR_MODE            0755
+#define FILE_MODE           0644
 
 #define CHAR_ESC            0x1B
 #define CHAR_BACKSPACE      127
@@ -72,24 +81,31 @@ static const char *SHELL_BANNER =
 static const char *SHELL_PROMPT = "ush> ";
 
 static const char *HELP_TEXT =
-    "Available commands:\n"
-    "  help   - Show this help\n"
-    "  echo   - Echo arguments\n"
-    "  cat    - Display file contents\n"
-    "  ls     - List directory\n"
-    "  cd     - Change directory\n"
-    "  pwd    - Print working directory\n"
-    "  mkdir  - Create directory\n"
-    "  rmdir  - Remove directory\n"
-    "  clear  - Clear screen\n"
-    "  hello  - Run hello program\n"
-    "  clock  - Display elapsed time\n"
-    "  ps     - List running processes\n"
-    "  uname  - Print system information\n"
-    "  uptime - Show system uptime\n"
-    "  whoami - Print current user\n"
-    "  tty    - Print terminal name\n"
-    "  exit   - Exit shell\n";
+    "Built-in commands:\n"
+    "  help     - Show this help\n"
+    "  echo     - Echo arguments (supports $VAR)\n"
+    "  cat      - Display file contents\n"
+    "  ls       - List directory\n"
+    "  cd       - Change directory\n"
+    "  pwd      - Print working directory\n"
+    "  mkdir    - Create directory\n"
+    "  rmdir    - Remove directory\n"
+    "  export   - Set environment variable (VAR=value)\n"
+    "  unset    - Remove environment variable\n"
+    "  env      - List environment variables\n"
+    "  history  - Show command history\n"
+    "  clear    - Clear screen\n"
+    "  exit     - Exit shell\n"
+    "\n"
+    "External programs: hello, clock, ps, uname, uptime, whoami, tty\n"
+    "\n"
+    "Features:\n"
+    "  - Up/Down arrows: Navigate command history\n"
+    "  - $VAR or ${VAR}: Variable expansion\n"
+    "  - > file: Redirect output (overwrite)\n"
+    "  - >> file: Redirect output (append)\n"
+    "  - Relative paths: cd .., cat file\n"
+    "\n";
 
 static const char *MSG_GOODBYE = "Goodbye!\n";
 static const char *MSG_UNKNOWN_CMD = "Unknown command (try 'help')\n";
@@ -103,6 +119,9 @@ static const char *MSG_CD_ERROR = "cd: cannot access directory\n";
 static const char *MSG_MKDIR_ERROR = "mkdir: cannot create directory\n";
 static const char *MSG_RMDIR_ERROR = "rmdir: cannot remove directory\n";
 static const char *MSG_EXEC_FAIL = "Failed to execute program\n";
+static const char *MSG_USAGE_EXPORT = "Usage: export VAR=value\n";
+static const char *MSG_ENV_FULL = "export: too many variables\n";
+static const char *MSG_REDIR_ERROR = "Error: Cannot open output file\n";
 
 static const char *NEWLINE = "\n";
 static const char *CRLF = "\r\n";
@@ -127,6 +146,22 @@ static int g_escape_state = ESC_STATE_NORMAL;
 /* Path buffer for external commands */
 static char g_path_buffer[PATH_BUFFER_SIZE];
 
+/* Environment variables */
+typedef struct {
+    char name[MAX_ENV_NAME];
+    char value[MAX_ENV_VALUE];
+    int in_use;
+} env_var_t;
+
+static env_var_t g_env_vars[MAX_ENV_VARS];
+
+/* Expanded command buffer (after variable substitution) */
+static char g_expanded_buffer[EXPANDED_CMD_SIZE];
+
+/* I/O redirection state */
+static char *g_redir_output_file;
+static int g_redir_append;
+
 /* ========================================================================
  * Forward declarations
  * ======================================================================== */
@@ -143,6 +178,16 @@ static void history_init(void);
 static void history_add(const char *command);
 static void history_navigate_up(void);
 static void history_navigate_down(void);
+
+/* Environment variables */
+static void env_init(void);
+static const char *env_get(const char *name);
+static int env_set(const char *name, const char *value);
+static int env_unset(const char *name);
+static void env_expand(const char *input, char *output, int max_len);
+
+/* I/O redirection */
+static void parse_redirections(char *cmd, char **output_file, int *append);
 
 /* Input line management */
 static void input_clear_line(void);
@@ -311,6 +356,183 @@ static void history_navigate_down(void) {
 }
 
 /* ========================================================================
+ * Environment variable management
+ * ======================================================================== */
+
+/**
+ * Initialize environment variables
+ */
+static void env_init(void) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        g_env_vars[i].in_use = 0;
+    }
+    /* Set default environment variables */
+    env_set("PATH", "/bin");
+    env_set("HOME", "/");
+    env_set("SHELL", "/bin/ush");
+    env_set("USER", "root");
+}
+
+/**
+ * Get environment variable value
+ */
+static const char *env_get(const char *name) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            if (strings_equal(g_env_vars[i].name, name, str_length(name)) &&
+                g_env_vars[i].name[str_length(name)] == '\0') {
+                return g_env_vars[i].value;
+            }
+        }
+    }
+    return (const char *)0;
+}
+
+/**
+ * Set environment variable
+ */
+static int env_set(const char *name, const char *value) {
+    /* Check if already exists */
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            int name_len = str_length(name);
+            if (strings_equal(g_env_vars[i].name, name, name_len) &&
+                g_env_vars[i].name[name_len] == '\0') {
+                copy_string(g_env_vars[i].value, value, MAX_ENV_VALUE);
+                return 0;
+            }
+        }
+    }
+    
+    /* Find empty slot */
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (!g_env_vars[i].in_use) {
+            copy_string(g_env_vars[i].name, name, MAX_ENV_NAME);
+            copy_string(g_env_vars[i].value, value, MAX_ENV_VALUE);
+            g_env_vars[i].in_use = 1;
+            return 0;
+        }
+    }
+    
+    return -1;  /* No space */
+}
+
+/**
+ * Unset environment variable
+ */
+static int env_unset(const char *name) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            int name_len = str_length(name);
+            if (strings_equal(g_env_vars[i].name, name, name_len) &&
+                g_env_vars[i].name[name_len] == '\0') {
+                g_env_vars[i].in_use = 0;
+                return 0;
+            }
+        }
+    }
+    return -1;  /* Not found */
+}
+
+/**
+ * Expand environment variables in a string
+ * Supports $VAR and ${VAR} syntax
+ */
+static void env_expand(const char *input, char *output, int max_len) {
+    int in_pos = 0;
+    int out_pos = 0;
+    
+    while (input[in_pos] && out_pos < max_len - 1) {
+        if (input[in_pos] == '$') {
+            in_pos++;
+            char var_name[MAX_ENV_NAME];
+            int var_pos = 0;
+            int braces = 0;
+            
+            /* Handle ${VAR} syntax */
+            if (input[in_pos] == '{') {
+                braces = 1;
+                in_pos++;
+            }
+            
+            /* Extract variable name */
+            while (input[in_pos] && var_pos < MAX_ENV_NAME - 1) {
+                char c = input[in_pos];
+                if (braces) {
+                    if (c == '}') {
+                        in_pos++;
+                        break;
+                    }
+                } else {
+                    /* Variable names: alphanumeric and underscore */
+                    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                          (c >= '0' && c <= '9') || c == '_')) {
+                        break;
+                    }
+                }
+                var_name[var_pos++] = c;
+                in_pos++;
+            }
+            var_name[var_pos] = '\0';
+            
+            /* Look up and substitute */
+            const char *value = env_get(var_name);
+            if (value) {
+                while (*value && out_pos < max_len - 1) {
+                    output[out_pos++] = *value++;
+                }
+            }
+        } else {
+            output[out_pos++] = input[in_pos++];
+        }
+    }
+    output[out_pos] = '\0';
+}
+
+/* ========================================================================
+ * I/O Redirection parsing
+ * ======================================================================== */
+
+/**
+ * Parse command for output redirections (> and >>)
+ * Modifies cmd in place to remove redirection
+ */
+static void parse_redirections(char *cmd, char **output_file, int *append) {
+    *output_file = (char *)0;
+    *append = 0;
+    
+    char *p = cmd;
+    while (*p) {
+        if (*p == '>') {
+            if (*(p + 1) == '>') {
+                /* Append mode >> */
+                *append = 1;
+                *p = '\0';
+                p += 2;
+            } else {
+                /* Truncate mode > */
+                *p = '\0';
+                p++;
+            }
+            
+            /* Skip whitespace */
+            while (*p == ' ' || *p == '\t') p++;
+            
+            /* Get filename */
+            *output_file = p;
+            
+            /* Find end of filename */
+            while (*p && *p != ' ' && *p != '\t') p++;
+            if (*p) {
+                *p = '\0';
+            }
+            return;
+        }
+        p++;
+    }
+}
+
+/* ========================================================================
  * Input line management
  * ======================================================================== */
 
@@ -433,9 +655,9 @@ static void handle_builtin_cat(int arg_start, int input_len) {
     }
     
     /* Null-terminate the filename */
-    g_input_buffer[input_len] = '\0';
+    g_expanded_buffer[input_len] = '\0';
     
-    long file_fd = syscall3(SYS_OPEN, (long)&g_input_buffer[arg_start], O_RDONLY, 0);
+    long file_fd = syscall3(SYS_OPEN, (long)&g_expanded_buffer[arg_start], O_RDONLY, 0);
     if (file_fd < 0) {
         print_string(MSG_FILE_ERROR);
         return;
@@ -460,8 +682,8 @@ static void handle_builtin_cd(int arg_start, int input_len) {
         return;
     }
     
-    g_input_buffer[input_len] = '\0';
-    long result = syscall1(SYS_CHDIR, (long)&g_input_buffer[arg_start]);
+    g_expanded_buffer[input_len] = '\0';
+    long result = syscall1(SYS_CHDIR, (long)&g_expanded_buffer[arg_start]);
     if (result != 0) {
         print_string(MSG_CD_ERROR);
     }
@@ -476,8 +698,8 @@ static void handle_builtin_mkdir(int arg_start, int input_len) {
         return;
     }
     
-    g_input_buffer[input_len] = '\0';
-    long result = syscall2(SYS_MKDIR, (long)&g_input_buffer[arg_start], DIR_MODE);
+    g_expanded_buffer[input_len] = '\0';
+    long result = syscall2(SYS_MKDIR, (long)&g_expanded_buffer[arg_start], DIR_MODE);
     if (result != 0) {
         print_string(MSG_MKDIR_ERROR);
     }
@@ -492,10 +714,87 @@ static void handle_builtin_rmdir(int arg_start, int input_len) {
         return;
     }
     
-    g_input_buffer[input_len] = '\0';
-    long result = syscall1(SYS_RMDIR, (long)&g_input_buffer[arg_start]);
+    g_expanded_buffer[input_len] = '\0';
+    long result = syscall1(SYS_RMDIR, (long)&g_expanded_buffer[arg_start]);
     if (result != 0) {
         print_string(MSG_RMDIR_ERROR);
+    }
+}
+
+/**
+ * Handle 'export' command - set environment variable
+ */
+static void handle_builtin_export(int arg_start, int input_len) {
+    if (arg_start >= input_len) {
+        print_string(MSG_USAGE_EXPORT);
+        return;
+    }
+    
+    /* Find '=' in the argument */
+    char *arg = &g_expanded_buffer[arg_start];
+    char *eq = arg;
+    while (*eq && *eq != '=') eq++;
+    
+    if (*eq != '=') {
+        print_string(MSG_USAGE_EXPORT);
+        return;
+    }
+    
+    /* Split into name and value */
+    *eq = '\0';
+    const char *name = arg;
+    const char *value = eq + 1;
+    
+    if (env_set(name, value) < 0) {
+        print_string(MSG_ENV_FULL);
+    }
+}
+
+/**
+ * Handle 'unset' command - remove environment variable
+ */
+static void handle_builtin_unset(int arg_start, int input_len) {
+    if (arg_start >= input_len) {
+        print_string("Usage: unset VAR\n");
+        return;
+    }
+    g_expanded_buffer[input_len] = '\0';
+    env_unset(&g_expanded_buffer[arg_start]);
+}
+
+/**
+ * Handle 'env' command - list environment variables
+ */
+static void handle_builtin_env(void) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            print_string(g_env_vars[i].name);
+            print_string("=");
+            print_string(g_env_vars[i].value);
+            print_string(NEWLINE);
+        }
+    }
+}
+
+/**
+ * Handle 'history' command - show command history
+ */
+static void handle_builtin_history(void) {
+    char num_buf[8];
+    for (int i = 0; i < g_history_count; i++) {
+        /* Print index */
+        int idx = i + 1;
+        int pos = 0;
+        if (idx >= 10) {
+            num_buf[pos++] = '0' + (idx / 10);
+        }
+        num_buf[pos++] = '0' + (idx % 10);
+        num_buf[pos++] = ' ';
+        num_buf[pos++] = ' ';
+        num_buf[pos] = '\0';
+        print_string(num_buf);
+        print_string(g_history[i]);
+        print_string(NEWLINE);
     }
 }
 
@@ -521,6 +820,13 @@ static void handle_external_command(const char *binary_name) {
 }
 
 /**
+ * Write string to file descriptor
+ */
+static void write_to_fd(long fd, const char *str) {
+    syscall3(SYS_WRITE, fd, (long)str, str_length(str));
+}
+
+/**
  * Process the entered command
  */
 static void process_command(void) {
@@ -531,52 +837,108 @@ static void process_command(void) {
         return;
     }
     
-    /* Add to history */
+    /* Add to history (before expansion) */
     history_add(g_input_buffer);
     
+    /* Expand environment variables */
+    env_expand(g_input_buffer, g_expanded_buffer, EXPANDED_CMD_SIZE);
+    
+    /* Parse for I/O redirections */
+    char *output_file = (char *)0;
+    int append_mode = 0;
+    parse_redirections(g_expanded_buffer, &output_file, &append_mode);
+    
+    /* Open output file if redirected */
+    long output_fd = -1;
+    if (output_file && output_file[0]) {
+        int flags = O_WRONLY | O_CREAT;
+        if (append_mode) {
+            flags |= O_APPEND;
+        } else {
+            flags |= O_TRUNC;
+        }
+        output_fd = syscall3(SYS_OPEN, (long)output_file, flags, FILE_MODE);
+        if (output_fd < 0) {
+            print_string(MSG_REDIR_ERROR);
+            return;
+        }
+    }
+    
+    /* Recalculate length after redirection parsing */
+    int expanded_len = str_length(g_expanded_buffer);
+    
+    /* Trim trailing whitespace */
+    while (expanded_len > 0 && (g_expanded_buffer[expanded_len - 1] == ' ' || 
+                                 g_expanded_buffer[expanded_len - 1] == '\t')) {
+        expanded_len--;
+    }
+    g_expanded_buffer[expanded_len] = '\0';
+    
     /* Parse command */
-    int cmd_len = parse_command_length(g_input_buffer, input_len);
-    int arg_start = parse_arg_start(g_input_buffer, input_len, cmd_len);
+    int cmd_len = parse_command_length(g_expanded_buffer, expanded_len);
+    int arg_start = parse_arg_start(g_expanded_buffer, expanded_len, cmd_len);
     
     /* Check built-in commands first */
-    if (command_matches(g_input_buffer, cmd_len, "help")) {
+    if (command_matches(g_expanded_buffer, cmd_len, "help")) {
         handle_builtin_help();
-    } else if (command_matches(g_input_buffer, cmd_len, "exit")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "exit")) {
         handle_builtin_exit();
-    } else if (command_matches(g_input_buffer, cmd_len, "echo")) {
-        handle_builtin_echo(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "cat")) {
-        handle_builtin_cat(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "cd")) {
-        handle_builtin_cd(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "mkdir")) {
-        handle_builtin_mkdir(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "rmdir")) {
-        handle_builtin_rmdir(arg_start, input_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "echo")) {
+        /* Handle echo with optional output redirection */
+        if (output_fd >= 0 && arg_start < expanded_len) {
+            write_to_fd(output_fd, &g_expanded_buffer[arg_start]);
+            write_to_fd(output_fd, NEWLINE);
+        } else if (arg_start < expanded_len) {
+            print_chars(&g_expanded_buffer[arg_start], expanded_len - arg_start);
+            print_string(NEWLINE);
+        }
+    } else if (command_matches(g_expanded_buffer, cmd_len, "cat")) {
+        handle_builtin_cat(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "cd")) {
+        handle_builtin_cd(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "mkdir")) {
+        handle_builtin_mkdir(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "rmdir")) {
+        handle_builtin_rmdir(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "export")) {
+        handle_builtin_export(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "unset")) {
+        handle_builtin_unset(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "env")) {
+        handle_builtin_env();
+    } else if (command_matches(g_expanded_buffer, cmd_len, "history")) {
+        handle_builtin_history();
     }
     /* External commands - fork and exec from /bin */
-    else if (command_matches(g_input_buffer, cmd_len, "ls")) {
+    else if (command_matches(g_expanded_buffer, cmd_len, "ls")) {
         handle_external_command("ls");
-    } else if (command_matches(g_input_buffer, cmd_len, "pwd")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "pwd")) {
         handle_external_command("pwd");
-    } else if (command_matches(g_input_buffer, cmd_len, "clear")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "clear")) {
         handle_external_command("clear");
-    } else if (command_matches(g_input_buffer, cmd_len, "hello")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "hello")) {
         handle_external_command("hello");
-    } else if (command_matches(g_input_buffer, cmd_len, "clock")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "clock")) {
         handle_external_command("clock");
-    } else if (command_matches(g_input_buffer, cmd_len, "ps")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "ps")) {
         handle_external_command("ps");
-    } else if (command_matches(g_input_buffer, cmd_len, "uname")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "uname")) {
         handle_external_command("uname");
-    } else if (command_matches(g_input_buffer, cmd_len, "uptime")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "uptime")) {
         handle_external_command("uptime");
-    } else if (command_matches(g_input_buffer, cmd_len, "whoami")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "whoami")) {
         handle_external_command("whoami");
-    } else if (command_matches(g_input_buffer, cmd_len, "tty")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "tty")) {
         handle_external_command("tty");
+    } else if (command_matches(g_expanded_buffer, cmd_len, "kill")) {
+        handle_external_command("kill");
     } else {
         print_string(MSG_UNKNOWN_CMD);
+    }
+    
+    /* Close output file if opened */
+    if (output_fd >= 0) {
+        syscall1(SYS_CLOSE, output_fd);
     }
 }
 
@@ -667,6 +1029,7 @@ void _start(void) {
     
     /* Initialize shell state */
     history_init();
+    env_init();
     g_input_pos = 0;
     g_escape_state = ESC_STATE_NORMAL;
     
