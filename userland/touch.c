@@ -37,10 +37,27 @@ static void print(const char *s) {
     syscall(SYS_WRITE, 1, (long)s, strlen(s));
 }
 
-void _start(void) {
-    // Note: Requires argument passing from shell
-    // For now, just show usage
-    print("touch: usage: touch <filename>\n");
-    print("Note: touch requires argument passing (not yet implemented)\n");
+/* Entry point - argc in a0, argv in a1 */
+void _start(long argc, char **argv) {
+    if (argc < 2) {
+        print("touch: missing file operand\n");
+        print("Usage: touch <filename>\n");
+        syscall(SYS_EXIT, 1, 0, 0);
+    }
+    
+    /* Create/open the file */
+    const char *filename = argv[1];
+    long fd = syscall(SYS_OPEN, (long)filename, O_WRONLY | O_CREAT, 0644);
+    
+    if (fd < 0) {
+        print("touch: cannot touch '");
+        print(filename);
+        print("': ");
+        print("Permission denied or path error\n");
+        syscall(SYS_EXIT, 1, 0, 0);
+    }
+    
+    /* Close immediately - file is created */
+    syscall(SYS_CLOSE, fd, 0, 0);
     syscall(SYS_EXIT, 0, 0, 0);
 }

@@ -44,6 +44,7 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define MAX_ENV_NAME        32
 #define MAX_ENV_VALUE       128
 #define EXPANDED_CMD_SIZE   512
+#define MAX_ARGS            16
 
 #define STDIN_FD            0
 #define STDOUT_FD           1
@@ -85,19 +86,32 @@ static const char *HELP_TEXT =
     "  help     - Show this help\n"
     "  echo     - Echo arguments (supports $VAR)\n"
     "  cat      - Display file contents\n"
-    "  ls       - List directory\n"
     "  cd       - Change directory\n"
-    "  pwd      - Print working directory\n"
-    "  mkdir    - Create directory\n"
-    "  rmdir    - Remove directory\n"
     "  export   - Set environment variable (VAR=value)\n"
     "  unset    - Remove environment variable\n"
     "  env      - List environment variables\n"
     "  history  - Show command history\n"
-    "  clear    - Clear screen\n"
     "  exit     - Exit shell\n"
     "\n"
-    "External programs: hello, clock, ps, uname, uptime, whoami, tty\n"
+    "File utilities:\n"
+    "  ls       - List directory\n"
+    "  pwd      - Print working directory\n"
+    "  mkdir    - Create directory\n"
+    "  rmdir    - Remove directory\n"
+    "  touch    - Create empty file\n"
+    "  rm       - Remove file\n"
+    "  clear    - Clear screen\n"
+    "\n"
+    "System utilities:\n"
+    "  ps       - List processes\n"
+    "  kill     - Send signal to process\n"
+    "  sleep    - Sleep for seconds\n"
+    "  uname    - System information\n"
+    "  uptime   - System uptime\n"
+    "  whoami   - Current user\n"
+    "  tty      - Terminal name\n"
+    "\n"
+    "Other programs: hello, clock\n"
     "\n"
     "Features:\n"
     "  - Up/Down arrows: Navigate command history\n"
@@ -199,7 +213,7 @@ static int parse_arg_start(const char *input, int input_len, int cmd_len);
 static int command_matches(const char *input, int cmd_len, const char *command);
 
 /* Command execution */
-static void exec_external(const char *path);
+static void exec_external_with_args(const char *path, int arg_start, int input_len);
 static void handle_builtin_help(void);
 static void handle_builtin_exit(void);
 static void handle_builtin_echo(int arg_start, int input_len);
@@ -207,7 +221,7 @@ static void handle_builtin_cat(int arg_start, int input_len);
 static void handle_builtin_cd(int arg_start, int input_len);
 static void handle_builtin_mkdir(int arg_start, int input_len);
 static void handle_builtin_rmdir(int arg_start, int input_len);
-static void handle_external_command(const char *binary_name);
+static void handle_external_command(const char *binary_name, int arg_start, int input_len);
 
 /* Main processing */
 static void process_command(void);
@@ -596,15 +610,54 @@ static int command_matches(const char *input, int cmd_len, const char *command) 
  * Command execution
  * ======================================================================== */
 
+/* Static buffer for argument strings */
+static char g_arg_buffer[EXPANDED_CMD_SIZE];
+
 /**
- * Fork and execute an external program, wait for completion
+ * Fork and execute an external program with arguments, wait for completion
  */
-static void exec_external(const char *path) {
+static void exec_external_with_args(const char *path, int arg_start, int input_len) {
+    /* Build argv array by parsing arguments from g_expanded_buffer */
+    const char *argv[MAX_ARGS];
+    int argc = 0;
+    
+    /* argv[0] is the program path */
+    argv[argc++] = path;
+    
+    /* Copy arguments to our buffer and parse them */
+    if (arg_start < input_len) {
+        /* Copy the argument portion */
+        int i = 0;
+        for (int j = arg_start; j < input_len && i < EXPANDED_CMD_SIZE - 1; j++) {
+            g_arg_buffer[i++] = g_expanded_buffer[j];
+        }
+        g_arg_buffer[i] = '\0';
+        
+        /* Parse arguments (space-separated) */
+        char *p = g_arg_buffer;
+        while (*p && argc < MAX_ARGS - 1) {
+            /* Skip leading whitespace */
+            while (*p == ' ' || *p == '\t') p++;
+            if (!*p) break;
+            
+            /* Start of argument */
+            argv[argc++] = p;
+            
+            /* Find end of argument */
+            while (*p && *p != ' ' && *p != '\t') p++;
+            if (*p) {
+                *p++ = '\0';  /* Null-terminate this argument */
+            }
+        }
+    }
+    
+    /* Null-terminate argv */
+    argv[argc] = (char *)0;
+    
     long child_pid = syscall0(SYS_FORK);
     
     if (child_pid == 0) {
         /* Child process */
-        const char *argv[] = { path, 0 };
         const char *envp[] = { 0 };
         syscall3(SYS_EXECVE, (long)path, (long)argv, (long)envp);
         
@@ -799,9 +852,9 @@ static void handle_builtin_history(void) {
 }
 
 /**
- * Handle external command - fork and exec from /bin
+ * Handle external command - fork and exec from /bin with arguments
  */
-static void handle_external_command(const char *binary_name) {
+static void handle_external_command(const char *binary_name, int arg_start, int input_len) {
     /* Build path: /bin/<binary_name> */
     int path_idx = 0;
     int prefix_idx = 0;
@@ -816,7 +869,7 @@ static void handle_external_command(const char *binary_name) {
     }
     g_path_buffer[path_idx] = '\0';
     
-    exec_external(g_path_buffer);
+    exec_external_with_args(g_path_buffer, arg_start, input_len);
 }
 
 /**
@@ -911,27 +964,33 @@ static void process_command(void) {
     }
     /* External commands - fork and exec from /bin */
     else if (command_matches(g_expanded_buffer, cmd_len, "ls")) {
-        handle_external_command("ls");
+        handle_external_command("ls", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "pwd")) {
-        handle_external_command("pwd");
+        handle_external_command("pwd", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "clear")) {
-        handle_external_command("clear");
+        handle_external_command("clear", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "hello")) {
-        handle_external_command("hello");
+        handle_external_command("hello", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "clock")) {
-        handle_external_command("clock");
+        handle_external_command("clock", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "ps")) {
-        handle_external_command("ps");
+        handle_external_command("ps", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "uname")) {
-        handle_external_command("uname");
+        handle_external_command("uname", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "uptime")) {
-        handle_external_command("uptime");
+        handle_external_command("uptime", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "whoami")) {
-        handle_external_command("whoami");
+        handle_external_command("whoami", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "tty")) {
-        handle_external_command("tty");
+        handle_external_command("tty", arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "kill")) {
-        handle_external_command("kill");
+        handle_external_command("kill", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "touch")) {
+        handle_external_command("touch", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "rm")) {
+        handle_external_command("rm", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "sleep")) {
+        handle_external_command("sleep", arg_start, expanded_len);
     } else {
         print_string(MSG_UNKNOWN_CMD);
     }

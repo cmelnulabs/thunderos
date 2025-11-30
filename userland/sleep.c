@@ -32,10 +32,30 @@ static void print(const char *s) {
     syscall(SYS_WRITE, 1, (long)s, strlen(s));
 }
 
-void _start(void) {
-    // Note: Requires argument passing from shell
-    // For now, just show usage
-    print("sleep: usage: sleep <seconds>\n");
-    print("Note: sleep requires argument passing (not yet implemented)\n");
+/* Parse integer from string */
+static long atol(const char *s) {
+    long n = 0;
+    while (*s >= '0' && *s <= '9') {
+        n = n * 10 + (*s - '0');
+        s++;
+    }
+    return n;
+}
+
+/* Entry point - argc in a0, argv in a1 */
+void _start(long argc, char **argv) {
+    if (argc < 2) {
+        print("sleep: missing operand\n");
+        print("Usage: sleep <seconds>\n");
+        syscall(SYS_EXIT, 1, 0, 0);
+    }
+    
+    long seconds = atol(argv[1]);
+    if (seconds <= 0) {
+        print("sleep: invalid time interval\n");
+        syscall(SYS_EXIT, 1, 0, 0);
+    }
+    
+    syscall(SYS_SLEEP, seconds, 0, 0);
     syscall(SYS_EXIT, 0, 0, 0);
 }

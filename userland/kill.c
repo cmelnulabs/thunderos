@@ -62,31 +62,6 @@ static void print(const char *s) {
     syscall3(SYS_WRITE, 1, (long)s, strlen(s));
 }
 
-static void print_int(int n) {
-    char buf[16];
-    int i = 0;
-    
-    if (n < 0) {
-        print("-");
-        n = -n;
-    }
-    
-    if (n == 0) {
-        print("0");
-        return;
-    }
-    
-    while (n > 0) {
-        buf[i++] = '0' + (n % 10);
-        n /= 10;
-    }
-    
-    while (i > 0) {
-        char c = buf[--i];
-        syscall3(SYS_WRITE, 1, (long)&c, 1);
-    }
-}
-
 /* Parse integer from string */
 static int atoi(const char *s) {
     int n = 0;
@@ -105,23 +80,38 @@ static int atoi(const char *s) {
     return neg ? -n : n;
 }
 
-/* Arguments passed from shell (simplified) */
-extern char __arg1[];  /* First argument (PID) */
-
-void _start(void) {
-    /* Initialize gp for global data access */
-    __asm__ volatile (
-        ".option push\n"
-        ".option norelax\n"
-        "1: auipc gp, %%pcrel_hi(__global_pointer$)\n"
-        "   addi gp, gp, %%pcrel_lo(1b)\n"
-        ".option pop\n"
-        ::: "gp"
-    );
+/* Entry point - argc in a0, argv in a1 */
+void _start(long argc, char **argv) {
+    if (argc < 2) {
+        print("kill: missing operand\n");
+        print("Usage: kill <pid>\n");
+        syscall1(SYS_EXIT, 1);
+    }
     
-    /* For now, show usage since we don't have proper argv */
-    print("kill: usage: kill <pid>\n");
-    print("Note: argument parsing not yet implemented\n");
+    int pid = atoi(argv[1]);
+    if (pid <= 0) {
+        print("kill: invalid pid\n");
+        syscall1(SYS_EXIT, 1);
+    }
+    
+    long result = syscall2(SYS_KILL, pid, SIGTERM);
+    if (result < 0) {
+        print("kill: (");
+        /* Print pid */
+        char buf[16];
+        int i = 0;
+        int n = pid;
+        while (n > 0) {
+            buf[i++] = '0' + (n % 10);
+            n /= 10;
+        }
+        while (i > 0) {
+            char c = buf[--i];
+            syscall3(SYS_WRITE, 1, (long)&c, 1);
+        }
+        print(") - No such process\n");
+        syscall1(SYS_EXIT, 1);
+    }
     
     syscall1(SYS_EXIT, 0);
 }
