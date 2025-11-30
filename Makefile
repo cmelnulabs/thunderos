@@ -183,16 +183,23 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@echo "$(GREEN)✓ Clean complete$(RESET)"
 
-# Create ext2 filesystem image
-fs: $(FS_IMG)
+# Create ext2 filesystem image (always rebuild to pick up Makefile changes)
+fs: force_fs
 
-$(FS_IMG): userland
+force_fs: userland
 	@echo ""
 	@echo "$(BOLD)$(MAGENTA)[FS]$(RESET) Creating ext2 filesystem ($(FS_SIZE))..."
 	@rm -rf $(BUILD_DIR)/testfs
+	@rm -f $(FS_IMG)
 	@mkdir -p $(BUILD_DIR)/testfs/bin
 	@echo "Hello from ThunderOS ext2 filesystem!" > $(BUILD_DIR)/testfs/test.txt
 	@echo "This is a sample file for testing." > $(BUILD_DIR)/testfs/README.txt
+	@# Create test files for rm/rmdir testing
+	@echo "Delete me with rm command!" > $(BUILD_DIR)/testfs/deleteme.txt
+	@echo "Another file to delete" > $(BUILD_DIR)/testfs/removable.txt
+	@mkdir -p $(BUILD_DIR)/testfs/emptydir
+	@mkdir -p $(BUILD_DIR)/testfs/nonemptydir
+	@echo "This file makes the directory non-empty" > $(BUILD_DIR)/testfs/nonemptydir/nested.txt
 	@# Create startup script
 	@echo "# ThunderOS Startup Script" > $(BUILD_DIR)/testfs/startup.sh
 	@echo "echo ================================" >> $(BUILD_DIR)/testfs/startup.sh

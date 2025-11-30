@@ -722,20 +722,42 @@ int vfs_rmdir(const char *path) {
         return -1;
     }
     
-    /* For now, only support directories in root */
+    /* Can't remove root */
     if (normalized[0] != '/' || normalized[1] == '\0') {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    const char *dirname = normalized + 1;
+    /* Find the last slash to separate parent path and directory name */
+    char *last_slash = NULL;
+    for (char *p = normalized; *p; p++) {
+        if (*p == '/') last_slash = p;
+    }
     
-    vfs_node_t *root = g_root_fs->root;
-    if (!root->ops || !root->ops->rmdir) {
+    vfs_node_t *parent_dir;
+    const char *dirname;
+    
+    if (last_slash == normalized) {
+        /* Directory is in root (e.g., /emptydir) */
+        parent_dir = g_root_fs->root;
+        dirname = normalized + 1;
+    } else {
+        /* Directory is in a subdirectory (e.g., /foo/bar) */
+        *last_slash = '\0';  /* Temporarily terminate to get parent path */
+        parent_dir = vfs_resolve_path(normalized);
+        *last_slash = '/';   /* Restore */
+        
+        if (!parent_dir) {
+            RETURN_ERRNO(THUNDEROS_ENOENT);
+        }
+        dirname = last_slash + 1;
+    }
+    
+    if (!parent_dir->ops || !parent_dir->ops->rmdir) {
         hal_uart_puts("vfs: No rmdir operation\n");
         RETURN_ERRNO(THUNDEROS_EIO);
     }
     
-    return root->ops->rmdir(root, dirname);
+    return parent_dir->ops->rmdir(parent_dir, dirname);
 }
 
 /**
@@ -753,20 +775,42 @@ int vfs_unlink(const char *path) {
         return -1;
     }
     
-    /* For now, only support files in root */
+    /* Must have a filename */
     if (normalized[0] != '/' || normalized[1] == '\0') {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    const char *filename = normalized + 1;
+    /* Find the last slash to separate parent path and filename */
+    char *last_slash = NULL;
+    for (char *p = normalized; *p; p++) {
+        if (*p == '/') last_slash = p;
+    }
     
-    vfs_node_t *root = g_root_fs->root;
-    if (!root->ops || !root->ops->unlink) {
+    vfs_node_t *parent_dir;
+    const char *filename;
+    
+    if (last_slash == normalized) {
+        /* File is in root (e.g., /deleteme.txt) */
+        parent_dir = g_root_fs->root;
+        filename = normalized + 1;
+    } else {
+        /* File is in a subdirectory (e.g., /foo/bar.txt) */
+        *last_slash = '\0';  /* Temporarily terminate to get parent path */
+        parent_dir = vfs_resolve_path(normalized);
+        *last_slash = '/';   /* Restore */
+        
+        if (!parent_dir) {
+            RETURN_ERRNO(THUNDEROS_ENOENT);
+        }
+        filename = last_slash + 1;
+    }
+    
+    if (!parent_dir->ops || !parent_dir->ops->unlink) {
         hal_uart_puts("vfs: No unlink operation\n");
         RETURN_ERRNO(THUNDEROS_EIO);
     }
     
-    return root->ops->unlink(root, filename);
+    return parent_dir->ops->unlink(parent_dir, filename);
 }
 
 /**
