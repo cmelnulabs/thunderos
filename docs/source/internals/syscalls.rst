@@ -8,7 +8,7 @@ System calls (syscalls) provide the interface between user-space programs and th
 
 **Current Status:**
 
-ThunderOS v0.7.0 implements **35 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, directory navigation, and terminal control.
+ThunderOS v0.8.0 implements **36 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, directory navigation, terminal control, and file descriptor manipulation.
 
 **Key Features:**
 
@@ -1962,6 +1962,86 @@ Get system identification information. Used by the ``uname`` utility.
    if (uname(&uts) == 0) {
        printf("%s %s %s\n", uts.sysname, uts.release, uts.machine);
    }
+
+sys_dup2 (35)
+^^^^^^^^^^^^^
+
+Duplicate a file descriptor to a specific file descriptor number. Used for I/O redirection and pipe setup.
+
+.. code-block:: c
+
+   int sys_dup2(int oldfd, int newfd);
+
+**Parameters:**
+
+* ``oldfd``: Existing file descriptor to duplicate
+* ``newfd``: Target file descriptor number
+
+**Return Value:**
+
+* ``newfd`` on success
+* ``-1`` on error (check ``errno``)
+
+**Error Codes:**
+
+.. code-block:: c
+
+   THUNDEROS_EBADF   // oldfd is not a valid file descriptor
+   THUNDEROS_EINVAL  // newfd is out of valid range
+
+**Description:**
+
+Creates a copy of the file descriptor ``oldfd`` using the file descriptor number ``newfd``. If ``newfd`` was previously open, it is silently closed before being reused.
+
+After a successful return, ``oldfd`` and ``newfd`` refer to the same open file description, and can be used interchangeably for I/O operations.
+
+If ``oldfd`` equals ``newfd``, the call does nothing and returns ``newfd``.
+
+**Example - I/O Redirection:**
+
+.. code-block:: c
+
+   // Redirect stdout to a file
+   int fd = open("output.txt", O_WRONLY | O_CREAT, 0644);
+   dup2(fd, STDOUT_FILENO);  // stdout now goes to file
+   close(fd);                 // Original fd no longer needed
+   printf("This goes to file!\n");
+
+**Example - Pipe Setup:**
+
+.. code-block:: c
+
+   int pipefd[2];
+   pipe(pipefd);
+   
+   if (fork() == 0) {
+       // Child: connect stdin to pipe read end
+       close(pipefd[1]);           // Close write end
+       dup2(pipefd[0], STDIN_FILENO);  // stdin reads from pipe
+       close(pipefd[0]);           // Original fd no longer needed
+       exec("/bin/cat", NULL);     // cat reads from pipe
+   } else {
+       // Parent: write to pipe
+       close(pipefd[0]);           // Close read end
+       write(pipefd[1], "Hello via pipe!\n", 16);
+       close(pipefd[1]);
+   }
+
+**Implementation:**
+
+1. Validates ``oldfd`` is a valid open file descriptor
+2. Validates ``newfd`` is within valid range (0 to MAX_FD)
+3. If ``oldfd == newfd``, returns ``newfd`` immediately
+4. Closes ``newfd`` if currently open
+5. Copies the file descriptor entry from ``oldfd`` to ``newfd``
+6. Increments reference count on underlying file object
+7. Returns ``newfd``
+
+**See Also:**
+
+- ``sys_pipe`` - Create a pipe for IPC
+- ``sys_open`` - Open a file
+- ``sys_close`` - Close a file descriptor
 
 Testing
 -------

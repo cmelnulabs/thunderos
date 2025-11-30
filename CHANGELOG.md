@@ -5,7 +5,113 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - v0.8.0 "Compatibility"
+
+### Overview
+Major shell improvements release bringing job control, pipes, I/O redirection, and full ext2 file/directory removal. The shell now supports background processes, signal handling, and command history navigation.
+
+### Added
+
+#### Job Control (`kernel/core/shell.c`, `kernel/core/signal.c`)
+- **Background Processes**:
+  - Run commands in background with `&` suffix
+  - `jobs` built-in lists all background jobs with status
+  - `fg` brings background job to foreground
+  - `bg` resumes stopped job in background
+- **Signal Handling**:
+  - Ctrl+C sends SIGINT to foreground process
+  - Ctrl+Z sends SIGTSTP to suspend foreground process
+  - Suspended processes can be resumed with `fg` or `bg`
+- **Process State Management**:
+  - New PROC_STOPPED state for suspended processes
+  - Job table tracks up to 16 concurrent jobs
+  - Proper interrupt restoration after context switch
+
+#### Shell Pipes (`kernel/core/pipe.c`, `kernel/core/syscall.c`)
+- **Pipe Syntax**:
+  - `cmd1 | cmd2` connects stdout of cmd1 to stdin of cmd2
+  - Proper file descriptor management with `dup2()`
+- **New System Call**:
+  - `sys_dup2(oldfd, newfd)` - Duplicate file descriptor to specific number
+- **Pipeline Execution**:
+  - Fork both processes
+  - Set up pipe between them
+  - Wait for pipeline completion
+
+#### I/O Redirection (`kernel/core/shell.c`)
+- **Output Redirection**:
+  - `cmd > file` - Redirect stdout to file (overwrite)
+  - `cmd >> file` - Redirect stdout to file (append)
+- **Input Redirection**:
+  - `cmd < file` - Redirect stdin from file
+- **VFS Integration**:
+  - Proper file creation with O_CREAT
+  - Append mode with O_APPEND flag
+
+#### Command History (`kernel/core/shell.c`)
+- **History Navigation**:
+  - Up arrow recalls previous command
+  - Down arrow moves forward in history
+  - 32-command history buffer
+- **Escape Sequence Handling**:
+  - Proper CSI (Control Sequence Introducer) parsing
+  - Arrow key sequences: ESC [ A (up), ESC [ B (down)
+
+#### ext2 File/Directory Removal (`kernel/fs/ext2_write.c`)
+- **File Removal (`ext2_remove_file`)**:
+  - Deallocates all data blocks
+  - Handles indirect blocks (single, double, triple)
+  - Clears inode and marks as free
+  - Updates block group free counts
+- **Directory Removal (`ext2_remove_dir`)**:
+  - Verifies directory is empty (only . and ..)
+  - Removes directory inode and blocks
+  - Updates parent directory link count
+- **Directory Entry Removal**:
+  - Finds and removes entry from parent directory
+  - Coalesces with previous entry when possible
+  - Updates parent's modification time
+
+#### VFS Improvements (`kernel/fs/vfs.c`)
+- **Relative Path Resolution**:
+  - `./program` executes from current directory
+  - `../dir` navigates to parent directory
+  - `subdir/file` resolves relative to cwd
+- **Path Normalization**:
+  - Handles `.` (current) and `..` (parent) components
+  - Removes redundant slashes
+  - Resolves to absolute paths internally
+
+#### Shell Enhancements
+- **Environment Variables**:
+  - `$VAR` expansion in commands
+  - Built-in variables: `$HOME`, `$PATH`, `$PWD`
+- **Argument Passing**:
+  - External programs receive argv correctly
+  - Proper argument tokenization
+- **New Built-in Commands**:
+  - `jobs` - List background jobs
+  - `fg [job]` - Bring job to foreground
+  - `bg [job]` - Resume job in background
+
+### Changed
+
+#### errno Error Handling (`kernel/fs/ext2_*.c`, `kernel/fs/vfs.c`)
+- Consistent errno setting across all ext2 operations
+- Proper error propagation through VFS layer
+- Clear errno on success paths
+- Semantic error codes: `THUNDEROS_EFS_BADBLK`, `THUNDEROS_EFS_NOTEMPTY`
+
+#### System Calls
+- **Total syscalls: 36** (up from 35 in v0.7.0)
+- Added `sys_dup2()` for file descriptor duplication
+
+### Fixed
+
+- Fixed interrupt restoration after context switch for job control
+- Fixed arrow key escape sequence handling in command history
+- Fixed `sys_kill()` to actually deliver signals to processes
+- Fixed relative path execution in shell
 
 ## [0.7.0] - 2025-11-29 - "Virtual Terminals"
 

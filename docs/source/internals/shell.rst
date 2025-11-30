@@ -8,13 +8,18 @@ ThunderOS includes a user-mode interactive shell (``ush``) that runs entirely in
 Overview
 --------
 
-The user-mode shell (``ush`` v0.7.0) provides:
+The user-mode shell (``ush`` v0.8.0) provides:
 
 - **User-space execution**: Runs as regular user processes
 - **Fork+exec model**: Launches external programs via fork and exec
 - **Built-in commands**: Directory navigation, file operations
 - **External commands**: Executes ELF binaries from filesystem
-- **Multi-terminal support**: Independent shells on virtual terminals (v0.7.0)
+- **Multi-terminal support**: Independent shells on virtual terminals
+- **Job control**: Background jobs, fg/bg commands, Ctrl+Z suspension (v0.8.0)
+- **Shell pipes**: Command pipelines with ``|`` operator (v0.8.0)
+- **I/O redirection**: Input/output redirection with ``<`` and ``>`` (v0.8.0)
+- **Signal handling**: Ctrl+C (SIGINT), Ctrl+Z (SIGTSTP) (v0.8.0)
+- **Command history**: Arrow key navigation through previous commands (v0.8.0)
 
 Multi-Terminal Support
 ----------------------
@@ -113,7 +118,7 @@ Built-in commands execute within the shell process (no fork):
      - ``echo Hello World``
    * - ``cd``
      - Change working directory
-     - ``cd /bin``
+     - ``cd /bin`` or ``cd ..``
    * - ``pwd``
      - Print working directory (calls external)
      - ``pwd``
@@ -123,6 +128,15 @@ Built-in commands execute within the shell process (no fork):
    * - ``rmdir``
      - Remove empty directory
      - ``rmdir /mydir``
+   * - ``jobs``
+     - List background jobs
+     - ``jobs``
+   * - ``fg``
+     - Bring job to foreground
+     - ``fg %1``
+   * - ``bg``
+     - Resume job in background
+     - ``bg %1``
    * - ``clear``
      - Clear terminal screen
      - ``clear``
@@ -148,6 +162,9 @@ External commands are executed via fork+exec:
    * - ``cat``
      - ``/bin/cat <file>``
      - Display file contents
+   * - ``rm``
+     - ``/bin/rm <file>``
+     - Remove a file
    * - ``hello``
      - ``/bin/hello``
      - Hello world test program
@@ -374,24 +391,83 @@ Known Limitations
 
 Current limitations of the shell and userland:
 
-1. **Relative Paths**: Only absolute paths supported (no ``cd ..``, ``cd subdir``)
-2. **No Argument Passing**: External programs don't receive command-line arguments
-3. **No Pipes**: Shell syntax pipes (``cmd1 | cmd2``) not implemented
-4. **No I/O Redirection**: No ``>``, ``<``, ``>>`` operators
-5. **No Command History**: No up/down arrow navigation
-6. **No Tab Completion**: No filename completion
+1. **No Tab Completion**: No filename or command completion
+2. **No Append Redirection**: ``>>`` operator not implemented
+3. **Limited Job Control**: Only single background job tracking per command
+4. **No Scripting**: No shell scripts or batch execution
+
+Features Implemented in v0.8.0
+------------------------------
+
+The following features were added in version 0.8.0:
+
+**Job Control:**
+
+- ``Ctrl+Z`` suspends the foreground process (sends SIGTSTP)
+- ``jobs`` lists all background/stopped jobs
+- ``fg %N`` brings job N to foreground
+- ``bg %N`` resumes job N in background
+- ``&`` suffix runs command in background
+
+.. code-block:: text
+
+    ush> sleep 100 &
+    [1] 5
+    ush> jobs
+    [1]  Running    sleep 100
+    ush> fg %1
+
+**Shell Pipes:**
+
+Commands can be chained with the ``|`` operator:
+
+.. code-block:: text
+
+    ush> cat /hello.txt | cat
+    Hello, ThunderOS!
+
+**I/O Redirection:**
+
+- Output redirection: ``command > file``
+- Input redirection: ``command < file``
+
+.. code-block:: text
+
+    ush> echo hello > /test.txt
+    ush> cat < /test.txt
+    hello
+
+**Command History:**
+
+- Up/Down arrows navigate through command history
+- Last 16 commands are remembered
+
+**Signal Handling:**
+
+- ``Ctrl+C`` sends SIGINT to foreground process
+- ``Ctrl+Z`` sends SIGTSTP to foreground process (suspends it)
+
+**Relative Paths:**
+
+Both shell and VFS now support relative paths:
+
+.. code-block:: text
+
+    ush> cd /bin
+    ush> ./hello         # Execute relative to cwd
+    ush> cd ..           # Navigate to parent
+    ush> cd nonemptydir  # Navigate to subdirectory
 
 Future Improvements
 -------------------
 
 Planned enhancements:
 
-- Relative path resolution in VFS
-- Command-line argument passing to programs
-- Command history with arrow key navigation
 - Tab completion for commands and paths
-- Shell pipes and I/O redirection
-- Environment variables
+- Append redirection (``>>``)
+- Multiple pipes in single command
+- Shell scripting support
+- Environment variable expansion
 
 See Also
 --------
