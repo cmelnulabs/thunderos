@@ -24,6 +24,7 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define SYS_YIELD   6
 #define SYS_FORK    7
 #define SYS_WAIT    9
+#define SYS_KILL    11
 #define SYS_OPEN    13
 #define SYS_CLOSE   14
 #define SYS_MKDIR   17
@@ -35,6 +36,9 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define SYS_GETCWD  29
 #define SYS_DUP2    35
 #define SYS_SETFGPID 36
+
+/* Signal numbers */
+#define SIGCONT     18
 
 /* ========================================================================
  * Constants
@@ -50,6 +54,7 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define MAX_ENV_VALUE       128
 #define EXPANDED_CMD_SIZE   512
 #define MAX_ARGS            16
+#define MAX_JOBS            8
 
 #define STDIN_FD            0
 #define STDOUT_FD           1
@@ -116,6 +121,9 @@ static const char *HELP_TEXT =
     "  unset    - Remove environment variable\n"
     "  env      - List environment variables\n"
     "  history  - Show command history\n"
+    "  jobs     - List stopped/background jobs\n"
+    "  fg       - Resume job in foreground\n"
+    "  bg       - Resume job in background\n"
     "  exit     - Exit shell\n"
     "\n"
     "File utilities:\n"
@@ -147,6 +155,8 @@ static const char *HELP_TEXT =
     "  - > file: Redirect output (overwrite)\n"
     "  - >> file: Redirect output (append)\n"
     "  - Relative paths: cd .., cat file\n"
+    "  - Ctrl+C: Interrupt foreground process\n"
+    "  - Ctrl+Z: Suspend foreground process\n"
     "\n";
 
 static const char *MSG_GOODBYE = "Goodbye!\n";
@@ -174,6 +184,16 @@ static const char *BIN_PREFIX = "/bin/";
 /* ========================================================================
  * Global state
  * ======================================================================== */
+
+/* Job tracking for fg/bg commands */
+typedef struct {
+    long pid;                   /* Process ID */
+    char name[32];              /* Command name */
+    int stopped;                /* 1 if stopped, 0 if running in background */
+} job_t;
+
+static job_t g_jobs[MAX_JOBS];
+static int g_job_count = 0;
 
 /* Command history buffer */
 static char g_history[HISTORY_SIZE][MAX_CMD_LEN];
@@ -253,6 +273,13 @@ static void handle_builtin_mkdir(int arg_start, int input_len);
 static void handle_builtin_rmdir(int arg_start, int input_len);
 static void handle_builtin_source(int arg_start, int input_len);
 static void handle_external_command(const char *binary_name, int arg_start, int input_len);
+
+/* Job control */
+static int job_add(long pid, const char *name, int stopped);
+static void job_remove(int job_num);
+static void handle_builtin_fg(int arg_start, int input_len);
+static void handle_builtin_bg(int arg_start, int input_len);
+static void handle_builtin_jobs(void);
 
 /* Main processing */
 static void process_command(void);
@@ -744,7 +771,13 @@ static void exec_external_with_args(const char *path, int arg_start, int input_l
         
         /* Check if child was stopped (Ctrl+Z) */
         if (WIFSTOPPED(exit_status)) {
-            print_string("[Stopped] ");
+            int job_num = job_add(child_pid, path, 1);
+            char num_buf[8];
+            num_buf[0] = '0' + job_num;
+            num_buf[1] = '\0';
+            print_string("[");
+            print_string(num_buf);
+            print_string("] Stopped  ");
             print_string(path);
             print_string(NEWLINE);
         }
@@ -942,6 +975,174 @@ static void handle_builtin_history(void) {
         print_string(g_history[i]);
         print_string(NEWLINE);
     }
+}
+
+/* ========================================================================
+ * Job Control
+ * ======================================================================== */
+
+/**
+ * Add a job to the job list
+ */
+static int job_add(long pid, const char *name, int stopped) {
+    if (g_job_count >= MAX_JOBS) {
+        return -1;
+    }
+    
+    g_jobs[g_job_count].pid = pid;
+    g_jobs[g_job_count].stopped = stopped;
+    
+    /* Copy name */
+    int i = 0;
+    while (name[i] && i < 31) {
+        g_jobs[g_job_count].name[i] = name[i];
+        i++;
+    }
+    g_jobs[g_job_count].name[i] = '\0';
+    
+    g_job_count++;
+    return g_job_count;  /* Job number (1-based) */
+}
+
+/**
+ * Remove a job from the job list
+ */
+static void job_remove(int job_num) {
+    if (job_num < 1 || job_num > g_job_count) return;
+    
+    int idx = job_num - 1;
+    /* Shift remaining jobs down */
+    for (int i = idx; i < g_job_count - 1; i++) {
+        g_jobs[i] = g_jobs[i + 1];
+    }
+    g_job_count--;
+}
+
+/**
+ * Find job by PID
+ */
+static int job_find_by_pid(long pid) {
+    for (int i = 0; i < g_job_count; i++) {
+        if (g_jobs[i].pid == pid) {
+            return i + 1;  /* 1-based job number */
+        }
+    }
+    return 0;
+}
+
+/**
+ * Handle 'jobs' command - list jobs
+ */
+static void handle_builtin_jobs(void) {
+    if (g_job_count == 0) {
+        print_string("No jobs\n");
+        return;
+    }
+    
+    char num_buf[16];
+    for (int i = 0; i < g_job_count; i++) {
+        print_string("[");
+        num_buf[0] = '0' + (i + 1);
+        num_buf[1] = '\0';
+        print_string(num_buf);
+        print_string("] ");
+        
+        if (g_jobs[i].stopped) {
+            print_string("Stopped    ");
+        } else {
+            print_string("Running    ");
+        }
+        
+        print_string(g_jobs[i].name);
+        print_string(NEWLINE);
+    }
+}
+
+/**
+ * Handle 'fg' command - bring job to foreground
+ */
+static void handle_builtin_fg(int arg_start, int input_len) {
+    int job_num = 1;  /* Default to job 1 */
+    
+    /* Parse job number if provided */
+    if (arg_start < input_len) {
+        job_num = 0;
+        for (int i = arg_start; i < input_len && g_expanded_buffer[i] >= '0' && g_expanded_buffer[i] <= '9'; i++) {
+            job_num = job_num * 10 + (g_expanded_buffer[i] - '0');
+        }
+    }
+    
+    if (job_num < 1 || job_num > g_job_count) {
+        print_string("fg: no such job\n");
+        return;
+    }
+    
+    int idx = job_num - 1;
+    long pid = g_jobs[idx].pid;
+    
+    print_string(g_jobs[idx].name);
+    print_string(NEWLINE);
+    
+    /* Set as foreground process */
+    syscall1(SYS_SETFGPID, pid);
+    
+    /* Send SIGCONT to resume */
+    syscall2(SYS_KILL, pid, SIGCONT);
+    
+    /* Wait for it */
+    int status = 0;
+    syscall3(SYS_WAIT, pid, (long)&status, 0);
+    
+    /* Clear foreground */
+    syscall1(SYS_SETFGPID, -1);
+    
+    /* Check if stopped again */
+    if (WIFSTOPPED(status)) {
+        g_jobs[idx].stopped = 1;
+        print_string("[Stopped] ");
+        print_string(g_jobs[idx].name);
+        print_string(NEWLINE);
+    } else {
+        /* Job completed - remove from list */
+        job_remove(job_num);
+    }
+}
+
+/**
+ * Handle 'bg' command - continue job in background
+ */
+static void handle_builtin_bg(int arg_start, int input_len) {
+    int job_num = 1;  /* Default to job 1 */
+    
+    /* Parse job number if provided */
+    if (arg_start < input_len) {
+        job_num = 0;
+        for (int i = arg_start; i < input_len && g_expanded_buffer[i] >= '0' && g_expanded_buffer[i] <= '9'; i++) {
+            job_num = job_num * 10 + (g_expanded_buffer[i] - '0');
+        }
+    }
+    
+    if (job_num < 1 || job_num > g_job_count) {
+        print_string("bg: no such job\n");
+        return;
+    }
+    
+    int idx = job_num - 1;
+    long pid = g_jobs[idx].pid;
+    
+    /* Send SIGCONT to resume in background */
+    syscall2(SYS_KILL, pid, SIGCONT);
+    
+    g_jobs[idx].stopped = 0;  /* Now running */
+    
+    print_string("[");
+    char num_buf[4];
+    num_buf[0] = '0' + job_num;
+    num_buf[1] = '\0';
+    print_string(num_buf);
+    print_string("] ");
+    print_string(g_jobs[idx].name);
+    print_string(" &\n");
 }
 
 /**
@@ -1462,6 +1663,12 @@ static void process_command(void) {
         handle_builtin_history();
     } else if (command_matches(g_expanded_buffer, cmd_len, "source")) {
         handle_builtin_source(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "fg")) {
+        handle_builtin_fg(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "bg")) {
+        handle_builtin_bg(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "jobs")) {
+        handle_builtin_jobs();
     }
     /* External commands - fork and exec from /bin */
     else if (command_matches(g_expanded_buffer, cmd_len, "ls")) {
