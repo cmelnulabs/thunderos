@@ -116,6 +116,7 @@ static const char *HELP_TEXT =
     "Features:\n"
     "  - Up/Down arrows: Navigate command history\n"
     "  - $VAR or ${VAR}: Variable expansion\n"
+    "  - < file: Redirect input\n"
     "  - > file: Redirect output (overwrite)\n"
     "  - >> file: Redirect output (append)\n"
     "  - Relative paths: cd .., cat file\n"
@@ -201,7 +202,7 @@ static int env_unset(const char *name);
 static void env_expand(const char *input, char *output, int max_len);
 
 /* I/O redirection */
-static void parse_redirections(char *cmd, char **output_file, int *append);
+static void parse_redirections(char *cmd, char **input_file, char **output_file, int *append);
 
 /* Input line management */
 static void input_clear_line(void);
@@ -217,7 +218,7 @@ static void exec_external_with_args(const char *path, int arg_start, int input_l
 static void handle_builtin_help(void);
 static void handle_builtin_exit(void);
 static void handle_builtin_echo(int arg_start, int input_len);
-static void handle_builtin_cat(int arg_start, int input_len);
+static void handle_builtin_cat(int arg_start, int input_len, long input_fd);
 static void handle_builtin_cd(int arg_start, int input_len);
 static void handle_builtin_mkdir(int arg_start, int input_len);
 static void handle_builtin_rmdir(int arg_start, int input_len);
@@ -508,16 +509,40 @@ static void env_expand(const char *input, char *output, int max_len) {
  * ======================================================================== */
 
 /**
- * Parse command for output redirections (> and >>)
- * Modifies cmd in place to remove redirection
+ * Parse command for I/O redirections (<, >, >>)
+ * Modifies cmd in place to remove redirection operators
  */
-static void parse_redirections(char *cmd, char **output_file, int *append) {
+static void parse_redirections(char *cmd, char **input_file, char **output_file, int *append) {
+    *input_file = (char *)0;
     *output_file = (char *)0;
     *append = 0;
     
     char *p = cmd;
     while (*p) {
-        if (*p == '>') {
+        if (*p == '<') {
+            /* Input redirection */
+            *p = '\0';
+            p++;
+            
+            /* Skip whitespace */
+            while (*p == ' ' || *p == '\t') p++;
+            
+            /* Get filename */
+            *input_file = p;
+            
+            /* Find end of filename */
+            while (*p && *p != ' ' && *p != '\t' && *p != '>' && *p != '<') p++;
+            if (*p) {
+                char next = *p;
+                *p = '\0';
+                if (next != ' ' && next != '\t') {
+                    /* There's another redirection, continue parsing */
+                    p++;
+                    continue;
+                }
+                p++;
+            }
+        } else if (*p == '>') {
             if (*(p + 1) == '>') {
                 /* Append mode >> */
                 *append = 1;
@@ -536,13 +561,19 @@ static void parse_redirections(char *cmd, char **output_file, int *append) {
             *output_file = p;
             
             /* Find end of filename */
-            while (*p && *p != ' ' && *p != '\t') p++;
+            while (*p && *p != ' ' && *p != '\t' && *p != '>' && *p != '<') p++;
             if (*p) {
+                char next = *p;
                 *p = '\0';
+                if (next != ' ' && next != '\t') {
+                    p++;
+                    continue;
+                }
+                p++;
             }
-            return;
+        } else {
+            p++;
         }
-        p++;
     }
 }
 
@@ -701,19 +732,26 @@ static void handle_builtin_echo(int arg_start, int input_len) {
 /**
  * Handle 'cat' command - display file contents
  */
-static void handle_builtin_cat(int arg_start, int input_len) {
+static void handle_builtin_cat(int arg_start, int input_len, long input_fd) {
+    long file_fd;
+    
+    /* If no filename but input redirection, use input_fd */
     if (arg_start >= input_len) {
-        print_string(MSG_USAGE_CAT);
-        return;
-    }
-    
-    /* Null-terminate the filename */
-    g_expanded_buffer[input_len] = '\0';
-    
-    long file_fd = syscall3(SYS_OPEN, (long)&g_expanded_buffer[arg_start], O_RDONLY, 0);
-    if (file_fd < 0) {
-        print_string(MSG_FILE_ERROR);
-        return;
+        if (input_fd >= 0) {
+            file_fd = input_fd;
+        } else {
+            print_string(MSG_USAGE_CAT);
+            return;
+        }
+    } else {
+        /* Null-terminate the filename */
+        g_expanded_buffer[input_len] = '\0';
+        
+        file_fd = syscall3(SYS_OPEN, (long)&g_expanded_buffer[arg_start], O_RDONLY, 0);
+        if (file_fd < 0) {
+            print_string(MSG_FILE_ERROR);
+            return;
+        }
     }
     
     /* Read and display file contents */
@@ -723,7 +761,10 @@ static void handle_builtin_cat(int arg_start, int input_len) {
         print_chars(read_buffer, bytes_read);
     }
     
-    syscall1(SYS_CLOSE, file_fd);
+    /* Only close if we opened it (not from input redirection) */
+    if (arg_start < input_len) {
+        syscall1(SYS_CLOSE, file_fd);
+    }
 }
 
 /**
@@ -897,9 +938,20 @@ static void process_command(void) {
     env_expand(g_input_buffer, g_expanded_buffer, EXPANDED_CMD_SIZE);
     
     /* Parse for I/O redirections */
+    char *input_file = (char *)0;
     char *output_file = (char *)0;
     int append_mode = 0;
-    parse_redirections(g_expanded_buffer, &output_file, &append_mode);
+    parse_redirections(g_expanded_buffer, &input_file, &output_file, &append_mode);
+    
+    /* Open input file if redirected */
+    long input_fd = -1;
+    if (input_file && input_file[0]) {
+        input_fd = syscall3(SYS_OPEN, (long)input_file, O_RDONLY, 0);
+        if (input_fd < 0) {
+            print_string("Error: Cannot open input file\n");
+            return;
+        }
+    }
     
     /* Open output file if redirected */
     long output_fd = -1;
@@ -946,7 +998,7 @@ static void process_command(void) {
             print_string(NEWLINE);
         }
     } else if (command_matches(g_expanded_buffer, cmd_len, "cat")) {
-        handle_builtin_cat(arg_start, expanded_len);
+        handle_builtin_cat(arg_start, expanded_len, input_fd);
     } else if (command_matches(g_expanded_buffer, cmd_len, "cd")) {
         handle_builtin_cd(arg_start, expanded_len);
     } else if (command_matches(g_expanded_buffer, cmd_len, "mkdir")) {
@@ -995,9 +1047,12 @@ static void process_command(void) {
         print_string(MSG_UNKNOWN_CMD);
     }
     
-    /* Close output file if opened */
+    /* Close opened file descriptors */
     if (output_fd >= 0) {
         syscall1(SYS_CLOSE, output_fd);
+    }
+    if (input_fd >= 0) {
+        syscall1(SYS_CLOSE, input_fd);
     }
 }
 
