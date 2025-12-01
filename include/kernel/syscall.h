@@ -53,8 +53,11 @@
 #define SYS_GETEGID     40  // Get effective group ID
 #define SYS_CHMOD       41  // Change file permissions
 #define SYS_CHOWN       42  // Change file owner/group
+#define SYS_SETPGID     43  // Set process group ID
+#define SYS_GETPGID     44  // Get process group ID
+#define SYS_GETSID      45  // Get session ID
 
-#define SYSCALL_COUNT   43
+#define SYSCALL_COUNT   46
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
@@ -86,6 +89,8 @@ uint64_t syscall_handler_with_frame(struct trap_frame *tf,
 typedef struct {
     int pid;                    /* Process ID */
     int ppid;                   /* Parent process ID */
+    int pgid;                   /* Process group ID */
+    int sid;                    /* Session ID */
     int state;                  /* Process state (0=unused, 3=ready, 4=running, etc) */
     int tty;                    /* Controlling terminal (-1 = none) */
     unsigned long cpu_time;     /* CPU time in ticks */
@@ -136,5 +141,8 @@ uint64_t sys_gettty(void);
 uint64_t sys_settty(int tty);
 uint64_t sys_getprocs(procinfo_t *buf, size_t max_procs);
 uint64_t sys_uname(utsname_t *buf);
+uint64_t sys_setpgid(int pid, int pgid);
+uint64_t sys_getpgid(int pid);
+uint64_t sys_getsid(int pid);
 
 #endif // SYSCALL_H

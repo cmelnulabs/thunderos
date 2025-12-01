@@ -72,6 +72,8 @@ void process_init(void) {
     init_proc->gid = 0;              /* root group */
     init_proc->euid = 0;             /* effective root */
     init_proc->egid = 0;             /* effective root group */
+    init_proc->pgid = 0;             /* Process group leader (its own pgid) */
+    init_proc->sid = 0;              /* Session leader (its own session) */
     
     current_process = init_proc;
     
@@ -311,11 +313,17 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
         proc->gid = current_process->gid;
         proc->euid = current_process->euid;
         proc->egid = current_process->egid;
+        // Inherit process group and session from parent
+        proc->pgid = current_process->pgid;
+        proc->sid = current_process->sid;
     } else {
         proc->uid = 0;   /* root */
         proc->gid = 0;
         proc->euid = 0;
         proc->egid = 0;
+        // New process becomes its own group and session leader
+        proc->pgid = proc->pid;
+        proc->sid = proc->pid;
     }
     
     // Initialize signals
@@ -629,6 +637,10 @@ pid_t process_fork(struct trap_frame *current_tf) {
     child->euid = parent->euid;
     child->egid = parent->egid;
     
+    /* Inherit process group and session from parent */
+    child->pgid = parent->pgid;
+    child->sid = parent->sid;
+    
     /* Copy parent's current working directory with proper null termination */
     int cwd_index = 0;
     for (cwd_index = 0; cwd_index < 255 && parent->cwd[cwd_index]; cwd_index++) {
@@ -907,11 +919,17 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
         proc->gid = current_process->gid;
         proc->euid = current_process->euid;
         proc->egid = current_process->egid;
+        // Inherit process group and session from parent
+        proc->pgid = current_process->pgid;
+        proc->sid = current_process->sid;
     } else {
         proc->uid = 0;
         proc->gid = 0;
         proc->euid = 0;
         proc->egid = 0;
+        // New process becomes its own group and session leader
+        proc->pgid = proc->pid;
+        proc->sid = proc->pid;
     }
     
     // Mark as ready and enqueue for scheduling
@@ -1072,11 +1090,17 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
         proc->gid = current_process->gid;
         proc->euid = current_process->euid;
         proc->egid = current_process->egid;
+        // Inherit process group and session from parent
+        proc->pgid = current_process->pgid;
+        proc->sid = current_process->sid;
     } else {
         proc->uid = 0;
         proc->gid = 0;
         proc->euid = 0;
         proc->egid = 0;
+        // New process becomes its own group and session leader
+        proc->pgid = proc->pid;
+        proc->sid = proc->pid;
     }
     
     // Setup memory isolation (VMAs for validation)
@@ -1457,4 +1481,199 @@ int process_get_tty(struct process *proc) {
     }
     
     return proc->controlling_tty;
+}
+
+/**
+ * Set process group ID
+ * 
+ * @param pid Process ID (0 for current process)
+ * @param pgid Process group ID (0 to use pid as pgid)
+ * @return 0 on success, -1 on error (errno set)
+ */
+int process_setpgid(pid_t pid, pid_t pgid) {
+    struct process *current = process_current();
+    if (!current) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);
+    }
+    
+    // If pid is 0, use current process
+    pid_t target_pid = (pid == 0) ? current->pid : pid;
+    
+    // If pgid is 0, use target_pid as the new pgid (become group leader)
+    pid_t new_pgid = (pgid == 0) ? target_pid : pgid;
+    
+    // Find the target process
+    struct process *target = process_get(target_pid);
+    if (!target) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);  // No such process
+    }
+    
+    // Permission check: can only change own pgid or child's pgid
+    if (target != current && target->parent != current) {
+        RETURN_ERRNO(THUNDEROS_EPERM);  // Operation not permitted
+    }
+    
+    // Cannot change pgid of a session leader
+    if (target->pid == target->sid) {
+        RETURN_ERRNO(THUNDEROS_EPERM);  // Process is session leader
+    }
+    
+    // The new pgid must either be:
+    // 1. Same as target pid (target becomes new group leader)
+    // 2. An existing process group in the same session
+    if (new_pgid != target_pid) {
+        // Check if there's a process with pgid == new_pgid in the same session
+        int found_group = 0;
+        for (int i = 0; i < MAX_PROCS; i++) {
+            if (process_table[i].state != PROC_UNUSED &&
+                process_table[i].pgid == new_pgid &&
+                process_table[i].sid == target->sid) {
+                found_group = 1;
+                break;
+            }
+        }
+        if (!found_group) {
+            RETURN_ERRNO(THUNDEROS_EPERM);  // No such process group in session
+        }
+    }
+    
+    // Set the new process group ID
+    target->pgid = new_pgid;
+    
+    clear_errno();
+    return 0;
+}
+
+/**
+ * Get process group ID
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Process group ID, or -1 on error (errno set)
+ */
+pid_t process_getpgid(pid_t pid) {
+    struct process *current = process_current();
+    if (!current) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);
+    }
+    
+    // If pid is 0, return current process's pgid
+    if (pid == 0) {
+        clear_errno();
+        return current->pgid;
+    }
+    
+    // Find the target process
+    struct process *target = process_get(pid);
+    if (!target) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);  // No such process
+    }
+    
+    clear_errno();
+    return target->pgid;
+}
+
+/**
+ * Create a new session
+ * 
+ * @return New session ID (same as calling process PID), or -1 on error
+ */
+pid_t process_setsid(void) {
+    struct process *current = process_current();
+    if (!current) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);
+    }
+    
+    // Cannot create session if already a process group leader
+    // (i.e., if pgid == pid)
+    if (current->pgid == current->pid) {
+        RETURN_ERRNO(THUNDEROS_EPERM);  // Already a group leader
+    }
+    
+    // Create new session and process group
+    current->sid = current->pid;   // Become session leader
+    current->pgid = current->pid;  // Become process group leader
+    current->controlling_tty = -1; // Detach from controlling terminal
+    
+    clear_errno();
+    return current->sid;
+}
+
+/**
+ * Get session ID
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Session ID, or -1 on error (errno set)
+ */
+pid_t process_getsid(pid_t pid) {
+    struct process *current = process_current();
+    if (!current) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);
+    }
+    
+    // If pid is 0, return current process's sid
+    if (pid == 0) {
+        clear_errno();
+        return current->sid;
+    }
+    
+    // Find the target process
+    struct process *target = process_get(pid);
+    if (!target) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);  // No such process
+    }
+    
+    clear_errno();
+    return target->sid;
+}
+
+/**
+ * Get process group leader
+ * 
+ * @param pgid Process group ID
+ * @return Process pointer, or NULL if not found
+ */
+struct process *process_get_group_leader(pid_t pgid) {
+    for (int i = 0; i < MAX_PROCS; i++) {
+        if (process_table[i].state != PROC_UNUSED &&
+            process_table[i].pid == pgid &&
+            process_table[i].pgid == pgid) {
+            return &process_table[i];
+        }
+    }
+    return NULL;
+}
+
+/**
+ * Send signal to process group
+ * 
+ * @param pgid Process group ID
+ * @param sig Signal number
+ * @return 0 on success, -1 on error (errno set)
+ */
+int process_killpg(pid_t pgid, int sig) {
+    if (pgid <= 0) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    if (sig < 0 || sig >= NSIG) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    int found = 0;
+    for (int i = 0; i < MAX_PROCS; i++) {
+        if (process_table[i].state != PROC_UNUSED &&
+            process_table[i].pgid == pgid) {
+            // Send signal to this process
+            extern int signal_send(struct process *proc, int sig);
+            signal_send(&process_table[i], sig);
+            found = 1;
+        }
+    }
+    
+    if (!found) {
+        RETURN_ERRNO(THUNDEROS_ESRCH);  // No such process group
+    }
+    
+    clear_errno();
+    return 0;
 }

@@ -1239,21 +1239,45 @@ uint64_t sys_getcwd(char *buf, size_t size) {
  * @return New session ID (process PID) on success, -1 on error
  */
 uint64_t sys_setsid(void) {
-    struct process *proc = process_current();
-    if (!proc) {
-        return SYSCALL_ERROR;
-    }
-    
-    /* In a full implementation, setsid would:
-     * 1. Create new session
-     * 2. Become session leader
-     * 3. Disassociate from controlling terminal
-     * For now, just clear the controlling terminal
-     */
-    proc->controlling_tty = -1;
-    
-    /* Return process PID as session ID */
-    return proc->pid;
+    /* Use the proper process group implementation */
+    return (uint64_t)process_setsid();
+}
+
+/**
+ * sys_setpgid - Set process group ID
+ * 
+ * Sets the process group ID of the specified process.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @param pgid New process group ID (0 to use pid as pgid)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_setpgid(int pid, int pgid) {
+    return (uint64_t)process_setpgid((pid_t)pid, (pid_t)pgid);
+}
+
+/**
+ * sys_getpgid - Get process group ID
+ * 
+ * Returns the process group ID of the specified process.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Process group ID, or -1 on error
+ */
+uint64_t sys_getpgid(int pid) {
+    return (uint64_t)process_getpgid((pid_t)pid);
+}
+
+/**
+ * sys_getsid - Get session ID
+ * 
+ * Returns the session ID of the specified process.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Session ID, or -1 on error
+ */
+uint64_t sys_getsid(int pid) {
+    return (uint64_t)process_getsid((pid_t)pid);
 }
 
 /**
@@ -1326,6 +1350,8 @@ uint64_t sys_getprocs(procinfo_t *buf, size_t max_procs) {
         if (p != NULL) {
             buf[count].pid = p->pid;
             buf[count].ppid = p->parent ? p->parent->pid : 0;
+            buf[count].pgid = p->pgid;
+            buf[count].sid = p->sid;
             buf[count].state = p->state;
             buf[count].tty = p->controlling_tty;
             buf[count].cpu_time = p->cpu_time;
@@ -1680,6 +1706,18 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_CHOWN:
             return_value = sys_chown((const char *)argument0, (uint16_t)argument1, (uint16_t)argument2);
+            break;
+            
+        case SYS_SETPGID:
+            return_value = sys_setpgid((int)argument0, (int)argument1);
+            break;
+            
+        case SYS_GETPGID:
+            return_value = sys_getpgid((int)argument0);
+            break;
+            
+        case SYS_GETSID:
+            return_value = sys_getsid((int)argument0);
             break;
             
         case SYS_FORK:

@@ -381,7 +381,7 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 ### Planned Features
 
 #### Job Control & Signals
-- [ ] Process groups and sessions
+- [x] Process groups and sessions
 - [x] Job control (background/foreground processes with `&`, `fg`, `bg`)
 - [x] Ctrl+C sends SIGINT to foreground process group
 - [x] Ctrl+Z sends SIGTSTP (job suspension)
@@ -398,7 +398,7 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - [x] ext2 directory removal (`ext2_remove_dir`)
 - [x] Relative path resolution in VFS (cd .., cd subdir, ./program)
 - [x] Environment variables
-- [ ] File permissions and ownership
+- [x] File permissions and ownership
 - [ ] Expanded syscall set (50+ syscalls)
 
 #### Graphics Console (from v0.7.0)
