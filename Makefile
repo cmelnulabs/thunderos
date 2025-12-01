@@ -226,6 +226,8 @@ force_fs: userland
 	@cp userland/build/rm $(BUILD_DIR)/testfs/bin/rm 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) rm not built"
 	@cp userland/build/clear $(BUILD_DIR)/testfs/bin/clear 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) clear not built"
 	@cp userland/build/sleep $(BUILD_DIR)/testfs/bin/sleep 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) sleep not built"
+	@cp userland/build/chmod $(BUILD_DIR)/testfs/bin/chmod 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) chmod not built"
+	@cp userland/build/chown $(BUILD_DIR)/testfs/bin/chown 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) chown not built"
 	@cp userland/build/ush $(BUILD_DIR)/testfs/bin/ush 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ush not built"
 	@cp userland/build/ps $(BUILD_DIR)/testfs/bin/ps 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ps not built"
 	@cp userland/build/uname $(BUILD_DIR)/testfs/bin/uname 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) uname not built"

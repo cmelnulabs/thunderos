@@ -146,6 +146,16 @@ static int parse_symbolic_mode(const char *str, uint32_t current_mode, uint32_t 
 }
 
 void _start(int argc, char **argv) {
+    /* Initialize global pointer for RISC-V */
+    __asm__ volatile (
+        ".option push\n"
+        ".option norelax\n"
+        "1: auipc gp, %%pcrel_hi(__global_pointer$)\n"
+        "   addi gp, gp, %%pcrel_lo(1b)\n"
+        ".option pop\n"
+        ::: "gp"
+    );
+    
     if (argc < 3) {
         print("Usage: chmod <mode> <file>\n");
         print("  mode: octal (e.g., 755) or symbolic (e.g., u+x, go-w)\n");
