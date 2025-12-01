@@ -68,6 +68,10 @@ void process_init(void) {
     init_proc->cwd[0] = '/';
     init_proc->cwd[1] = '\0';
     init_proc->controlling_tty = 0;  /* Kernel console (VT1) */
+    init_proc->uid = 0;              /* root user */
+    init_proc->gid = 0;              /* root group */
+    init_proc->euid = 0;             /* effective root */
+    init_proc->egid = 0;             /* effective root group */
     
     current_process = init_proc;
     
@@ -300,6 +304,19 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
     proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
+    
+    // Inherit uid/gid from parent process (or default to root)
+    if (current_process) {
+        proc->uid = current_process->uid;
+        proc->gid = current_process->gid;
+        proc->euid = current_process->euid;
+        proc->egid = current_process->egid;
+    } else {
+        proc->uid = 0;   /* root */
+        proc->gid = 0;
+        proc->euid = 0;
+        proc->egid = 0;
+    }
     
     // Initialize signals
     extern void signal_init_process(struct process *proc);
@@ -606,6 +623,12 @@ pid_t process_fork(struct trap_frame *current_tf) {
     child->errno_value = 0;
     child->controlling_tty = parent->controlling_tty;  /* Inherit parent's TTY */
     
+    /* Inherit uid/gid from parent */
+    child->uid = parent->uid;
+    child->gid = parent->gid;
+    child->euid = parent->euid;
+    child->egid = parent->egid;
+    
     /* Copy parent's current working directory with proper null termination */
     int cwd_index = 0;
     for (cwd_index = 0; cwd_index < 255 && parent->cwd[cwd_index]; cwd_index++) {
@@ -878,6 +901,19 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     proc->cwd[1] = '\0';
     proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
     
+    // Inherit uid/gid from parent process (or default to root)
+    if (current_process) {
+        proc->uid = current_process->uid;
+        proc->gid = current_process->gid;
+        proc->euid = current_process->euid;
+        proc->egid = current_process->egid;
+    } else {
+        proc->uid = 0;
+        proc->gid = 0;
+        proc->euid = 0;
+        proc->egid = 0;
+    }
+    
     // Mark as ready and enqueue for scheduling
     proc->state = PROC_READY;
     scheduler_enqueue(proc);
@@ -1029,6 +1065,19 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->cwd[0] = '/';
     proc->cwd[1] = '\0';
     proc->controlling_tty = current_process ? current_process->controlling_tty : 0;
+    
+    // Inherit uid/gid from parent process (or default to root)
+    if (current_process) {
+        proc->uid = current_process->uid;
+        proc->gid = current_process->gid;
+        proc->euid = current_process->euid;
+        proc->egid = current_process->egid;
+    } else {
+        proc->uid = 0;
+        proc->gid = 0;
+        proc->euid = 0;
+        proc->egid = 0;
+    }
     
     // Setup memory isolation (VMAs for validation)
     if (process_setup_memory_isolation(proc) != 0) {

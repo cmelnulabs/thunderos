@@ -47,8 +47,14 @@
 #define SYS_UNAME       34  // Get system information
 #define SYS_DUP2        35  // Duplicate file descriptor
 #define SYS_SETFGPID    36  // Set foreground process for terminal (Ctrl+C target)
+#define SYS_GETUID      37  // Get real user ID
+#define SYS_GETGID      38  // Get real group ID
+#define SYS_GETEUID     39  // Get effective user ID
+#define SYS_GETEGID     40  // Get effective group ID
+#define SYS_CHMOD       41  // Change file permissions
+#define SYS_CHOWN       42  // Change file owner/group
 
-#define SYSCALL_COUNT   37
+#define SYSCALL_COUNT   43
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)

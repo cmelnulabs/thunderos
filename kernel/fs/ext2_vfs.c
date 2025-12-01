@@ -136,6 +136,9 @@ static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
     node->type = ((inode->i_mode & EXT2_S_IFMT) == EXT2_S_IFDIR) ? 
                  VFS_TYPE_DIRECTORY : VFS_TYPE_FILE;
     node->flags = 0;
+    node->mode = inode->i_mode;    /* Copy full mode including permissions */
+    node->uid = inode->i_uid;      /* Copy owner user ID */
+    node->gid = inode->i_gid;      /* Copy owner group ID */
     node->fs = dir->fs;
     node->fs_data = inode;
     node->ops = &ext2_vfs_ops;
@@ -331,6 +334,9 @@ vfs_filesystem_t *ext2_vfs_mount(ext2_fs_t *ext2_fs) {
     root_node->size = root_inode->i_size;
     root_node->type = VFS_TYPE_DIRECTORY;
     root_node->flags = 0;
+    root_node->mode = root_inode->i_mode;  /* Copy permission bits */
+    root_node->uid = root_inode->i_uid;    /* Copy owner user ID */
+    root_node->gid = root_inode->i_gid;    /* Copy owner group ID */
     root_node->fs = vfs_fs;
     root_node->fs_data = root_inode;
     root_node->ops = &ext2_vfs_ops;

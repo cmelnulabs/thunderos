@@ -3,6 +3,7 @@
  */
 
 #include "../../include/fs/vfs.h"
+#include "../../include/fs/ext2.h"
 #include "../../include/hal/hal_uart.h"
 #include "../../include/mm/kmalloc.h"
 #include "../../include/kernel/errno.h"
@@ -465,6 +466,22 @@ int vfs_open(const char *path, uint32_t flags) {
         RETURN_ERRNO(THUNDEROS_ENOENT);
     }
     
+    /* Check permissions based on open flags */
+    int access_mode = 0;
+    if ((flags & O_RDWR) == O_RDWR) {
+        access_mode = VFS_ACCESS_READ | VFS_ACCESS_WRITE;
+    } else if (flags & O_WRONLY) {
+        access_mode = VFS_ACCESS_WRITE;
+    } else {
+        access_mode = VFS_ACCESS_READ;  /* O_RDONLY is 0 */
+    }
+    
+    if (vfs_check_permission(node, access_mode) != 0) {
+        kfree(node);
+        /* errno already set by vfs_check_permission */
+        return -1;
+    }
+    
     /* Allocate file descriptor */
     int fd = vfs_alloc_fd();
     if (fd < 0) {
@@ -757,6 +774,12 @@ int vfs_rmdir(const char *path) {
         RETURN_ERRNO(THUNDEROS_EIO);
     }
     
+    /* Check write permission on parent directory */
+    if (vfs_check_permission(parent_dir, VFS_ACCESS_WRITE) != 0) {
+        /* errno already set by vfs_check_permission */
+        return -1;
+    }
+    
     return parent_dir->ops->rmdir(parent_dir, dirname);
 }
 
@@ -810,6 +833,12 @@ int vfs_unlink(const char *path) {
         RETURN_ERRNO(THUNDEROS_EIO);
     }
     
+    /* Check write permission on parent directory */
+    if (vfs_check_permission(parent_dir, VFS_ACCESS_WRITE) != 0) {
+        /* errno already set by vfs_check_permission */
+        return -1;
+    }
+    
     return parent_dir->ops->unlink(parent_dir, filename);
 }
 
@@ -835,12 +864,203 @@ int vfs_stat(const char *path, uint32_t *size, uint32_t *type) {
 }
 
 /**
+ * Get extended file status including permissions
+ * 
+ * @param path      File path
+ * @param statbuf   Buffer to fill with stat information
+ * @return 0 on success, -1 on error (errno set)
+ */
+int vfs_stat_full(const char *path, vfs_stat_t *statbuf) {
+    if (!path || !statbuf) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    vfs_node_t *node = vfs_resolve_path(path);
+    if (!node) {
+        /* errno already set by vfs_resolve_path */
+        return -1;
+    }
+    
+    statbuf->st_ino = node->inode;
+    statbuf->st_mode = node->mode;
+    statbuf->st_uid = node->uid;
+    statbuf->st_gid = node->gid;
+    statbuf->st_size = node->size;
+    statbuf->st_type = node->type;
+    
+    clear_errno();
+    return 0;
+}
+
+/**
  * Check if file exists
  */
 int vfs_exists(const char *path) {
     vfs_node_t *node = vfs_resolve_path(path);
     return node != NULL;
 }
+
+/* ========================================================================
+ * Permission Checking
+ * ======================================================================== */
+
+/**
+ * Check if current process has permission to access a file
+ * 
+ * Uses standard Unix permission model:
+ * - If process euid is 0 (root), always allow access
+ * - If process euid matches file uid, use owner permissions
+ * - If process egid matches file gid, use group permissions  
+ * - Otherwise, use other permissions
+ * 
+ * @param node     VFS node to check
+ * @param mode     Access mode (VFS_ACCESS_READ, VFS_ACCESS_WRITE, VFS_ACCESS_EXEC)
+ * @return 0 if access allowed, -1 if denied (errno set to THUNDEROS_EACCES)
+ */
+int vfs_check_permission(vfs_node_t *node, int mode) {
+    if (!node) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    struct process *proc = process_current();
+    if (!proc) {
+        /* No current process (kernel context), allow access */
+        return 0;
+    }
+    
+    uint16_t euid = proc->euid;
+    uint16_t egid = proc->egid;
+    uint16_t file_mode = node->mode;
+    
+    /* Root (euid 0) can access anything */
+    if (euid == 0) {
+        clear_errno();
+        return 0;
+    }
+    
+    int allowed = 0;
+    
+    if (euid == node->uid) {
+        /* Check owner permissions */
+        if ((mode & VFS_ACCESS_READ) && (file_mode & EXT2_S_IRUSR)) allowed |= VFS_ACCESS_READ;
+        if ((mode & VFS_ACCESS_WRITE) && (file_mode & EXT2_S_IWUSR)) allowed |= VFS_ACCESS_WRITE;
+        if ((mode & VFS_ACCESS_EXEC) && (file_mode & EXT2_S_IXUSR)) allowed |= VFS_ACCESS_EXEC;
+    } else if (egid == node->gid) {
+        /* Check group permissions */
+        if ((mode & VFS_ACCESS_READ) && (file_mode & EXT2_S_IRGRP)) allowed |= VFS_ACCESS_READ;
+        if ((mode & VFS_ACCESS_WRITE) && (file_mode & EXT2_S_IWGRP)) allowed |= VFS_ACCESS_WRITE;
+        if ((mode & VFS_ACCESS_EXEC) && (file_mode & EXT2_S_IXGRP)) allowed |= VFS_ACCESS_EXEC;
+    } else {
+        /* Check other permissions */
+        if ((mode & VFS_ACCESS_READ) && (file_mode & EXT2_S_IROTH)) allowed |= VFS_ACCESS_READ;
+        if ((mode & VFS_ACCESS_WRITE) && (file_mode & EXT2_S_IWOTH)) allowed |= VFS_ACCESS_WRITE;
+        if ((mode & VFS_ACCESS_EXEC) && (file_mode & EXT2_S_IXOTH)) allowed |= VFS_ACCESS_EXEC;
+    }
+    
+    if ((mode & allowed) == mode) {
+        clear_errno();
+        return 0;
+    }
+    
+    RETURN_ERRNO(THUNDEROS_EACCES);
+}
+
+/**
+ * Change file permissions (mode bits)
+ * 
+ * @param path     Path to file
+ * @param mode     New permission bits (e.g., 0755)
+ * @return 0 on success, -1 on error
+ */
+int vfs_chmod(const char *path, uint32_t new_mode) {
+    if (!path) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    vfs_node_t *node = vfs_resolve_path(path);
+    if (!node) {
+        /* errno already set by vfs_resolve_path */
+        return -1;
+    }
+    
+    struct process *proc = process_current();
+    
+    /* Only root or file owner can change permissions */
+    if (proc && proc->euid != 0 && proc->euid != node->uid) {
+        kfree(node);
+        RETURN_ERRNO(THUNDEROS_EACCES);
+    }
+    
+    /* Update the node's mode (preserve file type bits, update permission bits) */
+    node->mode = (node->mode & EXT2_S_IFMT) | (new_mode & 0xFFF);
+    
+    /* Update the inode on disk if this is ext2 */
+    if (node->fs_data) {
+        ext2_inode_t *inode = (ext2_inode_t *)node->fs_data;
+        inode->i_mode = node->mode;
+        
+        ext2_fs_t *ext2_fs = (ext2_fs_t *)node->fs->fs_data;
+        if (ext2_fs) {
+            ext2_write_inode(ext2_fs, node->inode, inode);
+        }
+    }
+    
+    kfree(node);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * Change file owner and group
+ * 
+ * @param path     Path to file
+ * @param uid      New owner user ID
+ * @param gid      New owner group ID
+ * @return 0 on success, -1 on error
+ */
+int vfs_chown(const char *path, uint16_t uid, uint16_t gid) {
+    if (!path) {
+        RETURN_ERRNO(THUNDEROS_EINVAL);
+    }
+    
+    vfs_node_t *node = vfs_resolve_path(path);
+    if (!node) {
+        /* errno already set by vfs_resolve_path */
+        return -1;
+    }
+    
+    struct process *proc = process_current();
+    
+    /* Only root can change ownership */
+    if (proc && proc->euid != 0) {
+        kfree(node);
+        RETURN_ERRNO(THUNDEROS_EACCES);
+    }
+    
+    /* Update the node */
+    node->uid = uid;
+    node->gid = gid;
+    
+    /* Update the inode on disk if this is ext2 */
+    if (node->fs_data) {
+        ext2_inode_t *inode = (ext2_inode_t *)node->fs_data;
+        inode->i_uid = uid;
+        inode->i_gid = gid;
+        
+        ext2_fs_t *ext2_fs = (ext2_fs_t *)node->fs->fs_data;
+        if (ext2_fs) {
+            ext2_write_inode(ext2_fs, node->inode, inode);
+        }
+    }
+    
+    kfree(node);
+    clear_errno();
+    return 0;
+}
+
+/* ========================================================================
+ * Pipe Support
+ * ======================================================================== */
 
 /**
  * Create a pipe and return two file descriptors

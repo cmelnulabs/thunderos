@@ -665,11 +665,11 @@ uint64_t sys_lseek(int fd, int64_t offset, int whence) {
  * sys_stat - Get file status
  * 
  * @param path File path
- * @param statbuf Buffer to store stat information (size and type)
+ * @param statbuf Buffer to store stat information (vfs_stat_t struct)
  * @return 0 on success, -1 on error
  */
 uint64_t sys_stat(const char *path, void *statbuf) {
-    if (!is_valid_user_pointer(path, 1) || !is_valid_user_pointer(statbuf, 8)) {
+    if (!is_valid_user_pointer(path, 1) || !is_valid_user_pointer(statbuf, sizeof(vfs_stat_t))) {
         return SYSCALL_ERROR;
     }
     
@@ -685,8 +685,8 @@ uint64_t sys_stat(const char *path, void *statbuf) {
         return SYSCALL_ERROR;
     }
     
-    uint32_t *stat_data = (uint32_t *)statbuf;
-    int result = vfs_stat(path, &stat_data[0], &stat_data[1]);
+    vfs_stat_t *stat_data = (vfs_stat_t *)statbuf;
+    int result = vfs_stat_full(path, stat_data);
     return (result == 0) ? SYSCALL_SUCCESS : SYSCALL_ERROR;
 }
 
@@ -927,6 +927,99 @@ uint64_t sys_dup2(int oldfd, int newfd) {
         return SYSCALL_ERROR;
     }
     return result;
+}
+
+/**
+ * sys_getuid - Get real user ID
+ * 
+ * @return Real user ID of current process
+ */
+uint64_t sys_getuid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->uid;
+}
+
+/**
+ * sys_getgid - Get real group ID
+ * 
+ * @return Real group ID of current process
+ */
+uint64_t sys_getgid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->gid;
+}
+
+/**
+ * sys_geteuid - Get effective user ID
+ * 
+ * @return Effective user ID of current process
+ */
+uint64_t sys_geteuid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->euid;
+}
+
+/**
+ * sys_getegid - Get effective group ID
+ * 
+ * @return Effective group ID of current process
+ */
+uint64_t sys_getegid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->egid;
+}
+
+/**
+ * sys_chmod - Change file permissions
+ * 
+ * @param path Path to file
+ * @param mode New permission bits (e.g., 0755)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_chmod(const char *path, uint32_t mode) {
+    if (!path) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    int result = vfs_chmod(path, mode);
+    if (result < 0) {
+        return SYSCALL_ERROR;
+    }
+    return 0;
+}
+
+/**
+ * sys_chown - Change file owner and group
+ * 
+ * @param path Path to file
+ * @param uid New owner user ID
+ * @param gid New owner group ID
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_chown(const char *path, uint16_t uid, uint16_t gid) {
+    if (!path) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    int result = vfs_chown(path, uid, gid);
+    if (result < 0) {
+        return SYSCALL_ERROR;
+    }
+    return 0;
 }
 
 /**
@@ -1564,6 +1657,30 @@ uint64_t syscall_handler(uint64_t syscall_number,
             return_value = 0;
             break;
         }
+        
+        case SYS_GETUID:
+            return_value = sys_getuid();
+            break;
+            
+        case SYS_GETGID:
+            return_value = sys_getgid();
+            break;
+            
+        case SYS_GETEUID:
+            return_value = sys_geteuid();
+            break;
+            
+        case SYS_GETEGID:
+            return_value = sys_getegid();
+            break;
+            
+        case SYS_CHMOD:
+            return_value = sys_chmod((const char *)argument0, (uint32_t)argument1);
+            break;
+            
+        case SYS_CHOWN:
+            return_value = sys_chown((const char *)argument0, (uint16_t)argument1, (uint16_t)argument2);
+            break;
             
         case SYS_FORK:
             // Fork is handled in syscall_handler_with_frame

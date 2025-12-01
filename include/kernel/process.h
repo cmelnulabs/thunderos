@@ -122,6 +122,12 @@ struct process {
     // Error handling
     int errno_value;                    // Per-process error number (errno)
     
+    // User/group identity for permission checks
+    uint16_t uid;                       // Real user ID
+    uint16_t gid;                       // Real group ID
+    uint16_t euid;                      // Effective user ID (for setuid programs)
+    uint16_t egid;                      // Effective group ID (for setgid programs)
+    
     // Signal handling
     sigset_t pending_signals;           // Pending signals (bitmask)
     sigset_t blocked_signals;           // Blocked signals (bitmask)
