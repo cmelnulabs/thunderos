@@ -723,12 +723,74 @@ File Locking
 Access Control
 ~~~~~~~~~~~~~~
 
+ThunderOS implements POSIX-style file permissions with owner, group, and other access levels.
+
+**Permission Model:**
+
+Each file has a 16-bit mode that includes:
+
+- File type (directory, regular file, etc.)
+- Owner permissions (read, write, execute)
+- Group permissions (read, write, execute)
+- Other permissions (read, write, execute)
+
+**VFS Node Permission Fields:**
+
 .. code-block:: c
 
-    int vfs_access(const char *path, int mode) {
-        // Check if process has read/write/execute permission
-        // R_OK, W_OK, X_OK
-    }
+    typedef struct vfs_node {
+        // ... other fields ...
+        uint16_t mode;    /* Permission bits (e.g., 0755) */
+        uint16_t uid;     /* Owner user ID */
+        uint16_t gid;     /* Owner group ID */
+    } vfs_node_t;
+
+**Permission Constants:**
+
+.. code-block:: c
+
+    /* Access check modes */
+    #define VFS_ACCESS_READ   4   /* Check read permission */
+    #define VFS_ACCESS_WRITE  2   /* Check write permission */
+    #define VFS_ACCESS_EXEC   1   /* Check execute permission */
+
+**Permission Checking:**
+
+.. code-block:: c
+
+    int vfs_check_permission(vfs_node_t *node, int access_mode);
+
+The permission check follows standard Unix semantics:
+
+1. If process effective UID is 0 (root), access is always granted
+2. If process effective UID matches file owner, use owner permission bits
+3. If process effective GID matches file group, use group permission bits
+4. Otherwise, use "other" permission bits
+
+**Permission Modification:**
+
+.. code-block:: c
+
+    int vfs_chmod(const char *path, uint32_t new_mode);
+    int vfs_chown(const char *path, uint16_t uid, uint16_t gid);
+
+**Example - Permission Check Flow:**
+
+.. code-block:: c
+
+    // File: -rwxr-x--- (0750), uid=1000, gid=1000
+    // Process: euid=1000, egid=1000
+    
+    vfs_check_permission(node, VFS_ACCESS_READ);   // OK (owner has read)
+    vfs_check_permission(node, VFS_ACCESS_WRITE);  // OK (owner has write)
+    vfs_check_permission(node, VFS_ACCESS_EXEC);   // OK (owner has exec)
+    
+    // Process: euid=2000, egid=1000
+    vfs_check_permission(node, VFS_ACCESS_READ);   // OK (group has read)
+    vfs_check_permission(node, VFS_ACCESS_WRITE);  // DENIED (group no write)
+    
+    // Process: euid=2000, egid=2000
+    vfs_check_permission(node, VFS_ACCESS_READ);   // DENIED (other no read)
 
 Debugging
 ---------

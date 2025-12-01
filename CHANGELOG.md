@@ -8,9 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.8.0 "Compatibility"
 
 ### Overview
-Major shell improvements release bringing job control, pipes, I/O redirection, and full ext2 file/directory removal. The shell now supports background processes, signal handling, and command history navigation.
+Major shell improvements release bringing job control, pipes, I/O redirection, file permissions, and full ext2 file/directory removal. The shell now supports background processes, signal handling, command history navigation, and POSIX-style file permissions.
 
 ### Added
+
+#### File Permissions and Ownership (`kernel/fs/vfs.c`, `kernel/core/syscall.c`)
+- **Permission Model**:
+  - POSIX-style rwxrwxrwx permissions for owner/group/other
+  - Owner UID and GID stored per file
+  - Permission checks on file open, unlink, rmdir
+- **Process Credentials**:
+  - Per-process UID and GID (defaults to root: 0:0)
+  - Effective UID/GID for permission checks
+- **New System Calls**:
+  - `sys_getuid()` (37) - Get real user ID
+  - `sys_getgid()` (38) - Get real group ID
+  - `sys_geteuid()` (39) - Get effective user ID
+  - `sys_chmod(path, mode)` (41) - Change file permissions
+  - `sys_chown(path, uid, gid)` (42) - Change file owner/group
+- **New Utilities**:
+  - `chmod` - Change file permissions (octal: 755, symbolic: u+x)
+  - `chown` - Change file owner/group (supports uid:gid, :gid)
+- **ls Enhancement**:
+  - Displays full permission string (e.g., `-rwxr-xr-x`)
+  - Shows owner UID:GID for each file
 
 #### Job Control (`kernel/core/shell.c`, `kernel/core/signal.c`)
 - **Background Processes**:

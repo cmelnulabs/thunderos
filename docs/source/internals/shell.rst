@@ -158,13 +158,19 @@ External commands are executed via fork+exec:
      - Description
    * - ``ls``
      - ``/bin/ls``
-     - List directory contents
+     - List directory contents (with permissions)
    * - ``cat``
      - ``/bin/cat <file>``
      - Display file contents
    * - ``rm``
      - ``/bin/rm <file>``
      - Remove a file
+   * - ``chmod``
+     - ``/bin/chmod <mode> <file>``
+     - Change file permissions (e.g., 755, u+x)
+   * - ``chown``
+     - ``/bin/chown <uid>:<gid> <file>``
+     - Change file owner/group
    * - ``hello``
      - ``/bin/hello``
      - Hello world test program
