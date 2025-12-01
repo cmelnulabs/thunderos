@@ -97,6 +97,8 @@ build_program "touch" "touch" "core"
 build_program "rm" "rm" "core"
 build_program "clear" "clear" "core"
 build_program "sleep" "sleep" "core"
+build_program "chmod" "chmod" "core"
+build_program "chown" "chown" "core"
 
 # System utilities
 print_section "System Utilities"
