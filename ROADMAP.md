@@ -374,43 +374,48 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.8.0 - "Compatibility"
+## Version 0.8.0 - "Compatibility" ✅ RELEASED
+
+**Status:** Released on December 3, 2025
 
 **Focus:** POSIX compatibility, job control, and graphics console
 
-### Planned Features
+### Completed Features
 
 #### Job Control & Signals
-- [x] Process groups and sessions
-- [x] Job control (background/foreground processes with `&`, `fg`, `bg`)
-- [x] Ctrl+C sends SIGINT to foreground process group
-- [x] Ctrl+Z sends SIGTSTP (job suspension)
+- ✅ Process groups and sessions
+- ✅ Job control (background/foreground processes with `&`, `fg`, `bg`)
+- ✅ Ctrl+C sends SIGINT to foreground process group
+- ✅ Ctrl+Z sends SIGTSTP (job suspension)
 
 #### I/O & Shell
-- [x] I/O redirection (>, <, >>)
-- [x] Pipes in shell syntax (cmd1 | cmd2)
-- [x] Command history (up/down arrows)
-- [x] Tab completion
-- [x] Simple shell scripting support
+- ✅ I/O redirection (>, <, >>)
+- ✅ Pipes in shell syntax (cmd1 | cmd2)
+- ✅ Command history (up/down arrows)
+- ✅ Tab completion
+- ✅ Simple shell scripting support
 
 #### Filesystem & POSIX
-- [x] ext2 file removal (`ext2_remove_file`)
-- [x] ext2 directory removal (`ext2_remove_dir`)
-- [x] Relative path resolution in VFS (cd .., cd subdir, ./program)
-- [x] Environment variables
-- [x] File permissions and ownership
+- ✅ ext2 file removal (`ext2_remove_file`)
+- ✅ ext2 directory removal (`ext2_remove_dir`)
+- ✅ Relative path resolution in VFS (cd .., cd subdir, ./program)
+- ✅ Environment variables
+- ✅ File permissions and ownership
 
 #### Graphics Console (from v0.7.0)
-- [x] Framebuffer console driver (uses VirtIO GPU)
-- [x] Bitmap font rendering (8x16 characters)
-- [x] GPU-backed virtual terminal rendering
+- ✅ Framebuffer console driver (uses VirtIO GPU)
+- ✅ Bitmap font rendering (8x16 characters)
+- ✅ GPU-backed virtual terminal rendering
 
-**Release Criteria:**
-- Can run simple POSIX programs
-- Basic shell scripts execute
-- Process tree management works
-- Shell features functional
-- Background processes with proper output redirection
+#### Bug Fixes
+- ✅ Fixed nested trap sscratch corruption causing instruction page fault
+
+**Release Criteria:** ✅ All met
+- ✅ Can run simple POSIX programs
+- ✅ Basic shell scripts execute
+- ✅ Process tree management works
+- ✅ Shell features functional
+- ✅ Background processes with proper output redirection
 
 ---
 

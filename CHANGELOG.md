@@ -5,7 +5,7 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - v0.8.0 "Compatibility"
+## [0.8.0] - 2025-12-03 - "Compatibility"
 
 ### Overview
 Major shell improvements release bringing job control, pipes, I/O redirection, file permissions, and full ext2 file/directory removal. The shell now supports background processes, signal handling, command history navigation, and POSIX-style file permissions.
