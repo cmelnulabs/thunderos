@@ -5,7 +5,7 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] - 2025-12-03 - "Compatibility"
+## [0.8.0] - 03/12/2025 - "Compatibility"
 
 ### Overview
 Major shell improvements release bringing job control, pipes, I/O redirection, file permissions, and full ext2 file/directory removal. The shell now supports background processes, signal handling, command history navigation, and POSIX-style file permissions.
@@ -134,7 +134,7 @@ Major shell improvements release bringing job control, pipes, I/O redirection, f
 - Fixed `sys_kill()` to actually deliver signals to processes
 - Fixed relative path execution in shell
 
-## [0.7.0] - 2025-11-29 - "Virtual Terminals"
+## [0.7.0] - 29/11/2025 - "Virtual Terminals"
 
 ### Overview
 Seventh release of ThunderOS. Implements virtual terminal support with multiple independent shell instances, plus VirtIO GPU driver for future graphics support. Users can switch between terminals using ESC+1-6, with each terminal maintaining its own input buffer, screen buffer, and running shell.
@@ -223,7 +223,7 @@ Seventh release of ThunderOS. Implements virtual terminal support with multiple 
 - Terminal-aware input routing
 - **Total syscalls: 35** (up from 32 in v0.6.0)
 
-## [0.6.0] - 2025-11-28 - "User Shell"
+## [0.6.0] - 28/11/2025 - "User Shell"
 
 ### Overview
 Sixth release of ThunderOS. Implements a fully functional user-mode shell with fork+exec process launching, directory operations, and a suite of userland utilities. The shell runs entirely in user space and can execute programs from the ext2 filesystem.
@@ -355,7 +355,7 @@ Sixth release of ThunderOS. Implements a fully functional user-mode shell with f
 - ✅ All CI tests passing
 - ✅ Kernel boots and shell launches automatically
 
-## [0.5.0] - 2025-11-21 - "Communication"
+## [0.5.0] - 21/11/2025 - "Communication"
 
 ### Overview
 Fifth release of ThunderOS. Implements inter-process communication through signals and pipes, plus process forking for true multi-process execution. This milestone enables processes to communicate, coordinate, and create child processes - fundamental building blocks for Unix-like process management.
@@ -582,7 +582,7 @@ Fifth release of ThunderOS. Implements inter-process communication through signa
 - **Delegation**: mideleg=0xffff, medeleg=0xffff (all interrupts/exceptions to S-mode)
 - **PMP**: All memory accessible to S-mode (pmpaddr0=0x3fffffffffffff, pmpcfg0=0xf)
 
-## [0.4.0] - 2025-11-11 - "Persistence"
+## [0.4.0] - 11/11/2025 - "Persistence"
 
 ### Overview
 Fourth release of ThunderOS. Adds persistent storage capabilities with VirtIO block device driver, ext2 filesystem, Virtual Filesystem abstraction layer, and ELF program loader. This milestone enables ThunderOS to store and execute programs from disk, providing true persistence across reboots.
@@ -897,7 +897,7 @@ None
 
 ---
 
-## [0.3.0] - 2025-11-10 - "Memory Foundation"
+## [0.3.0] - 10/11/2025 - "Memory Foundation"
 
 ### Overview
 Third release of ThunderOS. Adds advanced memory management infrastructure required for device drivers, including DMA allocation, address translation, and memory barriers. This release builds the foundation for VirtIO device drivers in v0.4.0.
@@ -1046,7 +1046,7 @@ None
 
 ---
 
-## [0.2.0] - 2025-11-09 - "User Space"
+## [0.2.0] - 09/11/2025 - "User Space"
 
 ### Overview
 Second release of ThunderOS. Adds user-mode process support with privilege separation, system call interface, and memory isolation between processes.
@@ -1096,7 +1096,7 @@ Second release of ThunderOS. Adds user-mode process support with privilege separ
 
 ---
 
-## [0.1.0] - 2025-11-01 - "First Boot"
+## [0.1.0] - 01/11/2025 - "First Boot"
 
 ### Overview
 First functional release of ThunderOS. Provides basic kernel infrastructure with preemptive multitasking on RISC-V 64-bit architecture running in QEMU.
