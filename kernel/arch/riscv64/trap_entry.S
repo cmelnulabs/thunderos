@@ -29,6 +29,10 @@ trap_from_user:
     # Kernel stack is in sp, user stack is in sscratch
     csrr t0, sscratch
     
+    # CRITICAL: Clear sscratch to 0 to indicate we're now in kernel mode!
+    # This prevents nested traps from using the user stack.
+    csrw sscratch, zero
+    
     # Allocate trap frame on kernel stack
     addi sp, sp, -272
     

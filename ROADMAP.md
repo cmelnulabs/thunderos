@@ -399,12 +399,11 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - [x] Relative path resolution in VFS (cd .., cd subdir, ./program)
 - [x] Environment variables
 - [x] File permissions and ownership
-- [ ] Expanded syscall set (50+ syscalls)
 
 #### Graphics Console (from v0.7.0)
-- [ ] Framebuffer console driver (uses VirtIO GPU)
-- [ ] Bitmap font rendering (8x16 characters)
-- [ ] GPU-backed virtual terminal rendering
+- [x] Framebuffer console driver (uses VirtIO GPU)
+- [x] Bitmap font rendering (8x16 characters)
+- [x] GPU-backed virtual terminal rendering
 
 **Release Criteria:**
 - Can run simple POSIX programs
