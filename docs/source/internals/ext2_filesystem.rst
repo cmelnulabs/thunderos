@@ -718,9 +718,134 @@ Block Allocation
         kfree(bitmap);
         return 0;  // No free blocks
     }
-    write_blocks(fs, start_block, buffer, num_blocks);
 
-Reduces VirtIO notification overhead.
+File and Directory Removal
+--------------------------
+
+ThunderOS supports removing files and directories via the ``rm`` and ``rmdir`` commands.
+
+Removing Files (unlink)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``ext2_remove_file()`` function removes a file from the filesystem:
+
+.. code-block:: c
+
+    int ext2_remove_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name) {
+        // 1. Read parent directory and look up file
+        ext2_inode_t dir_inode;
+        ext2_read_inode(fs, dir_inode_num, &dir_inode);
+        
+        uint32_t file_inode_num = ext2_lookup(fs, &dir_inode, name);
+        if (file_inode_num == 0) {
+            RETURN_ERRNO(THUNDEROS_ENOENT);
+        }
+        
+        // 2. Verify it's a regular file (not a directory)
+        ext2_inode_t file_inode;
+        ext2_read_inode(fs, file_inode_num, &file_inode);
+        
+        if ((file_inode.i_mode & EXT2_S_IFMT) == EXT2_S_IFDIR) {
+            RETURN_ERRNO(THUNDEROS_EISDIR);  // Use rmdir for directories
+        }
+        
+        // 3. Remove directory entry
+        remove_dir_entry(fs, &dir_inode, dir_inode_num, name);
+        
+        // 4. Decrement link count
+        file_inode.i_links_count--;
+        
+        // 5. If no more links, free all data blocks and inode
+        if (file_inode.i_links_count == 0) {
+            free_inode_blocks(fs, &file_inode);  // Free direct/indirect blocks
+            file_inode.i_dtime = 1;              // Mark deletion time
+            ext2_free_inode(fs, file_inode_num); // Return inode to bitmap
+        }
+        
+        return 0;
+    }
+
+**Key Operations:**
+
+1. **Directory entry removal**: The entry is removed by either merging with the previous entry (extending its ``rec_len``) or setting ``inode = 0`` for the first entry.
+
+2. **Block deallocation**: All data blocks (direct, indirect, double-indirect) are freed back to the block bitmap.
+
+3. **Inode deallocation**: The inode is marked as deleted and returned to the inode bitmap.
+
+Removing Directories (rmdir)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``ext2_remove_dir()`` function removes an empty directory:
+
+.. code-block:: c
+
+    int ext2_remove_dir(ext2_fs_t *fs, uint32_t parent_inode_num, const char *name) {
+        // 1. Look up directory to remove
+        ext2_inode_t parent_inode;
+        ext2_read_inode(fs, parent_inode_num, &parent_inode);
+        
+        uint32_t target_inode_num = ext2_lookup(fs, &parent_inode, name);
+        
+        // 2. Verify it's a directory and is empty
+        ext2_inode_t target_inode;
+        ext2_read_inode(fs, target_inode_num, &target_inode);
+        
+        if ((target_inode.i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+            RETURN_ERRNO(THUNDEROS_ENOTDIR);
+        }
+        
+        if (!is_dir_empty(fs, &target_inode)) {
+            RETURN_ERRNO(THUNDEROS_ENOTEMPTY);
+        }
+        
+        // 3. Remove directory entry from parent
+        remove_dir_entry(fs, &parent_inode, parent_inode_num, name);
+        
+        // 4. Decrement parent link count (for ".." in removed dir)
+        parent_inode.i_links_count--;
+        ext2_write_inode(fs, parent_inode_num, &parent_inode);
+        
+        // 5. Free directory blocks and inode
+        free_inode_blocks(fs, &target_inode);
+        ext2_free_inode(fs, target_inode_num);
+        
+        return 0;
+    }
+
+**Empty Directory Check:**
+
+A directory is considered empty if it only contains ``.`` and ``..`` entries:
+
+.. code-block:: c
+
+    static int is_dir_empty(ext2_fs_t *fs, ext2_inode_t *dir_inode) {
+        // Read directory contents and count entries
+        // Return 1 if only "." and ".." exist, 0 otherwise
+    }
+
+**Error Conditions:**
+
+- ``THUNDEROS_ENOENT``: File/directory not found
+- ``THUNDEROS_EISDIR``: Tried to unlink a directory (use rmdir)
+- ``THUNDEROS_ENOTDIR``: Tried to rmdir a non-directory
+- ``THUNDEROS_ENOTEMPTY``: Directory contains files
+- ``THUNDEROS_EINVAL``: Tried to remove ``.`` or ``..``
+
+**Shell Usage:**
+
+.. code-block:: text
+
+    ush> ls
+    hello.txt  testdir
+    
+    ush> rm hello.txt
+    ush> ls
+    testdir
+    
+    ush> rmdir testdir
+    ush> ls
+    (empty)
 
 Limitations
 -----------

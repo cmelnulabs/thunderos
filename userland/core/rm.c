@@ -32,10 +32,24 @@ static void print(const char *s) {
     syscall(SYS_WRITE, 1, (long)s, strlen(s));
 }
 
-void _start(void) {
-    // Note: Requires argument passing from shell
-    // For now, just show usage
-    print("rm: usage: rm <filename>\n");
-    print("Note: rm requires argument passing (not yet implemented)\n");
+/* Entry point - argc in a0, argv in a1 */
+void _start(long argc, char **argv) {
+    if (argc < 2) {
+        print("rm: missing operand\n");
+        print("Usage: rm <filename>\n");
+        syscall(SYS_EXIT, 1, 0, 0);
+    }
+    
+    /* Remove the file */
+    const char *filename = argv[1];
+    long result = syscall(SYS_UNLINK, (long)filename, 0, 0);
+    
+    if (result < 0) {
+        print("rm: cannot remove '");
+        print(filename);
+        print("': No such file or directory\n");
+        syscall(SYS_EXIT, 1, 0, 0);
+    }
+    
     syscall(SYS_EXIT, 0, 0, 0);
 }

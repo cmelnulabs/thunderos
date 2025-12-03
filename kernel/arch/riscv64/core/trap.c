@@ -231,6 +231,14 @@ void trap_handler(struct trap_frame *tf) {
         // Deliver any pending signals, passing the trap frame so signal
         // handler can modify it to redirect execution
         signal_deliver_with_frame(current, tf);
+        
+        // If signal caused process to stop (SIGTSTP/SIGSTOP), we need to
+        // reschedule so we don't return to user mode for a stopped process
+        if (current->state == PROC_STOPPED) {
+            extern void schedule(void);
+            schedule();
+            // When we return here, this process was resumed via SIGCONT/fg
+        }
     }
 }
 

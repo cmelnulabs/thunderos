@@ -12,6 +12,8 @@
 #include <drivers/font.h>
 #include <kernel/errno.h>
 #include <kernel/kstring.h>
+#include <kernel/signal.h>
+#include <kernel/process.h>
 #include <hal/hal_uart.h>
 #include <stddef.h>
 
@@ -63,6 +65,7 @@ static const uint32_t ansi_colors[16] = {
 static void vterm_scroll_up(vterm_t *term);
 static void vterm_newline(vterm_t *term);
 static void vterm_draw_cell(uint32_t col, uint32_t row, vterm_cell_t *cell);
+static int input_buffer_put_to(int index, char c);
 
 /**
  * Initialize a single terminal
@@ -113,6 +116,9 @@ static void init_terminal(vterm_t *term, int index)
     
     /* Mark as inactive until written to */
     term->active = (index == 0) ? 1 : 0;
+    
+    /* No foreground process initially */
+    term->fg_pid = -1;
 }
 
 /**
@@ -595,6 +601,11 @@ void vterm_flush(void)
  */
 char vterm_process_input(char c)
 {
+    /* DEBUG: Log every character received */
+    // hal_uart_puts("[IN] ");
+    // hal_uart_putc(c >= 32 && c < 127 ? c : '?');
+    // hal_uart_puts("\n");
+    
     /* Simple Alt+number detection: ESC followed by 1-6 */
     if (g_input_state.in_escape) {
         g_input_state.escape_buf[g_input_state.escape_len++] = c;
@@ -616,6 +627,21 @@ char vterm_process_input(char c)
             return 0;
         }
         
+        /* ESC [ sequence */
+        if (g_input_state.escape_len == 1 && c == '[') {
+            /* Wait for more characters */
+            return 0;
+        }
+        
+        /* First character after ESC is not a valid sequence start - abort and pass through */
+        if (g_input_state.escape_len == 1) {
+            g_input_state.in_escape = 0;
+            g_input_state.escape_len = 0;
+            /* Pass the ESC and the character to userspace */
+            input_buffer_put_to(g_active_terminal, 0x1B);
+            return c;
+        }
+        
         if (g_input_state.escape_len == 2 && g_input_state.escape_buf[0] == 'O') {
             g_input_state.in_escape = 0;
             g_input_state.escape_len = 0;
@@ -635,14 +661,24 @@ char vterm_process_input(char c)
                 vterm_switch(3);
                 return 0;
             }
-            /* Unknown sequence, pass through */
+            /* Unknown ESC O x sequence, pass through */
+            input_buffer_put_to(g_active_terminal, 0x1B);
+            input_buffer_put_to(g_active_terminal, 'O');
             return c;
         }
         
-        /* ESC [ sequence */
-        if (g_input_state.escape_len == 1 && c == '[') {
-            /* Wait for more characters */
-            return 0;
+        /* Check for arrow keys: ESC [ A/B/C/D - pass through to userspace */
+        if (g_input_state.escape_len == 2 && g_input_state.escape_buf[0] == '[') {
+            if (c == 'A' || c == 'B' || c == 'C' || c == 'D') {
+                /* Arrow key - pass the entire sequence to userspace */
+                g_input_state.in_escape = 0;
+                g_input_state.escape_len = 0;
+                /* Buffer the entire escape sequence for userspace */
+                input_buffer_put_to(g_active_terminal, 0x1B);  /* ESC */
+                input_buffer_put_to(g_active_terminal, '[');
+                input_buffer_put_to(g_active_terminal, c);     /* A/B/C/D */
+                return 0;  /* Consumed - chars are in buffer */
+            }
         }
         
         /* Check for ESC [ 1 x ~ format (F1-F6) */
@@ -681,24 +717,29 @@ char vterm_process_input(char c)
                 return 0;  /* Consume unknown function key */
             }
             
-            /* Keep accumulating */
-            if (g_input_state.escape_len < 7) {
+            /* Keep accumulating if it looks like a valid sequence in progress */
+            if (g_input_state.escape_len < 7 && (c >= '0' && c <= '9')) {
                 return 0;
             }
             
-            /* Sequence too long, abort */
+            /* Invalid character in CSI sequence, abort and pass through */
+            /* Save the accumulated digits before resetting */
+            int saved_len = g_input_state.escape_len;
             g_input_state.in_escape = 0;
             g_input_state.escape_len = 0;
-            return 0;
+            /* Pass ESC [ and any accumulated digits to userspace */
+            input_buffer_put_to(g_active_terminal, 0x1B);
+            input_buffer_put_to(g_active_terminal, '[');
+            for (int i = 1; i < saved_len - 1; i++) {
+                input_buffer_put_to(g_active_terminal, g_input_state.escape_buf[i]);
+            }
+            return c;
         }
         
-        /* Unknown escape sequence - timeout or invalid */
-        if (g_input_state.escape_len > 6) {
-            g_input_state.in_escape = 0;
-            g_input_state.escape_len = 0;
-        }
-        
-        return 0;  /* Still processing escape */
+        /* Sequence too long, abort */
+        g_input_state.in_escape = 0;
+        g_input_state.escape_len = 0;
+        return 0;
     }
     
     /* Start of escape sequence */
@@ -706,6 +747,38 @@ char vterm_process_input(char c)
         g_input_state.in_escape = 1;
         g_input_state.escape_len = 0;
         return 0;
+    }
+    
+    /* Handle Ctrl+C - send SIGINT to foreground process */
+    if (c == 0x03) {  /* Ctrl+C */
+        vterm_t *term = &g_terminals[g_active_terminal];
+        if (term->fg_pid > 0) {
+            struct process *fg_proc = process_get(term->fg_pid);
+            if (fg_proc && fg_proc->state != PROC_UNUSED) {
+                signal_send(fg_proc, SIGINT);
+                /* Echo ^C to show it was received */
+                vterm_putc('^');
+                vterm_putc('C');
+                vterm_putc('\n');
+            }
+        }
+        return 0;  /* Consumed */
+    }
+    
+    /* Handle Ctrl+Z - send SIGTSTP to foreground process (suspend) */
+    if (c == 0x1A) {  /* Ctrl+Z */
+        vterm_t *term = &g_terminals[g_active_terminal];
+        if (term->fg_pid > 0) {
+            struct process *fg_proc = process_get(term->fg_pid);
+            if (fg_proc && fg_proc->state != PROC_UNUSED) {
+                signal_send(fg_proc, SIGTSTP);
+                /* Echo ^Z to show it was received */
+                vterm_putc('^');
+                vterm_putc('Z');
+                vterm_putc('\n');
+            }
+        }
+        return 0;  /* Consumed */
     }
     
     /* Regular character */
@@ -1067,4 +1140,34 @@ int vterm_get_buffered_input(void)
 int vterm_has_buffered_input(void)
 {
     return input_buffer_available();
+}
+
+/**
+ * Set the foreground process for a terminal
+ */
+void vterm_set_fg_pid(int index, int pid)
+{
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) {
+        return;
+    }
+    g_terminals[index].fg_pid = pid;
+}
+
+/**
+ * Get the foreground process for a terminal
+ */
+int vterm_get_fg_pid(int index)
+{
+    if (index < 0 || index >= VTERM_MAX_TERMINALS) {
+        return -1;
+    }
+    return g_terminals[index].fg_pid;
+}
+
+/**
+ * Set the foreground process for the active terminal
+ */
+void vterm_set_active_fg_pid(int pid)
+{
+    g_terminals[g_active_terminal].fg_pid = pid;
 }

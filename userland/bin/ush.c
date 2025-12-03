@@ -24,12 +24,21 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define SYS_YIELD   6
 #define SYS_FORK    7
 #define SYS_WAIT    9
+#define SYS_KILL    11
 #define SYS_OPEN    13
 #define SYS_CLOSE   14
 #define SYS_MKDIR   17
 #define SYS_RMDIR   19
 #define SYS_EXECVE  20
+#define SYS_PIPE    26
+#define SYS_GETDENTS 27
 #define SYS_CHDIR   28
+#define SYS_GETCWD  29
+#define SYS_DUP2    35
+#define SYS_SETFGPID 36
+
+/* Signal numbers */
+#define SIGCONT     18
 
 /* ========================================================================
  * Constants
@@ -40,21 +49,51 @@ extern long syscall3(long syscall_num, long arg0, long arg1, long arg2);
 #define INPUT_BUFFER_SIZE   256
 #define READ_BUFFER_SIZE    256
 #define PATH_BUFFER_SIZE    64
+#define MAX_ENV_VARS        32
+#define MAX_ENV_NAME        32
+#define MAX_ENV_VALUE       128
+#define EXPANDED_CMD_SIZE   512
+#define MAX_ARGS            16
+#define MAX_JOBS            8
 
 #define STDIN_FD            0
 #define STDOUT_FD           1
 
-#define O_RDONLY            0
+#define O_RDONLY            0x0000
+#define O_WRONLY            0x0001
+#define O_CREAT             0x0040
+#define O_TRUNC             0x0200
+#define O_APPEND            0x0400
 #define DIR_MODE            0755
+#define FILE_MODE           0644
 
 #define CHAR_ESC            0x1B
+#define CHAR_TAB            0x09
 #define CHAR_BACKSPACE      127
 #define CHAR_BACKSPACE_ALT  '\b'
+
+/* Wait status macros */
+#define WIFSTOPPED(status)  (((status) & 0xff) == 0x7f)
+#define WSTOPSIG(status)    (((status) >> 8) & 0xff)
+#define WIFEXITED(status)   (((status) & 0x7f) == 0)
+#define WEXITSTATUS(status) (((status) >> 8) & 0xff)
 
 /* Escape sequence parser states */
 #define ESC_STATE_NORMAL    0
 #define ESC_STATE_GOT_ESC   1
 #define ESC_STATE_GOT_CSI   2
+
+/* Directory entry structure (matches kernel) */
+struct thunderos_dirent {
+    unsigned int   d_ino;       /* Inode number */
+    unsigned short d_reclen;    /* Record length */
+    unsigned char  d_type;      /* File type */
+    char           d_name[256]; /* File name (null-terminated) */
+};
+
+/* File types */
+#define DT_REG   1  /* Regular file */
+#define DT_DIR   2  /* Directory */
 
 /* ========================================================================
  * String constants
@@ -72,24 +111,53 @@ static const char *SHELL_BANNER =
 static const char *SHELL_PROMPT = "ush> ";
 
 static const char *HELP_TEXT =
-    "Available commands:\n"
-    "  help   - Show this help\n"
-    "  echo   - Echo arguments\n"
-    "  cat    - Display file contents\n"
-    "  ls     - List directory\n"
-    "  cd     - Change directory\n"
-    "  pwd    - Print working directory\n"
-    "  mkdir  - Create directory\n"
-    "  rmdir  - Remove directory\n"
-    "  clear  - Clear screen\n"
-    "  hello  - Run hello program\n"
-    "  clock  - Display elapsed time\n"
-    "  ps     - List running processes\n"
-    "  uname  - Print system information\n"
-    "  uptime - Show system uptime\n"
-    "  whoami - Print current user\n"
-    "  tty    - Print terminal name\n"
-    "  exit   - Exit shell\n";
+    "Built-in commands:\n"
+    "  help     - Show this help\n"
+    "  echo     - Echo arguments (supports $VAR)\n"
+    "  cat      - Display file contents\n"
+    "  cd       - Change directory\n"
+    "  source   - Run commands from script file\n"
+    "  export   - Set environment variable (VAR=value)\n"
+    "  unset    - Remove environment variable\n"
+    "  env      - List environment variables\n"
+    "  history  - Show command history\n"
+    "  jobs     - List stopped/background jobs\n"
+    "  fg       - Resume job in foreground\n"
+    "  bg       - Resume job in background\n"
+    "  exit     - Exit shell\n"
+    "\n"
+    "File utilities:\n"
+    "  ls       - List directory\n"
+    "  pwd      - Print working directory\n"
+    "  mkdir    - Create directory\n"
+    "  rmdir    - Remove directory\n"
+    "  touch    - Create empty file\n"
+    "  rm       - Remove file\n"
+    "  clear    - Clear screen\n"
+    "\n"
+    "System utilities:\n"
+    "  ps       - List processes\n"
+    "  kill     - Send signal to process\n"
+    "  sleep    - Sleep for seconds\n"
+    "  uname    - System information\n"
+    "  uptime   - System uptime\n"
+    "  whoami   - Current user\n"
+    "  tty      - Terminal name\n"
+    "\n"
+    "Other programs: hello, clock\n"
+    "\n"
+    "Features:\n"
+    "  - Tab: Filename completion\n"
+    "  - Up/Down arrows: Navigate command history\n"
+    "  - $VAR or ${VAR}: Variable expansion\n"
+    "  - cmd1 | cmd2: Pipe output to input\n"
+    "  - < file: Redirect input\n"
+    "  - > file: Redirect output (overwrite)\n"
+    "  - >> file: Redirect output (append)\n"
+    "  - Relative paths: cd .., cat file\n"
+    "  - Ctrl+C: Interrupt foreground process\n"
+    "  - Ctrl+Z: Suspend foreground process\n"
+    "\n";
 
 static const char *MSG_GOODBYE = "Goodbye!\n";
 static const char *MSG_UNKNOWN_CMD = "Unknown command (try 'help')\n";
@@ -98,11 +166,15 @@ static const char *MSG_USAGE_ECHO = "Usage: echo <text>\n";
 static const char *MSG_USAGE_CD = "Usage: cd <directory>\n";
 static const char *MSG_USAGE_MKDIR = "Usage: mkdir <directory>\n";
 static const char *MSG_USAGE_RMDIR = "Usage: rmdir <directory>\n";
+static const char *MSG_USAGE_SOURCE = "Usage: source <script>\n";
 static const char *MSG_FILE_ERROR = "Error: Cannot open file\n";
 static const char *MSG_CD_ERROR = "cd: cannot access directory\n";
 static const char *MSG_MKDIR_ERROR = "mkdir: cannot create directory\n";
 static const char *MSG_RMDIR_ERROR = "rmdir: cannot remove directory\n";
 static const char *MSG_EXEC_FAIL = "Failed to execute program\n";
+static const char *MSG_USAGE_EXPORT = "Usage: export VAR=value\n";
+static const char *MSG_ENV_FULL = "export: too many variables\n";
+static const char *MSG_REDIR_ERROR = "Error: Cannot open output file\n";
 
 static const char *NEWLINE = "\n";
 static const char *CRLF = "\r\n";
@@ -112,6 +184,16 @@ static const char *BIN_PREFIX = "/bin/";
 /* ========================================================================
  * Global state
  * ======================================================================== */
+
+/* Job tracking for fg/bg commands */
+typedef struct {
+    long pid;                   /* Process ID */
+    char name[32];              /* Command name */
+    int stopped;                /* 1 if stopped, 0 if running in background */
+} job_t;
+
+static job_t g_jobs[MAX_JOBS];
+static int g_job_count = 0;
 
 /* Command history buffer */
 static char g_history[HISTORY_SIZE][MAX_CMD_LEN];
@@ -127,6 +209,22 @@ static int g_escape_state = ESC_STATE_NORMAL;
 /* Path buffer for external commands */
 static char g_path_buffer[PATH_BUFFER_SIZE];
 
+/* Environment variables */
+typedef struct {
+    char name[MAX_ENV_NAME];
+    char value[MAX_ENV_VALUE];
+    int in_use;
+} env_var_t;
+
+static env_var_t g_env_vars[MAX_ENV_VARS];
+
+/* Expanded command buffer (after variable substitution) */
+static char g_expanded_buffer[EXPANDED_CMD_SIZE];
+
+/* I/O redirection state */
+static char *g_redir_output_file;
+static int g_redir_append;
+
 /* ========================================================================
  * Forward declarations
  * ======================================================================== */
@@ -135,6 +233,7 @@ static char g_path_buffer[PATH_BUFFER_SIZE];
 static long str_length(const char *str);
 static void print_string(const char *str);
 static void print_chars(const char *chars, long count);
+static void print_char(char c);
 static int strings_equal(const char *str1, const char *str2, int length);
 static void copy_string(char *dest, const char *src, int max_len);
 
@@ -143,6 +242,16 @@ static void history_init(void);
 static void history_add(const char *command);
 static void history_navigate_up(void);
 static void history_navigate_down(void);
+
+/* Environment variables */
+static void env_init(void);
+static const char *env_get(const char *name);
+static int env_set(const char *name, const char *value);
+static int env_unset(const char *name);
+static void env_expand(const char *input, char *output, int max_len);
+
+/* I/O redirection */
+static void parse_redirections(char *cmd, char **input_file, char **output_file, int *append);
 
 /* Input line management */
 static void input_clear_line(void);
@@ -154,25 +263,35 @@ static int parse_arg_start(const char *input, int input_len, int cmd_len);
 static int command_matches(const char *input, int cmd_len, const char *command);
 
 /* Command execution */
-static void exec_external(const char *path);
+static void exec_external_with_args(const char *path, int arg_start, int input_len);
 static void handle_builtin_help(void);
 static void handle_builtin_exit(void);
 static void handle_builtin_echo(int arg_start, int input_len);
-static void handle_builtin_cat(int arg_start, int input_len);
+static void handle_builtin_cat(int arg_start, int input_len, long input_fd);
 static void handle_builtin_cd(int arg_start, int input_len);
 static void handle_builtin_mkdir(int arg_start, int input_len);
 static void handle_builtin_rmdir(int arg_start, int input_len);
-static void handle_external_command(const char *binary_name);
+static void handle_builtin_source(int arg_start, int input_len);
+static void handle_external_command(const char *binary_name, int arg_start, int input_len);
+
+/* Job control */
+static int job_add(long pid, const char *name, int stopped);
+static void job_remove(int job_num);
+static void handle_builtin_fg(int arg_start, int input_len);
+static void handle_builtin_bg(int arg_start, int input_len);
+static void handle_builtin_jobs(void);
 
 /* Main processing */
 static void process_command(void);
+static int find_pipe_char(const char *cmd);
+static void execute_pipeline(char *left_cmd, char *right_cmd);
 static void handle_arrow_up(void);
 static void handle_arrow_down(void);
 static void handle_escape_sequence(char input_char);
 static void handle_printable_char(char input_char);
 static void handle_backspace(void);
 static void handle_newline(void);
-
+static void handle_tab(void);
 /* ========================================================================
  * String utilities
  * ======================================================================== */
@@ -200,6 +319,13 @@ static void print_string(const char *str) {
  */
 static void print_chars(const char *chars, long count) {
     syscall3(SYS_WRITE, STDOUT_FD, (long)chars, count);
+}
+
+/**
+ * Print a single character to stdout
+ */
+static void print_char(char c) {
+    syscall3(SYS_WRITE, STDOUT_FD, (long)&c, 1);
 }
 
 /**
@@ -311,6 +437,213 @@ static void history_navigate_down(void) {
 }
 
 /* ========================================================================
+ * Environment variable management
+ * ======================================================================== */
+
+/**
+ * Initialize environment variables
+ */
+static void env_init(void) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        g_env_vars[i].in_use = 0;
+    }
+    /* Set default environment variables */
+    env_set("PATH", "/bin");
+    env_set("HOME", "/");
+    env_set("SHELL", "/bin/ush");
+    env_set("USER", "root");
+}
+
+/**
+ * Get environment variable value
+ */
+static const char *env_get(const char *name) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            if (strings_equal(g_env_vars[i].name, name, str_length(name)) &&
+                g_env_vars[i].name[str_length(name)] == '\0') {
+                return g_env_vars[i].value;
+            }
+        }
+    }
+    return (const char *)0;
+}
+
+/**
+ * Set environment variable
+ */
+static int env_set(const char *name, const char *value) {
+    /* Check if already exists */
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            int name_len = str_length(name);
+            if (strings_equal(g_env_vars[i].name, name, name_len) &&
+                g_env_vars[i].name[name_len] == '\0') {
+                copy_string(g_env_vars[i].value, value, MAX_ENV_VALUE);
+                return 0;
+            }
+        }
+    }
+    
+    /* Find empty slot */
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (!g_env_vars[i].in_use) {
+            copy_string(g_env_vars[i].name, name, MAX_ENV_NAME);
+            copy_string(g_env_vars[i].value, value, MAX_ENV_VALUE);
+            g_env_vars[i].in_use = 1;
+            return 0;
+        }
+    }
+    
+    return -1;  /* No space */
+}
+
+/**
+ * Unset environment variable
+ */
+static int env_unset(const char *name) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            int name_len = str_length(name);
+            if (strings_equal(g_env_vars[i].name, name, name_len) &&
+                g_env_vars[i].name[name_len] == '\0') {
+                g_env_vars[i].in_use = 0;
+                return 0;
+            }
+        }
+    }
+    return -1;  /* Not found */
+}
+
+/**
+ * Expand environment variables in a string
+ * Supports $VAR and ${VAR} syntax
+ */
+static void env_expand(const char *input, char *output, int max_len) {
+    int in_pos = 0;
+    int out_pos = 0;
+    
+    while (input[in_pos] && out_pos < max_len - 1) {
+        if (input[in_pos] == '$') {
+            in_pos++;
+            char var_name[MAX_ENV_NAME];
+            int var_pos = 0;
+            int braces = 0;
+            
+            /* Handle ${VAR} syntax */
+            if (input[in_pos] == '{') {
+                braces = 1;
+                in_pos++;
+            }
+            
+            /* Extract variable name */
+            while (input[in_pos] && var_pos < MAX_ENV_NAME - 1) {
+                char c = input[in_pos];
+                if (braces) {
+                    if (c == '}') {
+                        in_pos++;
+                        break;
+                    }
+                } else {
+                    /* Variable names: alphanumeric and underscore */
+                    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                          (c >= '0' && c <= '9') || c == '_')) {
+                        break;
+                    }
+                }
+                var_name[var_pos++] = c;
+                in_pos++;
+            }
+            var_name[var_pos] = '\0';
+            
+            /* Look up and substitute */
+            const char *value = env_get(var_name);
+            if (value) {
+                while (*value && out_pos < max_len - 1) {
+                    output[out_pos++] = *value++;
+                }
+            }
+        } else {
+            output[out_pos++] = input[in_pos++];
+        }
+    }
+    output[out_pos] = '\0';
+}
+
+/* ========================================================================
+ * I/O Redirection parsing
+ * ======================================================================== */
+
+/**
+ * Parse command for I/O redirections (<, >, >>)
+ * Modifies cmd in place to remove redirection operators
+ */
+static void parse_redirections(char *cmd, char **input_file, char **output_file, int *append) {
+    *input_file = (char *)0;
+    *output_file = (char *)0;
+    *append = 0;
+    
+    char *p = cmd;
+    while (*p) {
+        if (*p == '<') {
+            /* Input redirection */
+            *p = '\0';
+            p++;
+            
+            /* Skip whitespace */
+            while (*p == ' ' || *p == '\t') p++;
+            
+            /* Get filename */
+            *input_file = p;
+            
+            /* Find end of filename */
+            while (*p && *p != ' ' && *p != '\t' && *p != '>' && *p != '<') p++;
+            if (*p) {
+                char next = *p;
+                *p = '\0';
+                if (next != ' ' && next != '\t') {
+                    /* There's another redirection, continue parsing */
+                    p++;
+                    continue;
+                }
+                p++;
+            }
+        } else if (*p == '>') {
+            if (*(p + 1) == '>') {
+                /* Append mode >> */
+                *append = 1;
+                *p = '\0';
+                p += 2;
+            } else {
+                /* Truncate mode > */
+                *p = '\0';
+                p++;
+            }
+            
+            /* Skip whitespace */
+            while (*p == ' ' || *p == '\t') p++;
+            
+            /* Get filename */
+            *output_file = p;
+            
+            /* Find end of filename */
+            while (*p && *p != ' ' && *p != '\t' && *p != '>' && *p != '<') p++;
+            if (*p) {
+                char next = *p;
+                *p = '\0';
+                if (next != ' ' && next != '\t') {
+                    p++;
+                    continue;
+                }
+                p++;
+            }
+        } else {
+            p++;
+        }
+    }
+}
+
+/* ========================================================================
  * Input line management
  * ======================================================================== */
 
@@ -374,15 +707,54 @@ static int command_matches(const char *input, int cmd_len, const char *command) 
  * Command execution
  * ======================================================================== */
 
+/* Static buffer for argument strings */
+static char g_arg_buffer[EXPANDED_CMD_SIZE];
+
 /**
- * Fork and execute an external program, wait for completion
+ * Fork and execute an external program with arguments, wait for completion
  */
-static void exec_external(const char *path) {
+static void exec_external_with_args(const char *path, int arg_start, int input_len) {
+    /* Build argv array by parsing arguments from g_expanded_buffer */
+    const char *argv[MAX_ARGS];
+    int argc = 0;
+    
+    /* argv[0] is the program path */
+    argv[argc++] = path;
+    
+    /* Copy arguments to our buffer and parse them */
+    if (arg_start < input_len) {
+        /* Copy the argument portion */
+        int i = 0;
+        for (int j = arg_start; j < input_len && i < EXPANDED_CMD_SIZE - 1; j++) {
+            g_arg_buffer[i++] = g_expanded_buffer[j];
+        }
+        g_arg_buffer[i] = '\0';
+        
+        /* Parse arguments (space-separated) */
+        char *p = g_arg_buffer;
+        while (*p && argc < MAX_ARGS - 1) {
+            /* Skip leading whitespace */
+            while (*p == ' ' || *p == '\t') p++;
+            if (!*p) break;
+            
+            /* Start of argument */
+            argv[argc++] = p;
+            
+            /* Find end of argument */
+            while (*p && *p != ' ' && *p != '\t') p++;
+            if (*p) {
+                *p++ = '\0';  /* Null-terminate this argument */
+            }
+        }
+    }
+    
+    /* Null-terminate argv */
+    argv[argc] = (char *)0;
+    
     long child_pid = syscall0(SYS_FORK);
     
     if (child_pid == 0) {
         /* Child process */
-        const char *argv[] = { path, 0 };
         const char *envp[] = { 0 };
         syscall3(SYS_EXECVE, (long)path, (long)argv, (long)envp);
         
@@ -390,9 +762,28 @@ static void exec_external(const char *path) {
         print_string(MSG_EXEC_FAIL);
         syscall1(SYS_EXIT, 1);
     } else if (child_pid > 0) {
-        /* Parent - wait for child */
+        /* Parent - set child as foreground process for Ctrl+C/Ctrl+Z */
+        syscall1(SYS_SETFGPID, child_pid);
+        
+        /* Wait for child */
         int exit_status = 0;
         syscall3(SYS_WAIT, child_pid, (long)&exit_status, 0);
+        
+        /* Check if child was stopped (Ctrl+Z) */
+        if (WIFSTOPPED(exit_status)) {
+            int job_num = job_add(child_pid, path, 1);
+            char num_buf[8];
+            num_buf[0] = '0' + job_num;
+            num_buf[1] = '\0';
+            print_string("[");
+            print_string(num_buf);
+            print_string("] Stopped  ");
+            print_string(path);
+            print_string(NEWLINE);
+        }
+        
+        /* Clear foreground process (back to shell) */
+        syscall1(SYS_SETFGPID, -1);
     }
 }
 
@@ -426,19 +817,26 @@ static void handle_builtin_echo(int arg_start, int input_len) {
 /**
  * Handle 'cat' command - display file contents
  */
-static void handle_builtin_cat(int arg_start, int input_len) {
+static void handle_builtin_cat(int arg_start, int input_len, long input_fd) {
+    long file_fd;
+    
+    /* If no filename but input redirection, use input_fd */
     if (arg_start >= input_len) {
-        print_string(MSG_USAGE_CAT);
-        return;
-    }
-    
-    /* Null-terminate the filename */
-    g_input_buffer[input_len] = '\0';
-    
-    long file_fd = syscall3(SYS_OPEN, (long)&g_input_buffer[arg_start], O_RDONLY, 0);
-    if (file_fd < 0) {
-        print_string(MSG_FILE_ERROR);
-        return;
+        if (input_fd >= 0) {
+            file_fd = input_fd;
+        } else {
+            print_string(MSG_USAGE_CAT);
+            return;
+        }
+    } else {
+        /* Null-terminate the filename */
+        g_expanded_buffer[input_len] = '\0';
+        
+        file_fd = syscall3(SYS_OPEN, (long)&g_expanded_buffer[arg_start], O_RDONLY, 0);
+        if (file_fd < 0) {
+            print_string(MSG_FILE_ERROR);
+            return;
+        }
     }
     
     /* Read and display file contents */
@@ -448,7 +846,10 @@ static void handle_builtin_cat(int arg_start, int input_len) {
         print_chars(read_buffer, bytes_read);
     }
     
-    syscall1(SYS_CLOSE, file_fd);
+    /* Only close if we opened it (not from input redirection) */
+    if (arg_start < input_len) {
+        syscall1(SYS_CLOSE, file_fd);
+    }
 }
 
 /**
@@ -460,8 +861,8 @@ static void handle_builtin_cd(int arg_start, int input_len) {
         return;
     }
     
-    g_input_buffer[input_len] = '\0';
-    long result = syscall1(SYS_CHDIR, (long)&g_input_buffer[arg_start]);
+    g_expanded_buffer[input_len] = '\0';
+    long result = syscall1(SYS_CHDIR, (long)&g_expanded_buffer[arg_start]);
     if (result != 0) {
         print_string(MSG_CD_ERROR);
     }
@@ -476,8 +877,8 @@ static void handle_builtin_mkdir(int arg_start, int input_len) {
         return;
     }
     
-    g_input_buffer[input_len] = '\0';
-    long result = syscall2(SYS_MKDIR, (long)&g_input_buffer[arg_start], DIR_MODE);
+    g_expanded_buffer[input_len] = '\0';
+    long result = syscall2(SYS_MKDIR, (long)&g_expanded_buffer[arg_start], DIR_MODE);
     if (result != 0) {
         print_string(MSG_MKDIR_ERROR);
     }
@@ -492,17 +893,262 @@ static void handle_builtin_rmdir(int arg_start, int input_len) {
         return;
     }
     
-    g_input_buffer[input_len] = '\0';
-    long result = syscall1(SYS_RMDIR, (long)&g_input_buffer[arg_start]);
+    g_expanded_buffer[input_len] = '\0';
+    long result = syscall1(SYS_RMDIR, (long)&g_expanded_buffer[arg_start]);
     if (result != 0) {
         print_string(MSG_RMDIR_ERROR);
     }
 }
 
 /**
- * Handle external command - fork and exec from /bin
+ * Handle 'export' command - set environment variable
  */
-static void handle_external_command(const char *binary_name) {
+static void handle_builtin_export(int arg_start, int input_len) {
+    if (arg_start >= input_len) {
+        print_string(MSG_USAGE_EXPORT);
+        return;
+    }
+    
+    /* Find '=' in the argument */
+    char *arg = &g_expanded_buffer[arg_start];
+    char *eq = arg;
+    while (*eq && *eq != '=') eq++;
+    
+    if (*eq != '=') {
+        print_string(MSG_USAGE_EXPORT);
+        return;
+    }
+    
+    /* Split into name and value */
+    *eq = '\0';
+    const char *name = arg;
+    const char *value = eq + 1;
+    
+    if (env_set(name, value) < 0) {
+        print_string(MSG_ENV_FULL);
+    }
+}
+
+/**
+ * Handle 'unset' command - remove environment variable
+ */
+static void handle_builtin_unset(int arg_start, int input_len) {
+    if (arg_start >= input_len) {
+        print_string("Usage: unset VAR\n");
+        return;
+    }
+    g_expanded_buffer[input_len] = '\0';
+    env_unset(&g_expanded_buffer[arg_start]);
+}
+
+/**
+ * Handle 'env' command - list environment variables
+ */
+static void handle_builtin_env(void) {
+    for (int i = 0; i < MAX_ENV_VARS; i++) {
+        if (g_env_vars[i].in_use) {
+            print_string(g_env_vars[i].name);
+            print_string("=");
+            print_string(g_env_vars[i].value);
+            print_string(NEWLINE);
+        }
+    }
+}
+
+/**
+ * Handle 'history' command - show command history
+ */
+static void handle_builtin_history(void) {
+    char num_buf[8];
+    for (int i = 0; i < g_history_count; i++) {
+        /* Print index */
+        int idx = i + 1;
+        int pos = 0;
+        if (idx >= 10) {
+            num_buf[pos++] = '0' + (idx / 10);
+        }
+        num_buf[pos++] = '0' + (idx % 10);
+        num_buf[pos++] = ' ';
+        num_buf[pos++] = ' ';
+        num_buf[pos] = '\0';
+        print_string(num_buf);
+        print_string(g_history[i]);
+        print_string(NEWLINE);
+    }
+}
+
+/* ========================================================================
+ * Job Control
+ * ======================================================================== */
+
+/**
+ * Add a job to the job list
+ */
+static int job_add(long pid, const char *name, int stopped) {
+    if (g_job_count >= MAX_JOBS) {
+        return -1;
+    }
+    
+    g_jobs[g_job_count].pid = pid;
+    g_jobs[g_job_count].stopped = stopped;
+    
+    /* Copy name */
+    int i = 0;
+    while (name[i] && i < 31) {
+        g_jobs[g_job_count].name[i] = name[i];
+        i++;
+    }
+    g_jobs[g_job_count].name[i] = '\0';
+    
+    g_job_count++;
+    return g_job_count;  /* Job number (1-based) */
+}
+
+/**
+ * Remove a job from the job list
+ */
+static void job_remove(int job_num) {
+    if (job_num < 1 || job_num > g_job_count) return;
+    
+    int idx = job_num - 1;
+    /* Shift remaining jobs down */
+    for (int i = idx; i < g_job_count - 1; i++) {
+        g_jobs[i] = g_jobs[i + 1];
+    }
+    g_job_count--;
+}
+
+/**
+ * Find job by PID
+ */
+static int job_find_by_pid(long pid) {
+    for (int i = 0; i < g_job_count; i++) {
+        if (g_jobs[i].pid == pid) {
+            return i + 1;  /* 1-based job number */
+        }
+    }
+    return 0;
+}
+
+/**
+ * Handle 'jobs' command - list jobs
+ */
+static void handle_builtin_jobs(void) {
+    if (g_job_count == 0) {
+        print_string("No jobs\n");
+        return;
+    }
+    
+    char num_buf[16];
+    for (int i = 0; i < g_job_count; i++) {
+        print_string("[");
+        num_buf[0] = '0' + (i + 1);
+        num_buf[1] = '\0';
+        print_string(num_buf);
+        print_string("] ");
+        
+        if (g_jobs[i].stopped) {
+            print_string("Stopped    ");
+        } else {
+            print_string("Running    ");
+        }
+        
+        print_string(g_jobs[i].name);
+        print_string(NEWLINE);
+    }
+}
+
+/**
+ * Handle 'fg' command - bring job to foreground
+ */
+static void handle_builtin_fg(int arg_start, int input_len) {
+    int job_num = 1;  /* Default to job 1 */
+    
+    /* Parse job number if provided */
+    if (arg_start < input_len) {
+        job_num = 0;
+        for (int i = arg_start; i < input_len && g_expanded_buffer[i] >= '0' && g_expanded_buffer[i] <= '9'; i++) {
+            job_num = job_num * 10 + (g_expanded_buffer[i] - '0');
+        }
+    }
+    
+    if (job_num < 1 || job_num > g_job_count) {
+        print_string("fg: no such job\n");
+        return;
+    }
+    
+    int idx = job_num - 1;
+    long pid = g_jobs[idx].pid;
+    
+    print_string(g_jobs[idx].name);
+    print_string(NEWLINE);
+    
+    /* Set as foreground process */
+    syscall1(SYS_SETFGPID, pid);
+    
+    /* Send SIGCONT to resume */
+    syscall2(SYS_KILL, pid, SIGCONT);
+    
+    /* Wait for it */
+    int status = 0;
+    syscall3(SYS_WAIT, pid, (long)&status, 0);
+    
+    /* Clear foreground */
+    syscall1(SYS_SETFGPID, -1);
+    
+    /* Check if stopped again */
+    if (WIFSTOPPED(status)) {
+        g_jobs[idx].stopped = 1;
+        print_string("[Stopped] ");
+        print_string(g_jobs[idx].name);
+        print_string(NEWLINE);
+    } else {
+        /* Job completed - remove from list */
+        job_remove(job_num);
+    }
+}
+
+/**
+ * Handle 'bg' command - continue job in background
+ */
+static void handle_builtin_bg(int arg_start, int input_len) {
+    int job_num = 1;  /* Default to job 1 */
+    
+    /* Parse job number if provided */
+    if (arg_start < input_len) {
+        job_num = 0;
+        for (int i = arg_start; i < input_len && g_expanded_buffer[i] >= '0' && g_expanded_buffer[i] <= '9'; i++) {
+            job_num = job_num * 10 + (g_expanded_buffer[i] - '0');
+        }
+    }
+    
+    if (job_num < 1 || job_num > g_job_count) {
+        print_string("bg: no such job\n");
+        return;
+    }
+    
+    int idx = job_num - 1;
+    long pid = g_jobs[idx].pid;
+    
+    /* Send SIGCONT to resume in background */
+    syscall2(SYS_KILL, pid, SIGCONT);
+    
+    g_jobs[idx].stopped = 0;  /* Now running */
+    
+    print_string("[");
+    char num_buf[4];
+    num_buf[0] = '0' + job_num;
+    num_buf[1] = '\0';
+    print_string(num_buf);
+    print_string("] ");
+    print_string(g_jobs[idx].name);
+    print_string(" &\n");
+}
+
+/**
+ * Handle external command - fork and exec from /bin with arguments
+ */
+static void handle_external_command(const char *binary_name, int arg_start, int input_len) {
     /* Build path: /bin/<binary_name> */
     int path_idx = 0;
     int prefix_idx = 0;
@@ -517,7 +1163,388 @@ static void handle_external_command(const char *binary_name) {
     }
     g_path_buffer[path_idx] = '\0';
     
-    exec_external(g_path_buffer);
+    exec_external_with_args(g_path_buffer, arg_start, input_len);
+}
+
+/**
+ * Try to execute command as a path (handles ./ ../ and absolute paths)
+ * Returns 1 if it looks like a path and was attempted, 0 if not a path
+ */
+static int try_execute_as_path(int cmd_len, int arg_start, int input_len) {
+    /* Check if command starts with / (absolute) or . (relative) */
+    char first = g_expanded_buffer[0];
+    
+    if (first != '/' && first != '.') {
+        return 0;  /* Not a path */
+    }
+    
+    /* Check for ./ or ../ prefix */
+    if (first == '.') {
+        if (cmd_len < 2) {
+            return 0;  /* Just "." is not valid */
+        }
+        char second = g_expanded_buffer[1];
+        if (second != '/' && second != '.') {
+            return 0;  /* Not ./ or ../ */
+        }
+        if (second == '.' && (cmd_len < 3 || g_expanded_buffer[2] != '/')) {
+            return 0;  /* Not ../ */
+        }
+    }
+    
+    /* Copy command to path buffer */
+    int path_idx = 0;
+    for (int i = 0; i < cmd_len && path_idx < PATH_BUFFER_SIZE - 1; i++) {
+        g_path_buffer[path_idx++] = g_expanded_buffer[i];
+    }
+    g_path_buffer[path_idx] = '\0';
+    
+    /* Try to execute it */
+    exec_external_with_args(g_path_buffer, arg_start, input_len);
+    return 1;
+}
+
+/**
+ * Write string to file descriptor
+ */
+static void write_to_fd(long fd, const char *str) {
+    syscall3(SYS_WRITE, fd, (long)str, str_length(str));
+}
+
+/* Forward declaration for execute_script_line */
+static void execute_script_line(char *line);
+
+/**
+ * Handle 'source' command - run commands from a script file
+ */
+static void handle_builtin_source(int arg_start, int input_len) {
+    if (arg_start >= input_len) {
+        print_string(MSG_USAGE_SOURCE);
+        return;
+    }
+    
+    /* Null-terminate the filename */
+    g_expanded_buffer[input_len] = '\0';
+    
+    long file_fd = syscall3(SYS_OPEN, (long)&g_expanded_buffer[arg_start], O_RDONLY, 0);
+    if (file_fd < 0) {
+        print_string(MSG_FILE_ERROR);
+        return;
+    }
+    
+    /* Read and execute script line by line */
+    char line_buffer[MAX_CMD_LEN];
+    int line_pos = 0;
+    char ch;
+    
+    while (syscall3(SYS_READ, file_fd, (long)&ch, 1) == 1) {
+        if (ch == '\n' || ch == '\r') {
+            if (line_pos > 0) {
+                line_buffer[line_pos] = '\0';
+                
+                /* Skip comment lines */
+                int first_char = 0;
+                while (first_char < line_pos && 
+                       (line_buffer[first_char] == ' ' || line_buffer[first_char] == '\t')) {
+                    first_char++;
+                }
+                
+                if (first_char < line_pos && line_buffer[first_char] != '#') {
+                    /* Echo the command being executed */
+                    print_string("+ ");
+                    print_string(line_buffer);
+                    print_string(NEWLINE);
+                    
+                    /* Execute the line */
+                    execute_script_line(line_buffer);
+                }
+                line_pos = 0;
+            }
+        } else if (line_pos < MAX_CMD_LEN - 1) {
+            line_buffer[line_pos++] = ch;
+        }
+    }
+    
+    /* Execute any remaining content */
+    if (line_pos > 0) {
+        line_buffer[line_pos] = '\0';
+        int first_char = 0;
+        while (first_char < line_pos && 
+               (line_buffer[first_char] == ' ' || line_buffer[first_char] == '\t')) {
+            first_char++;
+        }
+        if (first_char < line_pos && line_buffer[first_char] != '#') {
+            print_string("+ ");
+            print_string(line_buffer);
+            print_string(NEWLINE);
+            execute_script_line(line_buffer);
+        }
+    }
+    
+    syscall1(SYS_CLOSE, file_fd);
+}
+
+/**
+ * Execute a single line from a script (or directly)
+ * This copies the line to g_input_buffer and processes it
+ */
+static void execute_script_line(char *line) {
+    /* Save current input buffer state */
+    int saved_pos = g_input_pos;
+    
+    /* Copy line to input buffer */
+    int i = 0;
+    while (line[i] && i < INPUT_BUFFER_SIZE - 1) {
+        g_input_buffer[i] = line[i];
+        i++;
+    }
+    g_input_buffer[i] = '\0';
+    g_input_pos = i;
+    
+    /* Process the command (without adding to history - it's a script) */
+    int input_len = g_input_pos;
+    
+    /* Expand environment variables */
+    env_expand(g_input_buffer, g_expanded_buffer, EXPANDED_CMD_SIZE);
+    
+    /* Parse for I/O redirections */
+    char *input_file = (char *)0;
+    char *output_file = (char *)0;
+    int append_mode = 0;
+    parse_redirections(g_expanded_buffer, &input_file, &output_file, &append_mode);
+    
+    /* Open input file if redirected */
+    long input_fd = -1;
+    if (input_file && input_file[0]) {
+        input_fd = syscall3(SYS_OPEN, (long)input_file, O_RDONLY, 0);
+        if (input_fd < 0) {
+            print_string("Error: Cannot open input file\n");
+            g_input_pos = saved_pos;
+            return;
+        }
+    }
+    
+    /* Open output file if redirected */
+    long output_fd = -1;
+    if (output_file && output_file[0]) {
+        int flags = O_WRONLY | O_CREAT;
+        if (append_mode) {
+            flags |= O_APPEND;
+        } else {
+            flags |= O_TRUNC;
+        }
+        output_fd = syscall3(SYS_OPEN, (long)output_file, flags, FILE_MODE);
+        if (output_fd < 0) {
+            print_string(MSG_REDIR_ERROR);
+            if (input_fd >= 0) syscall1(SYS_CLOSE, input_fd);
+            g_input_pos = saved_pos;
+            return;
+        }
+    }
+    
+    /* Recalculate length after redirection parsing */
+    int expanded_len = str_length(g_expanded_buffer);
+    
+    /* Trim trailing whitespace */
+    while (expanded_len > 0 && (g_expanded_buffer[expanded_len - 1] == ' ' || 
+                                 g_expanded_buffer[expanded_len - 1] == '\t')) {
+        expanded_len--;
+    }
+    g_expanded_buffer[expanded_len] = '\0';
+    
+    /* Parse command */
+    int cmd_len = parse_command_length(g_expanded_buffer, expanded_len);
+    int arg_start = parse_arg_start(g_expanded_buffer, expanded_len, cmd_len);
+    
+    /* Execute built-in or external command (simplified version) */
+    if (command_matches(g_expanded_buffer, cmd_len, "echo")) {
+        if (output_fd >= 0 && arg_start < expanded_len) {
+            write_to_fd(output_fd, &g_expanded_buffer[arg_start]);
+            write_to_fd(output_fd, NEWLINE);
+        } else if (arg_start < expanded_len) {
+            print_chars(&g_expanded_buffer[arg_start], expanded_len - arg_start);
+            print_string(NEWLINE);
+        }
+    } else if (command_matches(g_expanded_buffer, cmd_len, "cat")) {
+        handle_builtin_cat(arg_start, expanded_len, input_fd);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "cd")) {
+        handle_builtin_cd(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "mkdir")) {
+        handle_builtin_mkdir(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "rmdir")) {
+        handle_builtin_rmdir(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "export")) {
+        handle_builtin_export(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "unset")) {
+        handle_builtin_unset(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "ls")) {
+        handle_external_command("ls", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "pwd")) {
+        handle_external_command("pwd", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "clear")) {
+        handle_external_command("clear", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "hello")) {
+        handle_external_command("hello", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "sleep")) {
+        handle_external_command("sleep", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "touch")) {
+        handle_external_command("touch", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "rm")) {
+        handle_external_command("rm", arg_start, expanded_len);
+    } else if (cmd_len > 0) {
+        /* Try to execute as path (./program, ../program, /path/to/program) */
+        if (!try_execute_as_path(cmd_len, arg_start, expanded_len)) {
+            /* Not a path - try as command in /bin */
+            char saved = g_expanded_buffer[cmd_len];
+            g_expanded_buffer[cmd_len] = '\0';
+            handle_external_command(g_expanded_buffer, arg_start, expanded_len);
+            g_expanded_buffer[cmd_len] = saved;
+        }
+    }
+    
+    /* Close opened file descriptors */
+    if (output_fd >= 0) {
+        syscall1(SYS_CLOSE, output_fd);
+    }
+    if (input_fd >= 0) {
+        syscall1(SYS_CLOSE, input_fd);
+    }
+    
+    /* Restore input buffer state */
+    g_input_pos = saved_pos;
+}
+
+/**
+ * Find pipe character in command string
+ * Returns index of '|' or -1 if not found
+ */
+static int find_pipe_char(const char *cmd) {
+    for (int i = 0; cmd[i]; i++) {
+        if (cmd[i] == '|') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * Execute a simple command (no pipes) - used by pipeline
+ * Forks, execs, and waits
+ */
+static void exec_simple_command(const char *cmd) {
+    /* Skip leading whitespace */
+    while (*cmd == ' ' || *cmd == '\t') cmd++;
+    
+    if (*cmd == '\0') return;
+    
+    /* Parse command name */
+    char cmd_name[64];
+    int i = 0;
+    while (cmd[i] && cmd[i] != ' ' && cmd[i] != '\t' && i < 63) {
+        cmd_name[i] = cmd[i];
+        i++;
+    }
+    cmd_name[i] = '\0';
+    
+    /* Build path */
+    char path[PATH_BUFFER_SIZE];
+    path[0] = '/'; path[1] = 'b'; path[2] = 'i'; path[3] = 'n'; path[4] = '/';
+    int j = 5;
+    for (int k = 0; cmd_name[k] && j < PATH_BUFFER_SIZE - 1; k++) {
+        path[j++] = cmd_name[k];
+    }
+    path[j] = '\0';
+    
+    /* Skip to arguments */
+    while (cmd[i] == ' ' || cmd[i] == '\t') i++;
+    
+    /* Build argv */
+    const char *argv[MAX_ARGS];
+    int argc = 0;
+    argv[argc++] = path;
+    
+    /* Parse remaining arguments */
+    static char arg_buf[256];
+    int arg_idx = 0;
+    const char *arg_start_ptr = &cmd[i];
+    
+    while (*arg_start_ptr && argc < MAX_ARGS - 1) {
+        while (*arg_start_ptr == ' ' || *arg_start_ptr == '\t') arg_start_ptr++;
+        if (!*arg_start_ptr) break;
+        
+        argv[argc++] = &arg_buf[arg_idx];
+        while (*arg_start_ptr && *arg_start_ptr != ' ' && *arg_start_ptr != '\t') {
+            if (arg_idx < 255) {
+                arg_buf[arg_idx++] = *arg_start_ptr;
+            }
+            arg_start_ptr++;
+        }
+        arg_buf[arg_idx++] = '\0';
+    }
+    argv[argc] = (char *)0;
+    
+    /* Execute */
+    const char *envp[] = { 0 };
+    syscall3(SYS_EXECVE, (long)path, (long)argv, (long)envp);
+    
+    /* If we get here, exec failed */
+    print_string("exec failed: ");
+    print_string(cmd_name);
+    print_string("\n");
+    syscall1(SYS_EXIT, 1);
+}
+
+/**
+ * Execute a pipeline: left_cmd | right_cmd
+ */
+static void execute_pipeline(char *left_cmd, char *right_cmd) {
+    int pipefd[2];
+    
+    /* Create pipe */
+    if (syscall1(SYS_PIPE, (long)pipefd) < 0) {
+        print_string("Error: Cannot create pipe\n");
+        return;
+    }
+    
+    /* Fork for left command (writes to pipe) */
+    long left_pid = syscall0(SYS_FORK);
+    
+    if (left_pid == 0) {
+        /* Left child: stdout -> pipe write end */
+        syscall1(SYS_CLOSE, pipefd[0]);  /* Close read end */
+        syscall2(SYS_DUP2, pipefd[1], STDOUT_FD);
+        syscall1(SYS_CLOSE, pipefd[1]);
+        
+        exec_simple_command(left_cmd);
+        /* Never returns */
+    }
+    
+    /* Fork for right command (reads from pipe) */
+    long right_pid = syscall0(SYS_FORK);
+    
+    if (right_pid == 0) {
+        /* Right child: stdin <- pipe read end */
+        syscall1(SYS_CLOSE, pipefd[1]);  /* Close write end */
+        syscall2(SYS_DUP2, pipefd[0], STDIN_FD);
+        syscall1(SYS_CLOSE, pipefd[0]);
+        
+        exec_simple_command(right_cmd);
+        /* Never returns */
+    }
+    
+    /* Parent: close both ends, set foreground, and wait for children */
+    syscall1(SYS_CLOSE, pipefd[0]);
+    syscall1(SYS_CLOSE, pipefd[1]);
+    
+    /* Set right_pid as foreground for Ctrl+C (typically the last in pipeline) */
+    syscall1(SYS_SETFGPID, right_pid);
+    
+    int status;
+    syscall3(SYS_WAIT, left_pid, (long)&status, 0);
+    syscall3(SYS_WAIT, right_pid, (long)&status, 0);
+    
+    /* Clear foreground process */
+    syscall1(SYS_SETFGPID, -1);
 }
 
 /**
@@ -531,52 +1558,165 @@ static void process_command(void) {
         return;
     }
     
-    /* Add to history */
+    /* Add to history (before expansion) */
     history_add(g_input_buffer);
     
+    /* Expand environment variables */
+    env_expand(g_input_buffer, g_expanded_buffer, EXPANDED_CMD_SIZE);
+    
+    /* Check for pipe */
+    int pipe_pos = find_pipe_char(g_expanded_buffer);
+    if (pipe_pos >= 0) {
+        /* Split command at pipe */
+        g_expanded_buffer[pipe_pos] = '\0';
+        char *left_cmd = g_expanded_buffer;
+        char *right_cmd = &g_expanded_buffer[pipe_pos + 1];
+        
+        /* Trim whitespace from left command */
+        int left_end = pipe_pos - 1;
+        while (left_end >= 0 && (left_cmd[left_end] == ' ' || left_cmd[left_end] == '\t')) {
+            left_cmd[left_end--] = '\0';
+        }
+        
+        /* Skip leading whitespace on right command */
+        while (*right_cmd == ' ' || *right_cmd == '\t') right_cmd++;
+        
+        execute_pipeline(left_cmd, right_cmd);
+        return;
+    }
+    
+    /* Parse for I/O redirections */
+    char *input_file = (char *)0;
+    char *output_file = (char *)0;
+    int append_mode = 0;
+    parse_redirections(g_expanded_buffer, &input_file, &output_file, &append_mode);
+    
+    /* Open input file if redirected */
+    long input_fd = -1;
+    if (input_file && input_file[0]) {
+        input_fd = syscall3(SYS_OPEN, (long)input_file, O_RDONLY, 0);
+        if (input_fd < 0) {
+            print_string("Error: Cannot open input file\n");
+            return;
+        }
+    }
+    
+    /* Open output file if redirected */
+    long output_fd = -1;
+    if (output_file && output_file[0]) {
+        int flags = O_WRONLY | O_CREAT;
+        if (append_mode) {
+            flags |= O_APPEND;
+        } else {
+            flags |= O_TRUNC;
+        }
+        output_fd = syscall3(SYS_OPEN, (long)output_file, flags, FILE_MODE);
+        if (output_fd < 0) {
+            print_string(MSG_REDIR_ERROR);
+            return;
+        }
+    }
+    
+    /* Recalculate length after redirection parsing */
+    int expanded_len = str_length(g_expanded_buffer);
+    
+    /* Trim trailing whitespace */
+    while (expanded_len > 0 && (g_expanded_buffer[expanded_len - 1] == ' ' || 
+                                 g_expanded_buffer[expanded_len - 1] == '\t')) {
+        expanded_len--;
+    }
+    g_expanded_buffer[expanded_len] = '\0';
+    
     /* Parse command */
-    int cmd_len = parse_command_length(g_input_buffer, input_len);
-    int arg_start = parse_arg_start(g_input_buffer, input_len, cmd_len);
+    int cmd_len = parse_command_length(g_expanded_buffer, expanded_len);
+    int arg_start = parse_arg_start(g_expanded_buffer, expanded_len, cmd_len);
     
     /* Check built-in commands first */
-    if (command_matches(g_input_buffer, cmd_len, "help")) {
+    if (command_matches(g_expanded_buffer, cmd_len, "help")) {
         handle_builtin_help();
-    } else if (command_matches(g_input_buffer, cmd_len, "exit")) {
+    } else if (command_matches(g_expanded_buffer, cmd_len, "exit")) {
         handle_builtin_exit();
-    } else if (command_matches(g_input_buffer, cmd_len, "echo")) {
-        handle_builtin_echo(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "cat")) {
-        handle_builtin_cat(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "cd")) {
-        handle_builtin_cd(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "mkdir")) {
-        handle_builtin_mkdir(arg_start, input_len);
-    } else if (command_matches(g_input_buffer, cmd_len, "rmdir")) {
-        handle_builtin_rmdir(arg_start, input_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "echo")) {
+        /* Handle echo with optional output redirection */
+        if (output_fd >= 0 && arg_start < expanded_len) {
+            write_to_fd(output_fd, &g_expanded_buffer[arg_start]);
+            write_to_fd(output_fd, NEWLINE);
+        } else if (arg_start < expanded_len) {
+            print_chars(&g_expanded_buffer[arg_start], expanded_len - arg_start);
+            print_string(NEWLINE);
+        }
+    } else if (command_matches(g_expanded_buffer, cmd_len, "cat")) {
+        handle_builtin_cat(arg_start, expanded_len, input_fd);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "cd")) {
+        handle_builtin_cd(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "mkdir")) {
+        handle_builtin_mkdir(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "rmdir")) {
+        handle_builtin_rmdir(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "export")) {
+        handle_builtin_export(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "unset")) {
+        handle_builtin_unset(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "env")) {
+        handle_builtin_env();
+    } else if (command_matches(g_expanded_buffer, cmd_len, "history")) {
+        handle_builtin_history();
+    } else if (command_matches(g_expanded_buffer, cmd_len, "source")) {
+        handle_builtin_source(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "fg")) {
+        handle_builtin_fg(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "bg")) {
+        handle_builtin_bg(arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "jobs")) {
+        handle_builtin_jobs();
     }
     /* External commands - fork and exec from /bin */
-    else if (command_matches(g_input_buffer, cmd_len, "ls")) {
-        handle_external_command("ls");
-    } else if (command_matches(g_input_buffer, cmd_len, "pwd")) {
-        handle_external_command("pwd");
-    } else if (command_matches(g_input_buffer, cmd_len, "clear")) {
-        handle_external_command("clear");
-    } else if (command_matches(g_input_buffer, cmd_len, "hello")) {
-        handle_external_command("hello");
-    } else if (command_matches(g_input_buffer, cmd_len, "clock")) {
-        handle_external_command("clock");
-    } else if (command_matches(g_input_buffer, cmd_len, "ps")) {
-        handle_external_command("ps");
-    } else if (command_matches(g_input_buffer, cmd_len, "uname")) {
-        handle_external_command("uname");
-    } else if (command_matches(g_input_buffer, cmd_len, "uptime")) {
-        handle_external_command("uptime");
-    } else if (command_matches(g_input_buffer, cmd_len, "whoami")) {
-        handle_external_command("whoami");
-    } else if (command_matches(g_input_buffer, cmd_len, "tty")) {
-        handle_external_command("tty");
-    } else {
-        print_string(MSG_UNKNOWN_CMD);
+    else if (command_matches(g_expanded_buffer, cmd_len, "ls")) {
+        handle_external_command("ls", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "pwd")) {
+        handle_external_command("pwd", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "clear")) {
+        handle_external_command("clear", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "hello")) {
+        handle_external_command("hello", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "clock")) {
+        handle_external_command("clock", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "ps")) {
+        handle_external_command("ps", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "uname")) {
+        handle_external_command("uname", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "uptime")) {
+        handle_external_command("uptime", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "whoami")) {
+        handle_external_command("whoami", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "tty")) {
+        handle_external_command("tty", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "kill")) {
+        handle_external_command("kill", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "touch")) {
+        handle_external_command("touch", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "rm")) {
+        handle_external_command("rm", arg_start, expanded_len);
+    } else if (command_matches(g_expanded_buffer, cmd_len, "sleep")) {
+        handle_external_command("sleep", arg_start, expanded_len);
+    } else if (cmd_len > 0) {
+        /* Try to execute as path (./program, ../program, /path/to/program) */
+        if (!try_execute_as_path(cmd_len, arg_start, expanded_len)) {
+            /* Not a path - try as command in /bin */
+            /* Null-terminate command name temporarily */
+            char saved = g_expanded_buffer[cmd_len];
+            g_expanded_buffer[cmd_len] = '\0';
+            handle_external_command(g_expanded_buffer, arg_start, expanded_len);
+            g_expanded_buffer[cmd_len] = saved;
+        }
+    }
+    
+    /* Close opened file descriptors */
+    if (output_fd >= 0) {
+        syscall1(SYS_CLOSE, output_fd);
+    }
+    if (input_fd >= 0) {
+        syscall1(SYS_CLOSE, input_fd);
     }
 }
 
@@ -650,6 +1790,160 @@ static void handle_newline(void) {
     print_string(SHELL_PROMPT);
 }
 
+/**
+ * Handle tab key for filename completion
+ */
+static void handle_tab(void) {
+    if (g_input_pos == 0) {
+        return;  /* Nothing to complete */
+    }
+    
+    /* Find the start of the last word (token being typed) */
+    int word_start = g_input_pos;
+    while (word_start > 0 && g_input_buffer[word_start - 1] != ' ') {
+        word_start--;
+    }
+    
+    if (word_start == g_input_pos) {
+        return;  /* Empty word */
+    }
+    
+    /* Extract the partial word */
+    g_input_buffer[g_input_pos] = '\0';
+    const char *partial = &g_input_buffer[word_start];
+    int partial_len = g_input_pos - word_start;
+    
+    /* Determine directory to search and prefix to match */
+    char dir_path[PATH_BUFFER_SIZE];
+    const char *name_prefix;
+    int prefix_len;
+    
+    /* Check if partial contains a slash (path) */
+    int last_slash = -1;
+    for (int i = 0; i < partial_len; i++) {
+        if (partial[i] == '/') {
+            last_slash = i;
+        }
+    }
+    
+    if (last_slash >= 0) {
+        /* Has path - extract directory */
+        if ((unsigned int)last_slash >= sizeof(dir_path) - 1) {
+            return;  /* Path too long */
+        }
+        for (int i = 0; i < last_slash; i++) {
+            dir_path[i] = partial[i];
+        }
+        if (last_slash == 0) {
+            dir_path[0] = '/';
+            dir_path[1] = '\0';
+        } else {
+            dir_path[last_slash] = '\0';
+        }
+        name_prefix = &partial[last_slash + 1];
+        prefix_len = partial_len - last_slash - 1;
+    } else {
+        /* No slash - use current directory */
+        dir_path[0] = '.';
+        dir_path[1] = '\0';
+        name_prefix = partial;
+        prefix_len = partial_len;
+    }
+    
+    /* Open the directory */
+    long dir_fd = syscall3(SYS_OPEN, (long)dir_path, O_RDONLY, 0);
+    if (dir_fd < 0) {
+        return;  /* Cannot open directory */
+    }
+    
+    /* Read directory entries and find matches */
+    char match_buf[256];
+    int match_count = 0;
+    const char *first_match = (const char *)0;
+    int first_match_len = 0;
+    int common_len = 0;  /* Length of common prefix among all matches */
+    
+    char dirent_buf[512];  /* Buffer for directory entries */
+    long bytes_read;
+    
+    while ((bytes_read = syscall3(SYS_GETDENTS, dir_fd, (long)dirent_buf, sizeof(dirent_buf))) > 0) {
+        long pos = 0;
+        while (pos < bytes_read) {
+            struct thunderos_dirent *de = (struct thunderos_dirent *)&dirent_buf[pos];
+            
+            /* Check if name starts with our prefix */
+            int match = 1;
+            if (prefix_len > 0) {
+                for (int i = 0; i < prefix_len; i++) {
+                    if (de->d_name[i] != name_prefix[i]) {
+                        match = 0;
+                        break;
+                    }
+                }
+            }
+            
+            if (match && de->d_name[0] != '\0') {
+                /* Skip . and .. */
+                if (de->d_name[0] == '.' && 
+                    (de->d_name[1] == '\0' || 
+                     (de->d_name[1] == '.' && de->d_name[2] == '\0'))) {
+                    pos += de->d_reclen;
+                    continue;
+                }
+                
+                if (match_count == 0) {
+                    /* First match - copy it */
+                    int i;
+                    for (i = 0; de->d_name[i] && i < 255; i++) {
+                        match_buf[i] = de->d_name[i];
+                    }
+                    match_buf[i] = '\0';
+                    first_match = match_buf;
+                    first_match_len = i;
+                    common_len = i;
+                } else {
+                    /* Find common prefix with existing matches */
+                    int i;
+                    for (i = 0; i < common_len && de->d_name[i] == match_buf[i]; i++) {
+                        /* Keep going while matching */
+                    }
+                    common_len = i;
+                }
+                match_count++;
+            }
+            
+            pos += de->d_reclen;
+        }
+    }
+    
+    syscall1(SYS_CLOSE, dir_fd);
+    
+    if (match_count == 0) {
+        return;  /* No matches */
+    }
+    
+    if (match_count == 1) {
+        /* Single match - complete it fully */
+        int chars_to_add = first_match_len - prefix_len;
+        for (int i = 0; i < chars_to_add && g_input_pos < INPUT_BUFFER_SIZE - 1; i++) {
+            char c = first_match[prefix_len + i];
+            g_input_buffer[g_input_pos++] = c;
+            print_char(c);
+        }
+        /* Add trailing slash for directories or space for files */
+        /* (We'd need to stat the file to know - for simplicity, just complete) */
+    } else if (common_len > prefix_len) {
+        /* Multiple matches but can still extend */
+        int chars_to_add = common_len - prefix_len;
+        for (int i = 0; i < chars_to_add && g_input_pos < INPUT_BUFFER_SIZE - 1; i++) {
+            char c = match_buf[prefix_len + i];
+            g_input_buffer[g_input_pos++] = c;
+            print_char(c);
+        }
+    }
+    /* If multiple matches and no common extension, could beep or show options */
+}
+
 /* ========================================================================
  * Main entry point
  * ======================================================================== */
@@ -667,6 +1961,7 @@ void _start(void) {
     
     /* Initialize shell state */
     history_init();
+    env_init();
     g_input_pos = 0;
     g_escape_state = ESC_STATE_NORMAL;
     
@@ -699,6 +1994,8 @@ void _start(void) {
         /* Handle special characters */
         if (input_char == '\r' || input_char == '\n') {
             handle_newline();
+        } else if (input_char == CHAR_TAB) {
+            handle_tab();
         } else if (input_char == CHAR_BACKSPACE || input_char == CHAR_BACKSPACE_ALT) {
             handle_backspace();
         } else if (input_char >= 32 && input_char < 127) {

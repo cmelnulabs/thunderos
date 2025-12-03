@@ -240,10 +240,16 @@ void schedule(void) {
         // Switch to next process
         if (next != current) {
             context_switch(current, next);
+            // After context_switch returns, we're on the resumed process's stack.
+            // Local variable 'old_state' now points to the new process's stack frame
+            // which contains garbage or the wrong value.
+            // We must enable interrupts and return WITHOUT using old_state.
+            interrupt_restore(1);  // Always enable interrupts after context switch
+            return;
         }
     }
     
-    // Restore interrupt state
+    // Restore interrupt state (only reached if no context switch happened)
     interrupt_restore(old_state);
 }
 

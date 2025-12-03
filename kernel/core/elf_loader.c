@@ -235,18 +235,17 @@ int elf_load_exec(const char *path, const char *argv[], int argc) {
  * @return -1 on error (and errno is set), does not return on success
  */
 int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap_frame *tf) {
-    (void)argv;
-    (void)argc;
-    
     struct process *proc = process_current();
     if (!proc || !tf) {
         RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
-    /* CRITICAL: Copy path to kernel buffer BEFORE we free user memory!
-     * The path pointer is in user space (e.g., shell's .rodata section).
+    /* CRITICAL: Copy path and argv to kernel buffers BEFORE we free user memory!
+     * The path and argv pointers are in user space (e.g., shell's memory).
      * We will free the old process's pages during exec, which would make
-     * the path inaccessible. Copy it now while it's still valid. */
+     * them inaccessible. Copy now while they're still valid. */
+    
+    /* Copy path */
     char path_buf[256];
     size_t path_len = 0;
     while (path[path_len] && path_len < sizeof(path_buf) - 1) {
@@ -254,6 +253,28 @@ int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap
         path_len++;
     }
     path_buf[path_len] = '\0';
+    
+    /* Copy argv to kernel buffers */
+    #define MAX_EXEC_ARGS 16
+    #define MAX_ARG_LEN 128
+    char kargv_buf[MAX_EXEC_ARGS][MAX_ARG_LEN];
+    const char *kargv[MAX_EXEC_ARGS + 1];
+    int kargc = 0;
+    
+    if (argv) {
+        for (int i = 0; i < argc && i < MAX_EXEC_ARGS && argv[i]; i++) {
+            /* Copy each argument string */
+            size_t arg_len = 0;
+            while (argv[i][arg_len] && arg_len < MAX_ARG_LEN - 1) {
+                kargv_buf[i][arg_len] = argv[i][arg_len];
+                arg_len++;
+            }
+            kargv_buf[i][arg_len] = '\0';
+            kargv[i] = kargv_buf[i];
+            kargc++;
+        }
+    }
+    kargv[kargc] = (char *)0;  /* NULL terminate */
     
     /* Use kernel buffer from now on */
     const char *kpath = path_buf;
@@ -447,14 +468,52 @@ int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap
         process_exit(-1);
     }
     
-    /* 4. Setup new user stack (keep the existing stack) */
-    /* The stack is already mapped from process creation, we keep it */
+    /* 4. Setup new user stack and copy argv to it */
+    /* Stack layout (growing down from USER_STACK_TOP):
+     *   [argv strings]     - actual string data
+     *   [padding for alignment]
+     *   [argv[n] = NULL]   - NULL terminator
+     *   [argv[n-1]]        - pointer to last arg string
+     *   ...
+     *   [argv[0]]          - pointer to first arg string (program name)
+     *   SP points here ->
+     */
+    uint64_t sp = USER_STACK_TOP;
+    uint64_t user_argv[MAX_EXEC_ARGS + 1];
+    
+    /* First pass: copy strings to stack (from top, growing down) */
+    for (int i = kargc - 1; i >= 0; i--) {
+        size_t len = 0;
+        while (kargv[i][len]) len++;
+        len++;  /* Include null terminator */
+        
+        sp -= len;
+        sp &= ~7UL;  /* Align to 8 bytes */
+        
+        /* Copy string to user stack */
+        char *dst = (char *)sp;
+        for (size_t j = 0; j < len; j++) {
+            dst[j] = kargv[i][j];
+        }
+        user_argv[i] = sp;  /* Remember where this string is */
+    }
+    user_argv[kargc] = 0;  /* NULL terminator */
+    
+    /* Second pass: copy argv pointers to stack */
+    sp -= (kargc + 1) * sizeof(uint64_t);  /* Space for pointers + NULL */
+    sp &= ~15UL;  /* Align to 16 bytes for RISC-V ABI */
+    
+    uint64_t argv_base = sp;
+    uint64_t *argv_ptr = (uint64_t *)sp;
+    for (int i = 0; i <= kargc; i++) {
+        argv_ptr[i] = user_argv[i];
+    }
     
     /* 5. Update trap frame to start at new entry point */
     /* CRITICAL: We modify the trap frame passed from syscall handler (on stack),
      * NOT proc->trap_frame. The trap handler will return using this tf. */
     tf->sepc = ehdr.entry;
-    tf->sp = USER_STACK_TOP;  /* Stack pointer at TOP, grows down */
+    tf->sp = sp;  /* Stack pointer below argv */
     
     /* 6. Clear registers except sp */
     tf->ra = 0;
@@ -463,10 +522,10 @@ int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap
     tf->t0 = 0;
     tf->t1 = 0;
     tf->t2 = 0;
-    tf->s0 = USER_STACK_TOP;  /* CRITICAL: s0 must be valid for -O0 compiled code */
+    tf->s0 = sp;  /* CRITICAL: s0 must be valid for -O0 compiled code */
     tf->s1 = 0;
-    tf->a0 = argc;  /* argc */
-    tf->a1 = (uint64_t)argv;  /* argv */
+    tf->a0 = kargc;  /* argc */
+    tf->a1 = argv_base;  /* argv - pointer to argv array on user stack */
     tf->a2 = 0;
     tf->a3 = 0;
     tf->a4 = 0;

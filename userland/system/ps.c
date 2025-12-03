@@ -15,6 +15,8 @@ typedef unsigned long size_t;
 typedef struct {
     int pid;
     int ppid;
+    int pgid;
+    int sid;
     int state;
     int tty;
     unsigned long cpu_time;
@@ -143,7 +145,7 @@ void _start(void) {
     }
     
     /* Print header */
-    print("  PID  PPID TTY   STATE  TIME CMD\n");
+    print("  PID  PPID  PGID   SID TTY   STATE  TIME CMD\n");
     
     /* Print each process */
     for (int i = 0; i < count; i++) {
@@ -155,6 +157,14 @@ void _start(void) {
         
         /* PPID */
         print_int_width(p->ppid, 5);
+        print_char(' ');
+        
+        /* PGID */
+        print_int_width(p->pgid, 5);
+        print_char(' ');
+        
+        /* SID */
+        print_int_width(p->sid, 5);
         print_char(' ');
         
         /* TTY */

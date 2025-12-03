@@ -72,7 +72,22 @@ static int ext2_vfs_write(vfs_node_t *node, uint32_t offset, const void *buffer,
     ext2_fs_t *ext2_fs = (ext2_fs_t *)node->fs->fs_data;
     ext2_inode_t *inode = (ext2_inode_t *)node->fs_data;
     
-    return ext2_write_file(ext2_fs, inode, offset, buffer, size);
+    int bytes_written = ext2_write_file(ext2_fs, inode, offset, buffer, size);
+    if (bytes_written < 0) {
+        /* errno already set by ext2_write_file */
+        return -1;
+    }
+    
+    /* Write updated inode back to disk (size, blocks, etc. were modified) */
+    if (ext2_write_inode(ext2_fs, node->inode, inode) != 0) {
+        /* errno already set by ext2_write_inode */
+        return -1;
+    }
+    
+    /* Update VFS node size */
+    node->size = inode->i_size;
+    
+    return bytes_written;
 }
 
 /**
@@ -111,6 +126,7 @@ static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
     vfs_node_t *node = (vfs_node_t *)kmalloc(sizeof(vfs_node_t));
     if (!node) {
         kfree(inode);
+        set_errno(THUNDEROS_ENOMEM);
         return NULL;
     }
     
@@ -120,6 +136,9 @@ static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
     node->type = ((inode->i_mode & EXT2_S_IFMT) == EXT2_S_IFDIR) ? 
                  VFS_TYPE_DIRECTORY : VFS_TYPE_FILE;
     node->flags = 0;
+    node->mode = inode->i_mode;    /* Copy full mode including permissions */
+    node->uid = inode->i_uid;      /* Copy owner user ID */
+    node->gid = inode->i_gid;      /* Copy owner group ID */
     node->fs = dir->fs;
     node->fs_data = inode;
     node->ops = &ext2_vfs_ops;
@@ -138,6 +157,7 @@ static vfs_node_t *ext2_vfs_lookup(vfs_node_t *dir, const char *name) {
  */
 static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *entry_name, uint32_t *entry_inode) {
     if (!directory || !directory->fs || !directory->fs->fs_data || !directory->fs_data || !entry_name || !entry_inode) {
+        set_errno(THUNDEROS_EINVAL);
         return -1;
     }
     
@@ -146,12 +166,14 @@ static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *e
     
     /* Verify this is a directory */
     if ((directory_inode->i_mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+        set_errno(THUNDEROS_ENOTDIR);
         return -1;
     }
     
     /* Allocate buffer for directory data */
     uint8_t *directory_buffer = (uint8_t *)kmalloc(directory_inode->i_size);
     if (!directory_buffer) {
+        set_errno(THUNDEROS_ENOMEM);
         return -1;
     }
     
@@ -159,6 +181,7 @@ static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *e
     int read_result = ext2_read_file(ext2_filesystem, directory_inode, 0, directory_buffer, directory_inode->i_size);
     if (read_result < 0) {
         kfree(directory_buffer);
+        /* errno already set by ext2_read_file */
         return -1;
     }
     
@@ -194,7 +217,14 @@ static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *e
     }
     
     kfree(directory_buffer);
-    return entry_found ? 0 : -1;
+    
+    if (entry_found) {
+        clear_errno();
+        return 0;
+    } else {
+        set_errno(THUNDEROS_ENOENT);
+        return -1;
+    }
 }
 
 /**
@@ -202,6 +232,7 @@ static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *e
  */
 static int ext2_vfs_create(vfs_node_t *dir, const char *name, uint32_t mode) {
     if (!dir || !dir->fs || !dir->fs->fs_data) {
+        set_errno(THUNDEROS_EINVAL);
         return -1;
     }
     
@@ -217,6 +248,7 @@ static int ext2_vfs_create(vfs_node_t *dir, const char *name, uint32_t mode) {
  */
 static int ext2_vfs_mkdir(vfs_node_t *dir, const char *name, uint32_t mode) {
     if (!dir || !dir->fs || !dir->fs->fs_data) {
+        set_errno(THUNDEROS_EINVAL);
         return -1;
     }
     
@@ -232,6 +264,7 @@ static int ext2_vfs_mkdir(vfs_node_t *dir, const char *name, uint32_t mode) {
  */
 static int ext2_vfs_unlink(vfs_node_t *dir, const char *name) {
     if (!dir || !dir->fs || !dir->fs->fs_data) {
+        set_errno(THUNDEROS_EINVAL);
         return -1;
     }
     
@@ -246,6 +279,7 @@ static int ext2_vfs_unlink(vfs_node_t *dir, const char *name) {
  */
 static int ext2_vfs_rmdir(vfs_node_t *dir, const char *name) {
     if (!dir || !dir->fs || !dir->fs->fs_data) {
+        set_errno(THUNDEROS_EINVAL);
         return -1;
     }
     
@@ -260,12 +294,14 @@ static int ext2_vfs_rmdir(vfs_node_t *dir, const char *name) {
  */
 vfs_filesystem_t *ext2_vfs_mount(ext2_fs_t *ext2_fs) {
     if (!ext2_fs) {
+        set_errno(THUNDEROS_EINVAL);
         return NULL;
     }
     
     /* Allocate VFS filesystem structure */
     vfs_filesystem_t *vfs_fs = (vfs_filesystem_t *)kmalloc(sizeof(vfs_filesystem_t));
     if (!vfs_fs) {
+        set_errno(THUNDEROS_ENOMEM);
         return NULL;
     }
     
@@ -273,12 +309,14 @@ vfs_filesystem_t *ext2_vfs_mount(ext2_fs_t *ext2_fs) {
     ext2_inode_t *root_inode = (ext2_inode_t *)kmalloc(sizeof(ext2_inode_t));
     if (!root_inode) {
         kfree(vfs_fs);
+        set_errno(THUNDEROS_ENOMEM);
         return NULL;
     }
     
     if (ext2_read_inode(ext2_fs, EXT2_ROOT_INO, root_inode) != 0) {
         kfree(root_inode);
         kfree(vfs_fs);
+        /* errno already set by ext2_read_inode */
         return NULL;
     }
     
@@ -287,6 +325,7 @@ vfs_filesystem_t *ext2_vfs_mount(ext2_fs_t *ext2_fs) {
     if (!root_node) {
         kfree(root_inode);
         kfree(vfs_fs);
+        set_errno(THUNDEROS_ENOMEM);
         return NULL;
     }
     
@@ -295,6 +334,9 @@ vfs_filesystem_t *ext2_vfs_mount(ext2_fs_t *ext2_fs) {
     root_node->size = root_inode->i_size;
     root_node->type = VFS_TYPE_DIRECTORY;
     root_node->flags = 0;
+    root_node->mode = root_inode->i_mode;  /* Copy permission bits */
+    root_node->uid = root_inode->i_uid;    /* Copy owner user ID */
+    root_node->gid = root_inode->i_gid;    /* Copy owner group ID */
     root_node->fs = vfs_fs;
     root_node->fs_data = root_inode;
     root_node->ops = &ext2_vfs_ops;

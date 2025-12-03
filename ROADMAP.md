@@ -381,28 +381,29 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 ### Planned Features
 
 #### Job Control & Signals
-- [ ] Process groups and sessions
-- [ ] Job control (background/foreground processes with `&`, `fg`, `bg`)
-- [ ] Ctrl+C sends SIGINT to foreground process group
-- [ ] Ctrl+Z sends SIGTSTP (job suspension)
+- [x] Process groups and sessions
+- [x] Job control (background/foreground processes with `&`, `fg`, `bg`)
+- [x] Ctrl+C sends SIGINT to foreground process group
+- [x] Ctrl+Z sends SIGTSTP (job suspension)
 
 #### I/O & Shell
-- [ ] I/O redirection (>, <, >>)
-- [ ] Pipes in shell syntax (cmd1 | cmd2)
-- [ ] Command history (up/down arrows)
-- [ ] Tab completion
-- [ ] Simple shell scripting support
+- [x] I/O redirection (>, <, >>)
+- [x] Pipes in shell syntax (cmd1 | cmd2)
+- [x] Command history (up/down arrows)
+- [x] Tab completion
+- [x] Simple shell scripting support
 
 #### Filesystem & POSIX
-- [ ] Relative path resolution in VFS (cd .., cd subdir, ./program)
-- [ ] Environment variables
-- [ ] File permissions and ownership
-- [ ] Expanded syscall set (50+ syscalls)
+- [x] ext2 file removal (`ext2_remove_file`)
+- [x] ext2 directory removal (`ext2_remove_dir`)
+- [x] Relative path resolution in VFS (cd .., cd subdir, ./program)
+- [x] Environment variables
+- [x] File permissions and ownership
 
 #### Graphics Console (from v0.7.0)
-- [ ] Framebuffer console driver (uses VirtIO GPU)
-- [ ] Bitmap font rendering (8x16 characters)
-- [ ] GPU-backed virtual terminal rendering
+- [x] Framebuffer console driver (uses VirtIO GPU)
+- [x] Bitmap font rendering (8x16 characters)
+- [x] GPU-backed virtual terminal rendering
 
 **Release Criteria:**
 - Can run simple POSIX programs

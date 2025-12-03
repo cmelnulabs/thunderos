@@ -103,12 +103,12 @@ uint64_t sys_waitpid(int pid, int *wstatus, int options) {
         return SYSCALL_ERROR;
     }
     
-    // Find zombie child process
+    // Find zombie or stopped child process
     while (1) {
         struct process *child = NULL;
         int found_child = 0;
         
-        // Search for matching child process
+        // First check for zombie children (exited)
         extern struct process *process_find_zombie_child(struct process *parent, int target_pid);
         child = process_find_zombie_child(current, pid);
         
@@ -128,6 +128,26 @@ uint64_t sys_waitpid(int pid, int *wstatus, int options) {
             return child_pid;
         }
         
+        // Check for stopped children (Ctrl+Z)
+        extern struct process *process_find_stopped_child(struct process *parent, int target_pid);
+        child = process_find_stopped_child(current, pid);
+        
+        if (child) {
+            // Found stopped child - report it but don't reap
+            pid_t child_pid = child->pid;
+            
+            // Store stop status if requested (signal << 8 | 0x7f)
+            if (wstatus) {
+                *wstatus = child->exit_code;  // Already set by signal_default_stop
+            }
+            
+            // Clear the stopped status so we don't report it again
+            // (Process stays stopped until SIGCONT)
+            child->exit_code = 0;
+            
+            return child_pid;
+        }
+        
         // Check if parent has any children at all
         extern int process_has_children(struct process *parent, int target_pid);
         found_child = process_has_children(current, pid);
@@ -137,7 +157,7 @@ uint64_t sys_waitpid(int pid, int *wstatus, int options) {
             return SYSCALL_ERROR;
         }
         
-        // Child exists but hasn't exited yet - sleep and try again
+        // Child exists but hasn't exited/stopped yet - sleep and try again
         current->state = PROC_SLEEPING;
         scheduler_yield();
         current->state = PROC_RUNNING;
@@ -327,20 +347,26 @@ uint64_t sys_getppid(void) {
  * sys_kill - Send signal to process
  * 
  * @param pid Target process ID
- * @param signal Signal number (ignored for now)
+ * @param signal Signal number to send
  * @return 0 on success, -1 on error
  */
 uint64_t sys_kill(int pid, int signal) {
-    (void)signal;  // Signals not implemented yet
-    
     if (pid <= 0) {
         return SYSCALL_ERROR;
     }
     
-    // Find process by PID and terminate it
-    // TODO: Implement process_find_by_pid() and proper signal handling
-    // For now, just return error
-    return SYSCALL_ERROR;
+    /* Find target process */
+    extern struct process *process_get(int pid);
+    struct process *target = process_get(pid);
+    if (!target) {
+        return SYSCALL_ERROR;  /* No such process */
+    }
+    
+    /* Send signal to target process */
+    extern int signal_send(struct process *proc, int signum);
+    int result = signal_send(target, signal);
+    
+    return (result == 0) ? 0 : SYSCALL_ERROR;
 }
 
 /**
@@ -474,18 +500,27 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
                 
                 // If we're the active terminal, also check UART directly
                 // This provides immediate response without waiting for timer
+                // Disable interrupts briefly to avoid race with timer polling
                 if (tty == vterm_get_active_index() && hal_uart_data_available()) {
-                    int c = hal_uart_getc_nonblock();
-                    if (c >= 0) {
-                        // Process through VT system for escape sequences
-                        char result = vterm_process_input((char)c);
-                        if (result != 0) {
-                            buffer[0] = result;
-                            return 1;
+                    // Disable interrupts to prevent timer from also reading UART
+                    int old_state = interrupt_save_disable();
+                    
+                    // Double-check UART still has data after disabling interrupts
+                    if (hal_uart_data_available()) {
+                        int c = hal_uart_getc_nonblock();
+                        if (c >= 0) {
+                            // Process through VT system for escape sequences
+                            char result = vterm_process_input((char)c);
+                            interrupt_restore(old_state);
+                            if (result != 0) {
+                                buffer[0] = result;
+                                return 1;
+                            }
+                            // Character consumed (VT switch), continue loop
+                            continue;
                         }
-                        // Character consumed (VT switch), continue loop
-                        continue;
                     }
+                    interrupt_restore(old_state);
                 }
                 
                 // Nothing available, yield and try again
@@ -630,11 +665,11 @@ uint64_t sys_lseek(int fd, int64_t offset, int whence) {
  * sys_stat - Get file status
  * 
  * @param path File path
- * @param statbuf Buffer to store stat information (size and type)
+ * @param statbuf Buffer to store stat information (vfs_stat_t struct)
  * @return 0 on success, -1 on error
  */
 uint64_t sys_stat(const char *path, void *statbuf) {
-    if (!is_valid_user_pointer(path, 1) || !is_valid_user_pointer(statbuf, 8)) {
+    if (!is_valid_user_pointer(path, 1) || !is_valid_user_pointer(statbuf, sizeof(vfs_stat_t))) {
         return SYSCALL_ERROR;
     }
     
@@ -650,8 +685,8 @@ uint64_t sys_stat(const char *path, void *statbuf) {
         return SYSCALL_ERROR;
     }
     
-    uint32_t *stat_data = (uint32_t *)statbuf;
-    int result = vfs_stat(path, &stat_data[0], &stat_data[1]);
+    vfs_stat_t *stat_data = (vfs_stat_t *)statbuf;
+    int result = vfs_stat_full(path, stat_data);
     return (result == 0) ? SYSCALL_SUCCESS : SYSCALL_ERROR;
 }
 
@@ -874,6 +909,120 @@ uint64_t sys_pipe(int pipefd[2]) {
 }
 
 /**
+ * sys_dup2 - Duplicate a file descriptor
+ * 
+ * Makes newfd be the copy of oldfd, closing newfd first if necessary.
+ * Used for I/O redirection in shells (e.g., redirecting stdin/stdout to pipes).
+ * 
+ * @param oldfd The file descriptor to duplicate
+ * @param newfd The target file descriptor number
+ * @return newfd on success, -1 on error
+ * 
+ * @errno THUNDEROS_EBADF - oldfd is not a valid file descriptor
+ * @errno THUNDEROS_EINVAL - newfd is out of range
+ */
+uint64_t sys_dup2(int oldfd, int newfd) {
+    int result = vfs_dup2(oldfd, newfd);
+    if (result < 0) {
+        return SYSCALL_ERROR;
+    }
+    return result;
+}
+
+/**
+ * sys_getuid - Get real user ID
+ * 
+ * @return Real user ID of current process
+ */
+uint64_t sys_getuid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->uid;
+}
+
+/**
+ * sys_getgid - Get real group ID
+ * 
+ * @return Real group ID of current process
+ */
+uint64_t sys_getgid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->gid;
+}
+
+/**
+ * sys_geteuid - Get effective user ID
+ * 
+ * @return Effective user ID of current process
+ */
+uint64_t sys_geteuid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->euid;
+}
+
+/**
+ * sys_getegid - Get effective group ID
+ * 
+ * @return Effective group ID of current process
+ */
+uint64_t sys_getegid(void) {
+    struct process *proc = process_current();
+    if (!proc) {
+        return 0;  /* Default to root */
+    }
+    return proc->egid;
+}
+
+/**
+ * sys_chmod - Change file permissions
+ * 
+ * @param path Path to file
+ * @param mode New permission bits (e.g., 0755)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_chmod(const char *path, uint32_t mode) {
+    if (!path) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    int result = vfs_chmod(path, mode);
+    if (result < 0) {
+        return SYSCALL_ERROR;
+    }
+    return 0;
+}
+
+/**
+ * sys_chown - Change file owner and group
+ * 
+ * @param path Path to file
+ * @param uid New owner user ID
+ * @param gid New owner group ID
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_chown(const char *path, uint16_t uid, uint16_t gid) {
+    if (!path) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    int result = vfs_chown(path, uid, gid);
+    if (result < 0) {
+        return SYSCALL_ERROR;
+    }
+    return 0;
+}
+
+/**
  * Directory entry structure for getdents
  * Similar to Linux struct linux_dirent
  */
@@ -980,10 +1129,13 @@ uint64_t sys_getdents(int fd, void *dirp, size_t count) {
 /**
  * sys_chdir - Change current working directory
  * 
- * @param path Path to new working directory (must be absolute)
+ * Supports both absolute and relative paths. The path is normalized
+ * before storing in the process control block.
+ * 
+ * @param path Path to new working directory (absolute or relative)
  * @return 0 on success, -1 on error
  * 
- * @errno THUNDEROS_EINVAL - Invalid path or not absolute
+ * @errno THUNDEROS_EINVAL - Invalid path
  * @errno THUNDEROS_ENOENT - Path does not exist
  * @errno THUNDEROS_ENOTDIR - Path is not a directory
  */
@@ -999,8 +1151,15 @@ uint64_t sys_chdir(const char *path) {
         return SYSCALL_ERROR;
     }
     
-    // Resolve the path to verify it exists and is a directory
-    vfs_node_t *node = vfs_resolve_path(path);
+    /* Normalize the path (handles relative paths, ., ..) */
+    char normalized_path[VFS_MAX_PATH];
+    if (vfs_normalize_path(path, normalized_path, VFS_MAX_PATH) < 0) {
+        /* errno already set by vfs_normalize_path */
+        return SYSCALL_ERROR;
+    }
+    
+    /* Resolve the normalized path to verify it exists and is a directory */
+    vfs_node_t *node = vfs_resolve_path(normalized_path);
     if (!node) {
         /* errno already set by vfs_resolve_path */
         return SYSCALL_ERROR;
@@ -1011,13 +1170,13 @@ uint64_t sys_chdir(const char *path) {
         return SYSCALL_ERROR;
     }
     
-    // Copy path to process cwd
-    size_t i = 0;
-    while (path[i] && i < VFS_MAX_PATH - 1) {
-        proc->cwd[i] = path[i];
-        i++;
+    /* Store the normalized absolute path in process cwd */
+    size_t path_index = 0;
+    while (normalized_path[path_index] && path_index < VFS_MAX_PATH - 1) {
+        proc->cwd[path_index] = normalized_path[path_index];
+        path_index++;
     }
-    proc->cwd[i] = '\0';
+    proc->cwd[path_index] = '\0';
     
     clear_errno();
     return SYSCALL_SUCCESS;
@@ -1080,21 +1239,45 @@ uint64_t sys_getcwd(char *buf, size_t size) {
  * @return New session ID (process PID) on success, -1 on error
  */
 uint64_t sys_setsid(void) {
-    struct process *proc = process_current();
-    if (!proc) {
-        return SYSCALL_ERROR;
-    }
-    
-    /* In a full implementation, setsid would:
-     * 1. Create new session
-     * 2. Become session leader
-     * 3. Disassociate from controlling terminal
-     * For now, just clear the controlling terminal
-     */
-    proc->controlling_tty = -1;
-    
-    /* Return process PID as session ID */
-    return proc->pid;
+    /* Use the proper process group implementation */
+    return (uint64_t)process_setsid();
+}
+
+/**
+ * sys_setpgid - Set process group ID
+ * 
+ * Sets the process group ID of the specified process.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @param pgid New process group ID (0 to use pid as pgid)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_setpgid(int pid, int pgid) {
+    return (uint64_t)process_setpgid((pid_t)pid, (pid_t)pgid);
+}
+
+/**
+ * sys_getpgid - Get process group ID
+ * 
+ * Returns the process group ID of the specified process.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Process group ID, or -1 on error
+ */
+uint64_t sys_getpgid(int pid) {
+    return (uint64_t)process_getpgid((pid_t)pid);
+}
+
+/**
+ * sys_getsid - Get session ID
+ * 
+ * Returns the session ID of the specified process.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Session ID, or -1 on error
+ */
+uint64_t sys_getsid(int pid) {
+    return (uint64_t)process_getsid((pid_t)pid);
 }
 
 /**
@@ -1167,6 +1350,8 @@ uint64_t sys_getprocs(procinfo_t *buf, size_t max_procs) {
         if (p != NULL) {
             buf[count].pid = p->pid;
             buf[count].ppid = p->parent ? p->parent->pid : 0;
+            buf[count].pgid = p->pgid;
+            buf[count].sid = p->sid;
             buf[count].state = p->state;
             buf[count].tty = p->controlling_tty;
             buf[count].cpu_time = p->cpu_time;
@@ -1484,6 +1669,55 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_UNAME:
             return_value = sys_uname((utsname_t *)argument0);
+            break;
+            
+        case SYS_DUP2:
+            return_value = sys_dup2((int)argument0, (int)argument1);
+            break;
+            
+        case SYS_SETFGPID: {
+            /* Set foreground process for current terminal */
+            extern void vterm_set_active_fg_pid(int pid);
+            int pid = (int)argument0;
+            vterm_set_active_fg_pid(pid);
+            return_value = 0;
+            break;
+        }
+        
+        case SYS_GETUID:
+            return_value = sys_getuid();
+            break;
+            
+        case SYS_GETGID:
+            return_value = sys_getgid();
+            break;
+            
+        case SYS_GETEUID:
+            return_value = sys_geteuid();
+            break;
+            
+        case SYS_GETEGID:
+            return_value = sys_getegid();
+            break;
+            
+        case SYS_CHMOD:
+            return_value = sys_chmod((const char *)argument0, (uint32_t)argument1);
+            break;
+            
+        case SYS_CHOWN:
+            return_value = sys_chown((const char *)argument0, (uint16_t)argument1, (uint16_t)argument2);
+            break;
+            
+        case SYS_SETPGID:
+            return_value = sys_setpgid((int)argument0, (int)argument1);
+            break;
+            
+        case SYS_GETPGID:
+            return_value = sys_getpgid((int)argument0);
+            break;
+            
+        case SYS_GETSID:
+            return_value = sys_getsid((int)argument0);
             break;
             
         case SYS_FORK:

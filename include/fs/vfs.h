@@ -44,6 +44,20 @@
 #define VFS_TYPE_DIRECTORY 2
 #define VFS_TYPE_PIPE      3
 
+/**
+ * Stat structure for vfs_stat_full
+ * Contains extended file information including permissions
+ */
+typedef struct {
+    uint32_t st_ino;      /* Inode number */
+    uint16_t st_mode;     /* Permission bits and file type */
+    uint16_t st_uid;      /* Owner user ID */
+    uint16_t st_gid;      /* Owner group ID */
+    uint16_t st_pad;      /* Padding for alignment */
+    uint32_t st_size;     /* File size in bytes */
+    uint32_t st_type;     /* VFS file type (VFS_TYPE_*) */
+} vfs_stat_t;
+
 /* Forward declarations */
 struct vfs_node;
 struct vfs_filesystem;
@@ -92,6 +106,9 @@ typedef struct vfs_node {
     uint32_t size;                     /* File size in bytes */
     uint32_t type;                     /* File type (file/dir) */
     uint32_t flags;                    /* Flags */
+    uint16_t mode;                     /* Permission bits (from inode i_mode) */
+    uint16_t uid;                      /* Owner user ID */
+    uint16_t gid;                      /* Owner group ID */
     struct vfs_filesystem *fs;         /* Filesystem this node belongs to */
     void *fs_data;                     /* Filesystem-specific data */
     vfs_ops_t *ops;                    /* Operations for this node */
@@ -131,6 +148,7 @@ int vfs_close(int fd);
 int vfs_read(int fd, void *buffer, uint32_t size);
 int vfs_write(int fd, const void *buffer, uint32_t size);
 int vfs_seek(int fd, int offset, int whence);
+int vfs_dup2(int oldfd, int newfd);
 
 /* Directory operations */
 int vfs_mkdir(const char *path, uint32_t mode);
@@ -140,6 +158,9 @@ int vfs_unlink(const char *path);
 /* Path resolution */
 vfs_node_t *vfs_resolve_path(const char *path);
 
+/* Path normalization - converts relative paths to absolute, resolves . and .. */
+int vfs_normalize_path(const char *path, char *normalized, size_t size);
+
 /* File descriptor management */
 int vfs_alloc_fd(void);
 void vfs_free_fd(int fd);
@@ -147,7 +168,42 @@ vfs_file_t *vfs_get_file(int fd);
 
 /* Helper functions */
 int vfs_stat(const char *path, uint32_t *size, uint32_t *type);
+int vfs_stat_full(const char *path, vfs_stat_t *statbuf);
 int vfs_exists(const char *path);
+
+/* Permission checking */
+/* Access mode flags for vfs_check_permission */
+#define VFS_ACCESS_READ   0x04  /* Check read permission */
+#define VFS_ACCESS_WRITE  0x02  /* Check write permission */
+#define VFS_ACCESS_EXEC   0x01  /* Check execute permission */
+
+/**
+ * Check if current process has permission to access a file
+ * 
+ * @param node     VFS node to check
+ * @param mode     Access mode (VFS_ACCESS_READ, VFS_ACCESS_WRITE, VFS_ACCESS_EXEC)
+ * @return 0 if access allowed, -1 if denied (errno set to THUNDEROS_EACCES)
+ */
+int vfs_check_permission(vfs_node_t *node, int mode);
+
+/**
+ * Change file permissions (mode bits)
+ * 
+ * @param path     Path to file
+ * @param mode     New permission bits (e.g., 0755)
+ * @return 0 on success, -1 on error
+ */
+int vfs_chmod(const char *path, uint32_t mode);
+
+/**
+ * Change file owner and group
+ * 
+ * @param path     Path to file
+ * @param uid      New owner user ID
+ * @param gid      New owner group ID
+ * @return 0 on success, -1 on error
+ */
+int vfs_chown(const char *path, uint16_t uid, uint16_t gid);
 
 /* Pipe support */
 int vfs_create_pipe(int pipefd[2]);

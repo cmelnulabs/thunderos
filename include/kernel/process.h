@@ -26,6 +26,7 @@ typedef enum {
     PROC_READY,         // Ready to run
     PROC_RUNNING,       // Currently running
     PROC_SLEEPING,      // Waiting for event
+    PROC_STOPPED,       // Stopped by signal (Ctrl+Z)
     PROC_ZOMBIE         // Exited but not yet cleaned up
 } proc_state_t;
 
@@ -120,6 +121,16 @@ struct process {
     
     // Error handling
     int errno_value;                    // Per-process error number (errno)
+    
+    // User/group identity for permission checks
+    uint16_t uid;                       // Real user ID
+    uint16_t gid;                       // Real group ID
+    uint16_t euid;                      // Effective user ID (for setuid programs)
+    uint16_t egid;                      // Effective group ID (for setgid programs)
+    
+    // Process groups and sessions
+    pid_t pgid;                         // Process group ID
+    pid_t sid;                          // Session ID
     
     // Signal handling
     sigset_t pending_signals;           // Pending signals (bitmask)
@@ -416,5 +427,71 @@ int process_set_tty(struct process *proc, int tty_index);
  * @return Terminal index, or -1 if none
  */
 int process_get_tty(struct process *proc);
+
+/**
+ * Set process group ID
+ * 
+ * Sets the process group ID for process pid. If pid is 0, the PID of the
+ * current process is used. If pgid is 0, the process becomes group leader.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @param pgid Process group ID (0 to use pid as pgid)
+ * @return 0 on success, -1 on error (errno set)
+ */
+int process_setpgid(pid_t pid, pid_t pgid);
+
+/**
+ * Get process group ID
+ * 
+ * Returns the process group ID for process pid.
+ * If pid is 0, the PID of the current process is used.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Process group ID, or -1 on error (errno set)
+ */
+pid_t process_getpgid(pid_t pid);
+
+/**
+ * Create a new session
+ * 
+ * Creates a new session with the calling process as session leader.
+ * The process also becomes the process group leader of a new process group.
+ * Fails if the calling process is already a process group leader.
+ * 
+ * @return New session ID (same as calling process PID), or -1 on error
+ */
+pid_t process_setsid(void);
+
+/**
+ * Get session ID
+ * 
+ * Returns the session ID for process pid.
+ * If pid is 0, the session ID of the current process is returned.
+ * 
+ * @param pid Process ID (0 for current process)
+ * @return Session ID, or -1 on error (errno set)
+ */
+pid_t process_getsid(pid_t pid);
+
+/**
+ * Send signal to process group
+ * 
+ * Sends the specified signal to all processes in the process group.
+ * 
+ * @param pgid Process group ID
+ * @param sig Signal number
+ * @return 0 on success, -1 on error (errno set)
+ */
+int process_killpg(pid_t pgid, int sig);
+
+/**
+ * Get process group leader
+ * 
+ * Returns the process that is the leader of the specified process group.
+ * 
+ * @param pgid Process group ID
+ * @return Process pointer, or NULL if not found
+ */
+struct process *process_get_group_leader(pid_t pgid);
 
 #endif // PROCESS_H

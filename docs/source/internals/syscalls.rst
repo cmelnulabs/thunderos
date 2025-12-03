@@ -8,7 +8,7 @@ System calls (syscalls) provide the interface between user-space programs and th
 
 **Current Status:**
 
-ThunderOS v0.7.0 implements **35 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, directory navigation, and terminal control.
+ThunderOS v0.8.0 implements **43 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, directory navigation, terminal control, file descriptor manipulation, and file permissions.
 
 **Key Features:**
 
@@ -1962,6 +1962,257 @@ Get system identification information. Used by the ``uname`` utility.
    if (uname(&uts) == 0) {
        printf("%s %s %s\n", uts.sysname, uts.release, uts.machine);
    }
+
+sys_dup2 (35)
+^^^^^^^^^^^^^
+
+Duplicate a file descriptor to a specific file descriptor number. Used for I/O redirection and pipe setup.
+
+.. code-block:: c
+
+   int sys_dup2(int oldfd, int newfd);
+
+**Parameters:**
+
+* ``oldfd``: Existing file descriptor to duplicate
+* ``newfd``: Target file descriptor number
+
+**Return Value:**
+
+* ``newfd`` on success
+* ``-1`` on error (check ``errno``)
+
+**Error Codes:**
+
+.. code-block:: c
+
+   THUNDEROS_EBADF   // oldfd is not a valid file descriptor
+   THUNDEROS_EINVAL  // newfd is out of valid range
+
+**Description:**
+
+Creates a copy of the file descriptor ``oldfd`` using the file descriptor number ``newfd``. If ``newfd`` was previously open, it is silently closed before being reused.
+
+After a successful return, ``oldfd`` and ``newfd`` refer to the same open file description, and can be used interchangeably for I/O operations.
+
+If ``oldfd`` equals ``newfd``, the call does nothing and returns ``newfd``.
+
+**Example - I/O Redirection:**
+
+.. code-block:: c
+
+   // Redirect stdout to a file
+   int fd = open("output.txt", O_WRONLY | O_CREAT, 0644);
+   dup2(fd, STDOUT_FILENO);  // stdout now goes to file
+   close(fd);                 // Original fd no longer needed
+   printf("This goes to file!\n");
+
+**Example - Pipe Setup:**
+
+.. code-block:: c
+
+   int pipefd[2];
+   pipe(pipefd);
+   
+   if (fork() == 0) {
+       // Child: connect stdin to pipe read end
+       close(pipefd[1]);           // Close write end
+       dup2(pipefd[0], STDIN_FILENO);  // stdin reads from pipe
+       close(pipefd[0]);           // Original fd no longer needed
+       exec("/bin/cat", NULL);     // cat reads from pipe
+   } else {
+       // Parent: write to pipe
+       close(pipefd[0]);           // Close read end
+       write(pipefd[1], "Hello via pipe!\n", 16);
+       close(pipefd[1]);
+   }
+
+**Implementation:**
+
+1. Validates ``oldfd`` is a valid open file descriptor
+2. Validates ``newfd`` is within valid range (0 to MAX_FD)
+3. If ``oldfd == newfd``, returns ``newfd`` immediately
+4. Closes ``newfd`` if currently open
+5. Copies the file descriptor entry from ``oldfd`` to ``newfd``
+6. Increments reference count on underlying file object
+7. Returns ``newfd``
+
+**See Also:**
+
+- ``sys_pipe`` - Create a pipe for IPC
+- ``sys_open`` - Open a file
+- ``sys_close`` - Close a file descriptor
+
+File Permissions and Ownership
+------------------------------
+
+ThunderOS implements POSIX-style file permissions and ownership. Each file has:
+
+- **Mode bits**: 9 permission bits (rwxrwxrwx) for owner, group, and others
+- **Owner UID**: User ID of the file owner
+- **Owner GID**: Group ID of the file owner
+
+Each process has:
+
+- **Real UID/GID**: The actual user/group identity
+- **Effective UID/GID**: Used for permission checks (can differ for setuid programs)
+
+sys_getuid (37)
+^^^^^^^^^^^^^^^
+
+Get the real user ID of the calling process.
+
+.. code-block:: c
+
+   uint16_t sys_getuid(void);
+
+**Return Value:**
+
+* Real user ID of the calling process
+
+**Description:**
+
+Returns the real user ID of the calling process. In ThunderOS, all processes currently start with UID 0 (root).
+
+**Example:**
+
+.. code-block:: c
+
+   uint16_t uid = getuid();
+   printf("Real UID: %d\n", uid);
+
+sys_getgid (38)
+^^^^^^^^^^^^^^^
+
+Get the real group ID of the calling process.
+
+.. code-block:: c
+
+   uint16_t sys_getgid(void);
+
+**Return Value:**
+
+* Real group ID of the calling process
+
+**Description:**
+
+Returns the real group ID of the calling process. In ThunderOS, all processes currently start with GID 0 (root).
+
+sys_geteuid (39)
+^^^^^^^^^^^^^^^^
+
+Get the effective user ID of the calling process.
+
+.. code-block:: c
+
+   uint16_t sys_geteuid(void);
+
+**Return Value:**
+
+* Effective user ID of the calling process
+
+**Description:**
+
+Returns the effective user ID, which is used for permission checks. For setuid programs, this may differ from the real UID.
+
+sys_chmod (41)
+^^^^^^^^^^^^^^
+
+Change file permissions.
+
+.. code-block:: c
+
+   int sys_chmod(const char *path, uint32_t mode);
+
+**Parameters:**
+
+* ``path``: Path to the file
+* ``mode``: New permission bits (e.g., 0755 for rwxr-xr-x)
+
+**Return Value:**
+
+* ``0`` on success
+* ``-1`` on error (check ``errno``)
+
+**Error Codes:**
+
+.. code-block:: c
+
+   THUNDEROS_ENOENT  // File not found
+   THUNDEROS_EINVAL  // Invalid path
+   THUNDEROS_EACCES  // Permission denied
+
+**Permission Bits:**
+
+.. code-block:: c
+
+   /* Owner permissions */
+   S_IRUSR  0x0100  // Owner read
+   S_IWUSR  0x0080  // Owner write
+   S_IXUSR  0x0040  // Owner execute
+   
+   /* Group permissions */
+   S_IRGRP  0x0020  // Group read
+   S_IWGRP  0x0010  // Group write
+   S_IXGRP  0x0008  // Group execute
+   
+   /* Other permissions */
+   S_IROTH  0x0004  // Other read
+   S_IWOTH  0x0002  // Other write
+   S_IXOTH  0x0001  // Other execute
+
+**Example:**
+
+.. code-block:: c
+
+   // Make file executable
+   chmod("/bin/hello", 0755);  // rwxr-xr-x
+   
+   // Make file read-only
+   chmod("/etc/config", 0444);  // r--r--r--
+
+sys_chown (42)
+^^^^^^^^^^^^^^
+
+Change file owner and group.
+
+.. code-block:: c
+
+   int sys_chown(const char *path, uint16_t uid, uint16_t gid);
+
+**Parameters:**
+
+* ``path``: Path to the file
+* ``uid``: New owner user ID
+* ``gid``: New owner group ID
+
+**Return Value:**
+
+* ``0`` on success
+* ``-1`` on error (check ``errno``)
+
+**Error Codes:**
+
+.. code-block:: c
+
+   THUNDEROS_ENOENT  // File not found
+   THUNDEROS_EINVAL  // Invalid path
+   THUNDEROS_EPERM   // Operation not permitted (non-root trying to change ownership)
+
+**Example:**
+
+.. code-block:: c
+
+   // Change owner to user 1000, group 1000
+   chown("/home/user/file.txt", 1000, 1000);
+   
+   // Change only group (keep owner)
+   // Use current UID from stat, new GID
+   chown("/shared/data.txt", current_uid, 500);
+
+**Note:**
+
+Currently, only root (UID 0) can change file ownership. Attempting to change ownership as a non-root user will fail with ``THUNDEROS_EPERM``.
 
 Testing
 -------

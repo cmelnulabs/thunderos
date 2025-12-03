@@ -183,16 +183,38 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@echo "$(GREEN)✓ Clean complete$(RESET)"
 
-# Create ext2 filesystem image
-fs: $(FS_IMG)
+# Create ext2 filesystem image (always rebuild to pick up Makefile changes)
+fs: force_fs
 
-$(FS_IMG): userland
+force_fs: userland
 	@echo ""
 	@echo "$(BOLD)$(MAGENTA)[FS]$(RESET) Creating ext2 filesystem ($(FS_SIZE))..."
 	@rm -rf $(BUILD_DIR)/testfs
+	@rm -f $(FS_IMG)
 	@mkdir -p $(BUILD_DIR)/testfs/bin
 	@echo "Hello from ThunderOS ext2 filesystem!" > $(BUILD_DIR)/testfs/test.txt
 	@echo "This is a sample file for testing." > $(BUILD_DIR)/testfs/README.txt
+	@# Create test files for rm/rmdir testing
+	@echo "Delete me with rm command!" > $(BUILD_DIR)/testfs/deleteme.txt
+	@echo "Another file to delete" > $(BUILD_DIR)/testfs/removable.txt
+	@mkdir -p $(BUILD_DIR)/testfs/emptydir
+	@mkdir -p $(BUILD_DIR)/testfs/nonemptydir
+	@echo "This file makes the directory non-empty" > $(BUILD_DIR)/testfs/nonemptydir/nested.txt
+	@# Create startup script
+	@echo "# ThunderOS Startup Script" > $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo ================================" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo   Welcome to ThunderOS!" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo ================================" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "export PATH=/bin" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "export HOME=/" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "export USER=root" >> $(BUILD_DIR)/testfs/startup.sh
+	@echo "echo System ready." >> $(BUILD_DIR)/testfs/startup.sh
+	@# Create demo script
+	@echo "# ThunderOS Demo Script" > $(BUILD_DIR)/testfs/demo.sh
+	@echo "echo === System Demo ===" >> $(BUILD_DIR)/testfs/demo.sh
+	@echo "ls /" >> $(BUILD_DIR)/testfs/demo.sh
+	@echo "pwd" >> $(BUILD_DIR)/testfs/demo.sh
+	@echo "echo === Demo Complete ===" >> $(BUILD_DIR)/testfs/demo.sh
 	@cp userland/build/cat $(BUILD_DIR)/testfs/bin/cat 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) cat not built"
 	@cp userland/build/ls $(BUILD_DIR)/testfs/bin/ls 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ls not built"
 	@cp userland/build/hello $(BUILD_DIR)/testfs/bin/hello 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) hello not built"
@@ -204,6 +226,8 @@ $(FS_IMG): userland
 	@cp userland/build/rm $(BUILD_DIR)/testfs/bin/rm 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) rm not built"
 	@cp userland/build/clear $(BUILD_DIR)/testfs/bin/clear 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) clear not built"
 	@cp userland/build/sleep $(BUILD_DIR)/testfs/bin/sleep 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) sleep not built"
+	@cp userland/build/chmod $(BUILD_DIR)/testfs/bin/chmod 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) chmod not built"
+	@cp userland/build/chown $(BUILD_DIR)/testfs/bin/chown 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) chown not built"
 	@cp userland/build/ush $(BUILD_DIR)/testfs/bin/ush 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ush not built"
 	@cp userland/build/ps $(BUILD_DIR)/testfs/bin/ps 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ps not built"
 	@cp userland/build/uname $(BUILD_DIR)/testfs/bin/uname 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) uname not built"
