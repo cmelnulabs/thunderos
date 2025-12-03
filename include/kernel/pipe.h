@@ -18,6 +18,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "kernel/wait_queue.h"
 
 /**
  * Maximum size of pipe buffer (4KB - one page)
@@ -35,8 +36,8 @@
 /**
  * Pipe structure
  * 
- * Contains circular buffer for data, read/write positions, and reference counts
- * for tracking when both ends are closed.
+ * Contains circular buffer for data, read/write positions, reference counts
+ * for tracking when both ends are closed, and wait queues for blocking I/O.
  */
 typedef struct pipe {
     char buffer[PIPE_BUF_SIZE];  /**< Circular buffer for pipe data */
@@ -46,6 +47,8 @@ typedef struct pipe {
     uint32_t state;              /**< Current pipe state (PIPE_*) */
     uint32_t read_ref_count;     /**< Number of open read ends */
     uint32_t write_ref_count;    /**< Number of open write ends */
+    wait_queue_t readers;        /**< Processes waiting to read (pipe empty) */
+    wait_queue_t writers;        /**< Processes waiting to write (pipe full) */
 } pipe_t;
 
 /**
@@ -68,11 +71,11 @@ void pipe_init(void);
 pipe_t* pipe_create(void);
 
 /**
- * Read data from pipe
+ * Read data from pipe (blocking)
  * 
  * Reads up to 'count' bytes from the pipe into the buffer. If the pipe is empty:
+ * - Blocks (sleeps) if write end is still open, until data arrives
  * - Returns 0 if write end is closed (EOF)
- * - Blocks (returns -EAGAIN) if write end is still open (caller should retry)
  * 
  * @param pipe Pointer to pipe structure
  * @param buffer Destination buffer for read data
@@ -81,18 +84,17 @@ pipe_t* pipe_create(void);
  * @return Number of bytes read on success, 0 on EOF, -1 on error
  * 
  * @errno THUNDEROS_EINVAL - Invalid pipe or buffer pointer
- * @errno THUNDEROS_EAGAIN - Pipe empty but write end open (would block)
  * @errno THUNDEROS_EPIPE - Pipe read end already closed
  */
 int pipe_read(pipe_t* pipe, void* buffer, size_t count);
 
 /**
- * Write data to pipe
+ * Write data to pipe (blocking)
  * 
  * Writes up to 'count' bytes from buffer into the pipe. If pipe is full:
- * - Returns -EAGAIN (caller should retry later)
+ * - Blocks (sleeps) until space is available
  * 
- * If read end is closed, returns error immediately.
+ * If read end is closed, returns error immediately (broken pipe).
  * 
  * @param pipe Pointer to pipe structure
  * @param buffer Source buffer containing data to write
@@ -101,8 +103,7 @@ int pipe_read(pipe_t* pipe, void* buffer, size_t count);
  * @return Number of bytes written on success, -1 on error
  * 
  * @errno THUNDEROS_EINVAL - Invalid pipe or buffer pointer
- * @errno THUNDEROS_EAGAIN - Pipe full (would block)
- * @errno THUNDEROS_EPIPE - Read end closed, cannot write
+ * @errno THUNDEROS_EPIPE - Read end closed, cannot write (broken pipe)
  */
 int pipe_write(pipe_t* pipe, const void* buffer, size_t count);
 

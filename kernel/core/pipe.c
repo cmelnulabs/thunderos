@@ -4,11 +4,14 @@
  * 
  * Implements anonymous pipes for unidirectional communication between processes.
  * Uses a circular buffer for efficient data transfer without copying.
+ * Supports blocking I/O via wait queues - readers sleep when pipe is empty,
+ * writers sleep when pipe is full.
  */
 
 #include "kernel/pipe.h"
 #include "kernel/errno.h"
 #include "kernel/process.h"
+#include "kernel/wait_queue.h"
 #include "mm/kmalloc.h"
 #include "kernel/kstring.h"
 
@@ -27,6 +30,7 @@ void pipe_init(void) {
  * 
  * Allocates and initializes a pipe structure with empty circular buffer.
  * Both read and write ends start with reference count of 1.
+ * Wait queues are initialized for blocking I/O support.
  * 
  * @return Pointer to newly created pipe, or NULL on allocation failure
  */
@@ -45,17 +49,21 @@ pipe_t* pipe_create(void) {
     pipe->state = PIPE_OPEN;
     pipe->read_ref_count = 1;
     pipe->write_ref_count = 1;
+    
+    // Initialize wait queues for blocking I/O
+    wait_queue_init(&pipe->readers);
+    wait_queue_init(&pipe->writers);
 
     clear_errno();
     return pipe;
 }
 
 /**
- * Read data from pipe
+ * Read data from pipe (blocking)
  * 
- * Reads up to 'count' bytes from pipe's circular buffer. Handles wraparound
- * automatically. Returns immediately if data is available, or 0 if write end
- * is closed (EOF), or -EAGAIN if pipe is empty but write end is open.
+ * Reads up to 'count' bytes from pipe's circular buffer. If the pipe is empty,
+ * the calling process will sleep until data is available or the write end is
+ * closed. Handles wraparound automatically.
  * 
  * @param pipe Pointer to pipe structure
  * @param buffer Destination buffer
@@ -72,17 +80,21 @@ int pipe_read(pipe_t* pipe, void* buffer, size_t count) {
         RETURN_ERRNO(THUNDEROS_EPIPE);
     }
 
-    // Wait for data to be available
-    // TODO: Implement proper blocking with wakeup mechanism
-    // For now, return EAGAIN if no data available (non-blocking)
-    if (pipe->data_size == 0) {
+    // Block until data is available or write end is closed
+    while (pipe->data_size == 0) {
         // If write end is closed, return EOF
         if (pipe->state == PIPE_WRITE_CLOSED || pipe->write_ref_count == 0) {
             clear_errno();
             return 0;  // EOF
         }
-        // No data and write end still open
-        RETURN_ERRNO(THUNDEROS_EAGAIN);
+        
+        // Sleep until writer wakes us
+        wait_queue_sleep(&pipe->readers);
+        
+        // After waking, re-check conditions (might be spurious wakeup or close)
+        if (pipe->state == PIPE_READ_CLOSED || pipe->state == PIPE_CLOSED) {
+            RETURN_ERRNO(THUNDEROS_EPIPE);
+        }
     }
 
     // Read available data (limited by count and available data)
@@ -109,6 +121,11 @@ int pipe_read(pipe_t* pipe, void* buffer, size_t count) {
     }
 
     pipe->data_size -= bytes_read;
+
+    // Wake any writers waiting for space
+    if (bytes_read > 0) {
+        wait_queue_wake(&pipe->writers);
+    }
 
     clear_errno();
     return (int)bytes_read;
@@ -141,9 +158,23 @@ int pipe_write(pipe_t* pipe, const void* buffer, size_t count) {
         RETURN_ERRNO(THUNDEROS_EPIPE);
     }
 
-    // If pipe is full, return would-block
-    if (pipe->data_size >= PIPE_BUF_SIZE) {
-        RETURN_ERRNO(THUNDEROS_EAGAIN);
+    // Block until there's space to write
+    while (pipe->data_size >= PIPE_BUF_SIZE) {
+        // Check for broken pipe
+        if (pipe->state == PIPE_READ_CLOSED || pipe->read_ref_count == 0) {
+            RETURN_ERRNO(THUNDEROS_EPIPE);
+        }
+        
+        // Sleep until reader makes space
+        wait_queue_sleep(&pipe->writers);
+        
+        // After waking, re-check conditions
+        if (pipe->state == PIPE_WRITE_CLOSED || pipe->state == PIPE_CLOSED) {
+            RETURN_ERRNO(THUNDEROS_EPIPE);
+        }
+        if (pipe->state == PIPE_READ_CLOSED || pipe->read_ref_count == 0) {
+            RETURN_ERRNO(THUNDEROS_EPIPE);
+        }
     }
 
     // Write available space (limited by count and free space)
@@ -172,6 +203,11 @@ int pipe_write(pipe_t* pipe, const void* buffer, size_t count) {
 
     pipe->data_size += bytes_written;
 
+    // Wake any readers waiting for data
+    if (bytes_written > 0) {
+        wait_queue_wake(&pipe->readers);
+    }
+
     clear_errno();
     return (int)bytes_written;
 }
@@ -180,6 +216,7 @@ int pipe_write(pipe_t* pipe, const void* buffer, size_t count) {
  * Close read end of pipe
  * 
  * Decrements read reference count and updates state if count reaches 0.
+ * Wakes any writers waiting on the pipe (they will get EPIPE).
  * 
  * @param pipe Pointer to pipe structure
  * @return 0 on success, -1 on error
@@ -199,6 +236,8 @@ int pipe_close_read(pipe_t* pipe) {
         } else {
             pipe->state = PIPE_READ_CLOSED;
         }
+        // Wake any writers - they'll get EPIPE
+        wait_queue_wake(&pipe->writers);
     }
 
     clear_errno();
@@ -210,6 +249,7 @@ int pipe_close_read(pipe_t* pipe) {
  * 
  * Decrements write reference count and updates state if count reaches 0.
  * Subsequent reads will return EOF when buffer is drained.
+ * Wakes any readers waiting on the pipe (they will get EOF).
  * 
  * @param pipe Pointer to pipe structure
  * @return 0 on success, -1 on error
@@ -229,6 +269,8 @@ int pipe_close_write(pipe_t* pipe) {
         } else {
             pipe->state = PIPE_WRITE_CLOSED;
         }
+        // Wake any readers - they'll get EOF
+        wait_queue_wake(&pipe->readers);
     }
 
     clear_errno();
