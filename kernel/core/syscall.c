@@ -6,6 +6,7 @@
 
 #include "kernel/syscall.h"
 #include "kernel/errno.h"
+#include "kernel/mutex.h"
 #include "hal/hal_timer.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
@@ -1409,6 +1410,101 @@ uint64_t sys_uname(utsname_t *buf) {
     return 0;
 }
 
+/* ========================================================================
+ * Mutex Syscalls
+ * ======================================================================== */
+
+#define MAX_USER_MUTEXES 64
+
+static mutex_t user_mutexes[MAX_USER_MUTEXES];
+static int mutex_in_use[MAX_USER_MUTEXES] = {0};
+
+/**
+ * sys_mutex_create - Create a new mutex
+ * 
+ * @return Mutex ID (>= 0) on success, -1 on error
+ */
+uint64_t sys_mutex_create(void) {
+    /* Find a free mutex slot */
+    for (int i = 0; i < MAX_USER_MUTEXES; i++) {
+        if (!mutex_in_use[i]) {
+            mutex_init(&user_mutexes[i]);
+            mutex_in_use[i] = 1;
+            clear_errno();
+            return (uint64_t)i;
+        }
+    }
+    
+    set_errno(THUNDEROS_ENOMEM);
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_mutex_lock - Lock a mutex (blocking)
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_mutex_lock(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    mutex_lock(&user_mutexes[mutex_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_mutex_trylock - Try to lock a mutex (non-blocking)
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 if locked, -1 if already locked or error
+ */
+uint64_t sys_mutex_trylock(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    return mutex_trylock(&user_mutexes[mutex_id]);
+}
+
+/**
+ * sys_mutex_unlock - Unlock a mutex
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_mutex_unlock(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    mutex_unlock(&user_mutexes[mutex_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_mutex_destroy - Destroy a mutex
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_mutex_destroy(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    mutex_in_use[mutex_id] = 0;
+    clear_errno();
+    return 0;
+}
+
 /**
  * sys_fork - Create a child process
  * 
@@ -1718,6 +1814,26 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_GETSID:
             return_value = sys_getsid((int)argument0);
+            break;
+            
+        case SYS_MUTEX_CREATE:
+            return_value = sys_mutex_create();
+            break;
+            
+        case SYS_MUTEX_LOCK:
+            return_value = sys_mutex_lock((int)argument0);
+            break;
+            
+        case SYS_MUTEX_TRYLOCK:
+            return_value = sys_mutex_trylock((int)argument0);
+            break;
+            
+        case SYS_MUTEX_UNLOCK:
+            return_value = sys_mutex_unlock((int)argument0);
+            break;
+            
+        case SYS_MUTEX_DESTROY:
+            return_value = sys_mutex_destroy((int)argument0);
             break;
             
         case SYS_FORK:

@@ -56,8 +56,13 @@
 #define SYS_SETPGID     43  // Set process group ID
 #define SYS_GETPGID     44  // Get process group ID
 #define SYS_GETSID      45  // Get session ID
+#define SYS_MUTEX_CREATE  46  // Create a mutex
+#define SYS_MUTEX_LOCK    47  // Lock a mutex (blocking)
+#define SYS_MUTEX_TRYLOCK 48  // Try to lock a mutex (non-blocking)
+#define SYS_MUTEX_UNLOCK  49  // Unlock a mutex
+#define SYS_MUTEX_DESTROY 50  // Destroy a mutex
 
-#define SYSCALL_COUNT   46
+#define SYSCALL_COUNT   51
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
