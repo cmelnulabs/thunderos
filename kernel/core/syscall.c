@@ -18,6 +18,8 @@
 #include "kernel/elf_loader.h"
 #include "drivers/vterm.h"
 #include "fs/vfs.h"
+#include "net/icmp.h"
+#include "net/netif.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -2116,6 +2118,26 @@ uint64_t syscall_handler(uint64_t syscall_number,
             break;
             
         case SYS_EXEC:
+            return_value = SYSCALL_ERROR;
+            break;
+            
+        case SYS_NET_PING:
+            // Ping syscall: argument0 = IP address (in network byte order)
+            return_value = (uint64_t)ping((uint32_t)argument0);
+            break;
+            
+        case SYS_NET_IFCONFIG:
+            // Get network interface information (not implemented yet)
+            return_value = SYSCALL_ERROR;
+            break;
+            
+        case SYS_NET_SEND:
+            // Raw network send (not implemented yet)
+            return_value = SYSCALL_ERROR;
+            break;
+            
+        case SYS_NET_RECV:
+            // Raw network receive (not implemented yet)
             return_value = SYSCALL_ERROR;
             break;
             

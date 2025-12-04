@@ -114,6 +114,18 @@
 #define THUNDEROS_EMEM_BADPTE  117 /* Invalid page table entry */
 #define THUNDEROS_EMEM_DMA     118 /* DMA allocation failed */
 
+/* ========== Network Errors (130-149) ========== */
+#define THUNDEROS_ENETDOWN     130 /* Network is down */
+#define THUNDEROS_ENETUNREACH  131 /* Network is unreachable */
+#define THUNDEROS_EHOSTUNREACH 132 /* No route to host */
+#define THUNDEROS_ECONNREFUSED 133 /* Connection refused */
+#define THUNDEROS_ETIMEDOUT    134 /* Connection timed out */
+#define THUNDEROS_EADDRINUSE   135 /* Address already in use */
+#define THUNDEROS_EADDRNOTAVAIL 136 /* Cannot assign requested address */
+#define THUNDEROS_EMSGSIZE     137 /* Message too long */
+#define THUNDEROS_ENOBUFS      138 /* No buffer space available */
+#define THUNDEROS_ENOTCONN     139 /* Transport endpoint not connected */
+
 /* ========== Error Handling Functions ========== */
 
 /**

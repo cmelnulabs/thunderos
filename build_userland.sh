@@ -132,4 +132,8 @@ build_program "mutex_test" "mutex_test" "tests"
 build_program "condvar_test" "condvar_test" "tests"
 build_program "rwlock_test" "rwlock_test" "tests"
 
+# Network utilities
+print_section "Network Utilities"
+build_program "ping" "ping" "net"
+
 print_footer

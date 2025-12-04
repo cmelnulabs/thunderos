@@ -28,6 +28,7 @@
 #include "drivers/font.h"
 #include "fs/ext2.h"
 #include "fs/vfs.h"
+#include "net/netif.h"
 
 /* Constants */
 #define TEST_ALLOC_SIZE         256
@@ -272,6 +273,21 @@ static int init_net_device(void) {
                 hal_uart_puts("  Link: ");
                 hal_uart_puts(virtio_net_link_up() ? "UP" : "DOWN");
                 hal_uart_puts("\n");
+                
+                /* Initialize network stack */
+                if (netif_init() == 0) {
+                    hal_uart_puts("[OK] Network stack initialized\n");
+                    hal_uart_puts("  IP: ");
+                    ip4_addr_t ip = netif_get_ip();
+                    hal_uart_put_uint32(IP4_ADDR_A(ip));
+                    hal_uart_putc('.');
+                    hal_uart_put_uint32(IP4_ADDR_B(ip));
+                    hal_uart_putc('.');
+                    hal_uart_put_uint32(IP4_ADDR_C(ip));
+                    hal_uart_putc('.');
+                    hal_uart_put_uint32(IP4_ADDR_D(ip));
+                    hal_uart_puts("\n");
+                }
             }
             return 0;
         }

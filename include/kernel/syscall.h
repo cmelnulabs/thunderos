@@ -73,7 +73,13 @@
 #define SYS_RWLOCK_WRITE_UNLOCK 60 // Release write lock
 #define SYS_RWLOCK_DESTROY     61  // Destroy a reader-writer lock
 
-#define SYSCALL_COUNT   62
+/* ========== Network System Calls (62-69) ========== */
+#define SYS_NET_PING    62  // Send ICMP ping and wait for reply
+#define SYS_NET_IFCONFIG 63 // Get/set network interface configuration
+#define SYS_NET_SEND    64  // Send raw network packet
+#define SYS_NET_RECV    65  // Receive raw network packet
+
+#define SYSCALL_COUNT   66
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)

@@ -55,6 +55,7 @@ KERNEL_C_SOURCES := $(wildcard $(KERNEL_DIR)/*.c) \
                     $(wildcard $(KERNEL_DIR)/drivers/*.c) \
                     $(wildcard $(KERNEL_DIR)/mm/*.c) \
                     $(wildcard $(KERNEL_DIR)/fs/*.c) \
+                    $(wildcard $(KERNEL_DIR)/net/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/core/*.c) \
                     $(wildcard $(KERNEL_DIR)/arch/riscv64/drivers/*.c)
@@ -241,6 +242,7 @@ force_fs: userland
 	@cp userland/build/mutex_test $(BUILD_DIR)/testfs/bin/mutex_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) mutex_test not built"
 	@cp userland/build/condvar_test $(BUILD_DIR)/testfs/bin/condvar_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) condvar_test not built"
 	@cp userland/build/rwlock_test $(BUILD_DIR)/testfs/bin/rwlock_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) rwlock_test not built"
+	@cp userland/build/ping $(BUILD_DIR)/testfs/bin/ping 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) ping not built"
 	@if command -v mkfs.ext2 >/dev/null 2>&1; then \
 		mkfs.ext2 -F -q -d $(BUILD_DIR)/testfs $(FS_IMG) $(FS_SIZE) 2>&1 | grep -v "^mke2fs" | grep -v "^Creating" | grep -v "^Allocating" | grep -v "^Writing" | grep -v "^Copying" || true; \
 		rm -rf $(BUILD_DIR)/testfs; \
