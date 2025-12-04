@@ -1,6 +1,6 @@
 # ThunderOS Development Roadmap
 
-This document outlines the planned development milestones for ThunderOS, a RISC-V operating system focused on AI acceleration and educational use.
+This document outlines the planned development milestones for ThunderOS, a lightweight RISC-V operating system for educational use and embedded systems experimentation.
 
 ## Version 0.1.0 - "First Boot" ✅ RELEASED
 

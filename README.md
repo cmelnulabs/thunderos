@@ -1,19 +1,19 @@
 # ThunderOS
 
-A RISC-V operating system focused on AI acceleration and educational use.
+A lightweight RISC-V operating system for educational use, providing a clean foundation for OS development and embedded systems experimentation.
 
 ## Current Status
 
-**Version 0.7.0 - "Virtual Terminals"** 🎯 Released!
+**Version 0.9.0 - "Synchronization"** 🎯 Released!
 
-- ✅ **v0.7.0 Released** - Virtual terminals and VirtIO GPU
-- ✅ 6 virtual terminals (VT1-VT6) with ESC+1-6 switching
-- ✅ Multiple independent shell instances (VT1 and VT2)
-- ✅ VirtIO GPU 2D driver for graphics support
-- ✅ Per-terminal input buffers and screen state
-- ✅ New utilities: ps, uname, uptime, whoami, tty
-- ✅ 35 system calls implemented
-- 🚧 **Next**: Framebuffer console, job control (v0.8.0)
+- ✅ **v0.9.0 Released** - Blocking I/O and synchronization primitives
+- ✅ Wait queues for sleep/wakeup on blocking operations
+- ✅ Mutexes and semaphores with blocking support
+- ✅ Condition variables (wait/signal/broadcast)
+- ✅ Reader-writer locks with writer priority
+- ✅ Blocking pipes (readers sleep when empty, writers when full)
+- ✅ 62 system calls implemented
+- 🚧 **Next**: VirtIO-net driver, TCP/IP stack (v0.10.0 Networking)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete feature list and [ROADMAP.md](ROADMAP.md) for future plans.
 

@@ -5,6 +5,80 @@ All notable changes to ThunderOS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 04/12/2025 - "Synchronization"
+
+### Overview
+Synchronization primitives release bringing proper blocking I/O with wait queues, mutexes, semaphores, condition variables, and reader-writer locks. The kernel now supports efficient sleep/wakeup mechanisms instead of busy-waiting.
+
+### Added
+
+#### Wait Queues (`kernel/core/wait_queue.c`, `include/kernel/wait_queue.h`)
+- **Sleep/Wakeup Mechanism**:
+  - `wait_queue_init()` - Initialize a wait queue
+  - `wait_queue_sleep()` - Sleep on a wait queue until woken
+  - `wait_queue_wake_one()` - Wake one waiting process (FIFO order)
+  - `wait_queue_wake_all()` - Wake all waiting processes
+  - `wait_queue_is_empty()` - Check if queue has waiters
+- **Integration with Pipes**:
+  - Readers block when pipe is empty
+  - Writers block when pipe is full
+  - Proper EOF detection with wakeup on close
+
+#### Mutexes and Semaphores (`kernel/core/mutex.c`, `include/kernel/mutex.h`)
+- **Mutex Operations**:
+  - `mutex_init()` - Initialize mutex (unlocked state)
+  - `mutex_lock()` - Acquire mutex (blocks if held)
+  - `mutex_unlock()` - Release mutex (wakes one waiter)
+  - `mutex_trylock()` - Non-blocking lock attempt
+- **Semaphore Operations**:
+  - `semaphore_init(count)` - Initialize with count
+  - `semaphore_wait()` - Decrement (blocks if zero)
+  - `semaphore_signal()` - Increment (wakes one waiter)
+  - `semaphore_trywait()` - Non-blocking wait
+- **New System Calls** (46-53):
+  - `sys_mutex_create()`, `sys_mutex_destroy()`
+  - `sys_mutex_lock()`, `sys_mutex_unlock()`, `sys_mutex_trylock()`
+  - `sys_sem_create()`, `sys_sem_wait()`, `sys_sem_signal()`
+
+#### Condition Variables (`kernel/core/condvar.c`, `include/kernel/condvar.h`)
+- **Condvar Operations**:
+  - `condvar_init()` - Initialize condition variable
+  - `condvar_wait()` - Wait for signal (releases mutex atomically)
+  - `condvar_signal()` - Wake one waiting process
+  - `condvar_broadcast()` - Wake all waiting processes
+- **New System Calls** (54-57):
+  - `sys_cond_create()`, `sys_cond_destroy()`
+  - `sys_cond_wait()`, `sys_cond_signal()`, `sys_cond_broadcast()`
+
+#### Reader-Writer Locks (`kernel/core/rwlock.c`, `include/kernel/rwlock.h`)
+- **RWLock Operations**:
+  - `rwlock_init()` - Initialize reader-writer lock
+  - `rwlock_read_lock()` / `rwlock_read_unlock()` - Reader access
+  - `rwlock_write_lock()` / `rwlock_write_unlock()` - Writer access
+  - Writer priority to prevent starvation
+- **New System Calls** (58-61):
+  - `sys_rwlock_create()`, `sys_rwlock_destroy()`
+  - `sys_rwlock_read_lock()`, `sys_rwlock_read_unlock()`
+  - `sys_rwlock_write_lock()`, `sys_rwlock_write_unlock()`
+
+#### Test Programs (`userland/tests/`)
+- `mutex_test` - Tests mutex lock/unlock, contention, trylock (8 tests)
+- `condvar_test` - Tests condition variable wait/signal/broadcast
+- `rwlock_test` - Tests reader-writer lock semantics (7 tests)
+
+### Changed
+- Pipes now use wait queues for blocking instead of returning EAGAIN
+- Process scheduler supports PROC_SLEEPING state for blocked processes
+- Total syscalls increased from 45 to 62
+
+### Technical Notes
+- All synchronization primitives built on wait_queue_t foundation
+- No busy-waiting in kernel - proper sleep/wakeup semantics
+- Mutexes track owner for debugging and recursive lock detection
+- Reader-writer locks use writer priority to prevent writer starvation
+
+---
+
 ## [0.8.0] - 03/12/2025 - "Compatibility"
 
 ### Overview
