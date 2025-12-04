@@ -148,6 +148,8 @@ static const char *HELP_TEXT =
     "  pipe_test        - Test pipe IPC with fork\n"
     "  pipe_simple_test - Test pipe without fork\n"
     "  mutex_test       - Test mutex synchronization\n"
+    "  condvar_test     - Test condition variables\n"
+    "  rwlock_test      - Test reader-writer locks\n"
     "  signal_test      - Test signal handling\n"
     "\n"
     "Other programs: hello, clock\n"

@@ -66,8 +66,14 @@
 #define SYS_COND_SIGNAL   53  // Signal one waiter on condition variable
 #define SYS_COND_BROADCAST 54 // Wake all waiters on condition variable
 #define SYS_COND_DESTROY  55  // Destroy a condition variable
+#define SYS_RWLOCK_CREATE      56  // Create a reader-writer lock
+#define SYS_RWLOCK_READ_LOCK   57  // Acquire read lock (blocking)
+#define SYS_RWLOCK_READ_UNLOCK 58  // Release read lock
+#define SYS_RWLOCK_WRITE_LOCK  59  // Acquire write lock (blocking)
+#define SYS_RWLOCK_WRITE_UNLOCK 60 // Release write lock
+#define SYS_RWLOCK_DESTROY     61  // Destroy a reader-writer lock
 
-#define SYSCALL_COUNT   56
+#define SYSCALL_COUNT   62
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)

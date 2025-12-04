@@ -8,6 +8,7 @@
 #include "kernel/errno.h"
 #include "kernel/mutex.h"
 #include "kernel/condvar.h"
+#include "kernel/rwlock.h"
 #include "hal/hal_timer.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
@@ -1617,6 +1618,120 @@ uint64_t sys_cond_destroy(int cond_id) {
     return 0;
 }
 
+/* ========================================================================
+ * Reader-Writer Lock Syscalls
+ * ======================================================================== */
+
+#define MAX_USER_RWLOCKS 64
+
+static rwlock_t user_rwlocks[MAX_USER_RWLOCKS];
+static int rwlock_in_use[MAX_USER_RWLOCKS] = {0};
+
+/**
+ * sys_rwlock_create - Create a new reader-writer lock
+ * 
+ * @return RWLock ID (>= 0) on success, -1 on error
+ */
+uint64_t sys_rwlock_create(void) {
+    /* Find a free rwlock slot */
+    for (int i = 0; i < MAX_USER_RWLOCKS; i++) {
+        if (!rwlock_in_use[i]) {
+            rwlock_init(&user_rwlocks[i]);
+            rwlock_in_use[i] = 1;
+            clear_errno();
+            return (uint64_t)i;
+        }
+    }
+    
+    set_errno(THUNDEROS_ENOMEM);
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_rwlock_read_lock - Acquire read lock (blocking)
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_read_lock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_read_lock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_read_unlock - Release read lock
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_read_unlock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_read_unlock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_write_lock - Acquire write lock (blocking)
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_write_lock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_write_lock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_write_unlock - Release write lock
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_write_unlock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_write_unlock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_destroy - Destroy a reader-writer lock
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_destroy(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_in_use[rwlock_id] = 0;
+    clear_errno();
+    return 0;
+}
+
 /**
  * sys_fork - Create a child process
  * 
@@ -1966,6 +2081,30 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_COND_DESTROY:
             return_value = sys_cond_destroy((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_CREATE:
+            return_value = sys_rwlock_create();
+            break;
+            
+        case SYS_RWLOCK_READ_LOCK:
+            return_value = sys_rwlock_read_lock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_READ_UNLOCK:
+            return_value = sys_rwlock_read_unlock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_WRITE_LOCK:
+            return_value = sys_rwlock_write_lock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_WRITE_UNLOCK:
+            return_value = sys_rwlock_write_unlock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_DESTROY:
+            return_value = sys_rwlock_destroy((int)argument0);
             break;
             
         case SYS_FORK:
