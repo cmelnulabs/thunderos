@@ -424,17 +424,19 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 **Focus:** Blocking I/O and synchronization primitives
 
 ### Planned Features
-- [ ] Wait queues for blocking I/O (pipe, network, disk)
-- [ ] Mutexes and semaphores
-- [ ] Condition variables
+- [x] Wait queues for blocking I/O (pipe, network, disk)
+- [x] Mutexes and semaphores
+- [x] Condition variables
 - [ ] Reader-writer locks
-- [ ] Proper wakeup mechanisms for sleeping processes
+- [x] Proper wakeup mechanisms for sleeping processes
 
 **Release Criteria:**
 - Blocking I/O works properly with wakeup mechanisms
 - Pipes block readers when empty, writers when full
 - Mutex/semaphore primitives functional
 - No busy-waiting in kernel
+
+**Status:** In Progress (4/5 features complete)
 
 ---
 

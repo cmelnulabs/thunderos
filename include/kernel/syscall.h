@@ -61,8 +61,13 @@
 #define SYS_MUTEX_TRYLOCK 48  // Try to lock a mutex (non-blocking)
 #define SYS_MUTEX_UNLOCK  49  // Unlock a mutex
 #define SYS_MUTEX_DESTROY 50  // Destroy a mutex
+#define SYS_COND_CREATE   51  // Create a condition variable
+#define SYS_COND_WAIT     52  // Wait on condition variable (blocking)
+#define SYS_COND_SIGNAL   53  // Signal one waiter on condition variable
+#define SYS_COND_BROADCAST 54 // Wake all waiters on condition variable
+#define SYS_COND_DESTROY  55  // Destroy a condition variable
 
-#define SYSCALL_COUNT   51
+#define SYSCALL_COUNT   56
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)

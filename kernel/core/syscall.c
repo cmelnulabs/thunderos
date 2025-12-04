@@ -7,6 +7,7 @@
 #include "kernel/syscall.h"
 #include "kernel/errno.h"
 #include "kernel/mutex.h"
+#include "kernel/condvar.h"
 #include "hal/hal_timer.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
@@ -1419,6 +1420,15 @@ uint64_t sys_uname(utsname_t *buf) {
 static mutex_t user_mutexes[MAX_USER_MUTEXES];
 static int mutex_in_use[MAX_USER_MUTEXES] = {0};
 
+/* ========================================================================
+ * Condition Variable Syscalls
+ * ======================================================================== */
+
+#define MAX_USER_CONDVARS 64
+
+static condvar_t user_condvars[MAX_USER_CONDVARS];
+static int condvar_in_use[MAX_USER_CONDVARS] = {0};
+
 /**
  * sys_mutex_create - Create a new mutex
  * 
@@ -1501,6 +1511,108 @@ uint64_t sys_mutex_destroy(int mutex_id) {
     }
     
     mutex_in_use[mutex_id] = 0;
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_create - Create a new condition variable
+ * 
+ * @return Condition variable ID (>= 0) on success, -1 on error
+ */
+uint64_t sys_cond_create(void) {
+    /* Find a free condvar slot */
+    for (int i = 0; i < MAX_USER_CONDVARS; i++) {
+        if (!condvar_in_use[i]) {
+            cond_init(&user_condvars[i]);
+            condvar_in_use[i] = 1;
+            clear_errno();
+            return (uint64_t)i;
+        }
+    }
+    
+    set_errno(THUNDEROS_ENOMEM);
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_cond_wait - Wait on a condition variable (blocking)
+ * 
+ * Atomically unlocks the mutex and sleeps on the condition variable.
+ * When awakened, re-acquires the mutex before returning.
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @param mutex_id Mutex ID (must be locked by caller)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_wait(int cond_id, int mutex_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_wait(&user_condvars[cond_id], &user_mutexes[mutex_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_signal - Signal one waiter on a condition variable
+ * 
+ * Wakes up one process waiting on the condition variable (if any).
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_signal(int cond_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_signal(&user_condvars[cond_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_broadcast - Wake all waiters on a condition variable
+ * 
+ * Wakes up all processes waiting on the condition variable.
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_broadcast(int cond_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_broadcast(&user_condvars[cond_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_destroy - Destroy a condition variable
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_destroy(int cond_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_destroy(&user_condvars[cond_id]);
+    condvar_in_use[cond_id] = 0;
     clear_errno();
     return 0;
 }
@@ -1834,6 +1946,26 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_MUTEX_DESTROY:
             return_value = sys_mutex_destroy((int)argument0);
+            break;
+            
+        case SYS_COND_CREATE:
+            return_value = sys_cond_create();
+            break;
+            
+        case SYS_COND_WAIT:
+            return_value = sys_cond_wait((int)argument0, (int)argument1);
+            break;
+            
+        case SYS_COND_SIGNAL:
+            return_value = sys_cond_signal((int)argument0);
+            break;
+            
+        case SYS_COND_BROADCAST:
+            return_value = sys_cond_broadcast((int)argument0);
+            break;
+            
+        case SYS_COND_DESTROY:
+            return_value = sys_cond_destroy((int)argument0);
             break;
             
         case SYS_FORK:
