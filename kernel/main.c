@@ -21,6 +21,7 @@
 #include "kernel/elf_loader.h"
 #include "drivers/virtio_blk.h"
 #include "drivers/virtio_gpu.h"
+#include "drivers/virtio_net.h"
 #include "drivers/framebuffer.h"
 #include "drivers/fbconsole.h"
 #include "drivers/vterm.h"
@@ -52,6 +53,7 @@ static void init_interrupts(void);
 static void init_memory(void);
 static int init_block_device(void);
 static int init_gpu_device(void);
+static int init_net_device(void);
 static int init_filesystem(void);
 static void launch_shell(void);
 static void halt_cpu(void);
@@ -246,6 +248,40 @@ static int init_gpu_device(void) {
 }
 
 /*
+ * Probe and initialize VirtIO network device.
+ * Returns 0 on success, -1 if no device found.
+ */
+static int init_net_device(void) {
+    static const char hex[] = "0123456789abcdef";
+    
+    for (int probe_index = 0; probe_index < VIRTIO_PROBE_COUNT; probe_index++) {
+        uint64_t device_address = VIRTIO_BASE_ADDRESS + (probe_index * VIRTIO_ADDRESS_STRIDE);
+        int irq_number = probe_index + 1;
+
+        if (virtio_net_init(device_address, irq_number) == 0) {
+            virtio_net_device_t *net_dev = virtio_net_get_device();
+            if (net_dev) {
+                hal_uart_puts("[OK] VirtIO network device initialized\n");
+                hal_uart_puts("  MAC: ");
+                for (int i = 0; i < 6; i++) {
+                    if (i > 0) hal_uart_putc(':');
+                    hal_uart_putc(hex[(net_dev->mac[i] >> 4) & 0xF]);
+                    hal_uart_putc(hex[net_dev->mac[i] & 0xF]);
+                }
+                hal_uart_puts("\n");
+                hal_uart_puts("  Link: ");
+                hal_uart_puts(virtio_net_link_up() ? "UP" : "DOWN");
+                hal_uart_puts("\n");
+            }
+            return 0;
+        }
+    }
+
+    hal_uart_puts("[INFO] No VirtIO network device found\n");
+    return -1;
+}
+
+/*
  * Mount ext2 filesystem and register with VFS.
  * Returns 0 on success, -1 on failure.
  */
@@ -389,6 +425,9 @@ void kernel_main(void) {
 
     /* Try to initialize GPU (optional - console works without it) */
     init_gpu_device();
+
+    /* Try to initialize network device (optional) */
+    init_net_device();
 
 #ifdef TEST_MODE
     hal_uart_puts("\n");

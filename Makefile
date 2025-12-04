@@ -290,7 +290,9 @@ qemu: userland fs
 		qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
-			-device virtio-blk-device,drive=hd0; \
+			-device virtio-blk-device,drive=hd0 \
+			-netdev user,id=net0 \
+			-device virtio-net-device,netdev=net0; \
 	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
 		echo "  $(CYAN)QEMU:$(RESET)         /tmp/qemu-10.1.2/build/qemu-system-riscv64"; \
 		echo "  $(CYAN)Machine:$(RESET)      virt (128M RAM)"; \
@@ -300,7 +302,9 @@ qemu: userland fs
 		/tmp/qemu-10.1.2/build/qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
-			-device virtio-blk-device,drive=hd0; \
+			-device virtio-blk-device,drive=hd0 \
+			-netdev user,id=net0 \
+			-device virtio-net-device,netdev=net0; \
 	else \
 		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found. Please install QEMU 10.1.2+"; \
 		exit 1; \
