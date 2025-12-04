@@ -128,5 +128,8 @@ print_section "Test Programs"
 build_program "signal_test" "signal_test" "tests"
 build_program "pipe_test" "pipe_test" "tests"
 build_program "pipe_simple_test" "pipe_simple_test" "tests"
+build_program "mutex_test" "mutex_test" "tests"
+build_program "condvar_test" "condvar_test" "tests"
+build_program "rwlock_test" "rwlock_test" "tests"
 
 print_footer

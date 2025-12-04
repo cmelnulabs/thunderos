@@ -419,44 +419,44 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.9.0 - "Tools"
-
-**Focus:** Development environment
-
-### Planned Features
-- [ ] Dynamic linking support
-- [ ] Shared libraries (libc)
-- [ ] Simple text editor (nano-like)
-- [ ] Embedded compiler/interpreter (TinyCC or Lua)
-- [ ] GDB stub for debugging
-- [ ] Developer utilities (make, grep, sed)
-- [ ] Networking basics (VirtIO network, lwIP)
-
-**Release Criteria:**
-- Can compile and run programs on ThunderOS
-- Self-hosting capability (compile kernel on itself)
-- Developer tools available and working
-- Debugging support functional
-- Basic networking operational
-
----
-
-## Version 0.10.0 - "Synchronization"
+## Version 0.9.0 - "Synchronization"
 
 **Focus:** Blocking I/O and synchronization primitives
 
 ### Planned Features
-- [ ] Wait queues for blocking I/O (pipe, network, disk)
-- [ ] Mutexes and semaphores
-- [ ] Condition variables
-- [ ] Reader-writer locks
-- [ ] Proper wakeup mechanisms for sleeping processes
+- [x] Wait queues for blocking I/O (pipe, network, disk)
+- [x] Mutexes and semaphores
+- [x] Condition variables
+- [x] Reader-writer locks
+- [x] Proper wakeup mechanisms for sleeping processes
 
 **Release Criteria:**
 - Blocking I/O works properly with wakeup mechanisms
 - Pipes block readers when empty, writers when full
 - Mutex/semaphore primitives functional
 - No busy-waiting in kernel
+
+**Status:** Complete (5/5 features) - Ready for release
+
+---
+
+## Version 0.10.0 - "Networking"
+
+**Focus:** Network connectivity
+
+### Planned Features
+- [ ] VirtIO-net driver
+- [ ] lwIP TCP/IP stack integration
+- [ ] Socket API (blocking, uses v0.9.0 primitives)
+- [ ] UDP and TCP support
+- [ ] Basic network utilities (ping, simple HTTP client)
+- [ ] DHCP client for automatic IP configuration
+
+**Release Criteria:**
+- Can send and receive network packets
+- TCP/UDP sockets work reliably
+- Can fetch data from network (wget-like)
+- Basic network diagnostics available
 
 ---
 

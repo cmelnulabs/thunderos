@@ -6,6 +6,9 @@
 
 #include "kernel/syscall.h"
 #include "kernel/errno.h"
+#include "kernel/mutex.h"
+#include "kernel/condvar.h"
+#include "kernel/rwlock.h"
 #include "hal/hal_timer.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
@@ -1409,6 +1412,326 @@ uint64_t sys_uname(utsname_t *buf) {
     return 0;
 }
 
+/* ========================================================================
+ * Mutex Syscalls
+ * ======================================================================== */
+
+#define MAX_USER_MUTEXES 64
+
+static mutex_t user_mutexes[MAX_USER_MUTEXES];
+static int mutex_in_use[MAX_USER_MUTEXES] = {0};
+
+/* ========================================================================
+ * Condition Variable Syscalls
+ * ======================================================================== */
+
+#define MAX_USER_CONDVARS 64
+
+static condvar_t user_condvars[MAX_USER_CONDVARS];
+static int condvar_in_use[MAX_USER_CONDVARS] = {0};
+
+/**
+ * sys_mutex_create - Create a new mutex
+ * 
+ * @return Mutex ID (>= 0) on success, -1 on error
+ */
+uint64_t sys_mutex_create(void) {
+    /* Find a free mutex slot */
+    for (int i = 0; i < MAX_USER_MUTEXES; i++) {
+        if (!mutex_in_use[i]) {
+            mutex_init(&user_mutexes[i]);
+            mutex_in_use[i] = 1;
+            clear_errno();
+            return (uint64_t)i;
+        }
+    }
+    
+    set_errno(THUNDEROS_ENOMEM);
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_mutex_lock - Lock a mutex (blocking)
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_mutex_lock(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    mutex_lock(&user_mutexes[mutex_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_mutex_trylock - Try to lock a mutex (non-blocking)
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 if locked, -1 if already locked or error
+ */
+uint64_t sys_mutex_trylock(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    return mutex_trylock(&user_mutexes[mutex_id]);
+}
+
+/**
+ * sys_mutex_unlock - Unlock a mutex
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_mutex_unlock(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    mutex_unlock(&user_mutexes[mutex_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_mutex_destroy - Destroy a mutex
+ * 
+ * @param mutex_id Mutex ID from sys_mutex_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_mutex_destroy(int mutex_id) {
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    mutex_in_use[mutex_id] = 0;
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_create - Create a new condition variable
+ * 
+ * @return Condition variable ID (>= 0) on success, -1 on error
+ */
+uint64_t sys_cond_create(void) {
+    /* Find a free condvar slot */
+    for (int i = 0; i < MAX_USER_CONDVARS; i++) {
+        if (!condvar_in_use[i]) {
+            cond_init(&user_condvars[i]);
+            condvar_in_use[i] = 1;
+            clear_errno();
+            return (uint64_t)i;
+        }
+    }
+    
+    set_errno(THUNDEROS_ENOMEM);
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_cond_wait - Wait on a condition variable (blocking)
+ * 
+ * Atomically unlocks the mutex and sleeps on the condition variable.
+ * When awakened, re-acquires the mutex before returning.
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @param mutex_id Mutex ID (must be locked by caller)
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_wait(int cond_id, int mutex_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    if (mutex_id < 0 || mutex_id >= MAX_USER_MUTEXES || !mutex_in_use[mutex_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_wait(&user_condvars[cond_id], &user_mutexes[mutex_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_signal - Signal one waiter on a condition variable
+ * 
+ * Wakes up one process waiting on the condition variable (if any).
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_signal(int cond_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_signal(&user_condvars[cond_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_broadcast - Wake all waiters on a condition variable
+ * 
+ * Wakes up all processes waiting on the condition variable.
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_broadcast(int cond_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_broadcast(&user_condvars[cond_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_cond_destroy - Destroy a condition variable
+ * 
+ * @param cond_id Condition variable ID from sys_cond_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_cond_destroy(int cond_id) {
+    if (cond_id < 0 || cond_id >= MAX_USER_CONDVARS || !condvar_in_use[cond_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    cond_destroy(&user_condvars[cond_id]);
+    condvar_in_use[cond_id] = 0;
+    clear_errno();
+    return 0;
+}
+
+/* ========================================================================
+ * Reader-Writer Lock Syscalls
+ * ======================================================================== */
+
+#define MAX_USER_RWLOCKS 64
+
+static rwlock_t user_rwlocks[MAX_USER_RWLOCKS];
+static int rwlock_in_use[MAX_USER_RWLOCKS] = {0};
+
+/**
+ * sys_rwlock_create - Create a new reader-writer lock
+ * 
+ * @return RWLock ID (>= 0) on success, -1 on error
+ */
+uint64_t sys_rwlock_create(void) {
+    /* Find a free rwlock slot */
+    for (int i = 0; i < MAX_USER_RWLOCKS; i++) {
+        if (!rwlock_in_use[i]) {
+            rwlock_init(&user_rwlocks[i]);
+            rwlock_in_use[i] = 1;
+            clear_errno();
+            return (uint64_t)i;
+        }
+    }
+    
+    set_errno(THUNDEROS_ENOMEM);
+    return SYSCALL_ERROR;
+}
+
+/**
+ * sys_rwlock_read_lock - Acquire read lock (blocking)
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_read_lock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_read_lock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_read_unlock - Release read lock
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_read_unlock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_read_unlock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_write_lock - Acquire write lock (blocking)
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_write_lock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_write_lock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_write_unlock - Release write lock
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_write_unlock(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_write_unlock(&user_rwlocks[rwlock_id]);
+    clear_errno();
+    return 0;
+}
+
+/**
+ * sys_rwlock_destroy - Destroy a reader-writer lock
+ * 
+ * @param rwlock_id RWLock ID from sys_rwlock_create
+ * @return 0 on success, -1 on error
+ */
+uint64_t sys_rwlock_destroy(int rwlock_id) {
+    if (rwlock_id < 0 || rwlock_id >= MAX_USER_RWLOCKS || !rwlock_in_use[rwlock_id]) {
+        set_errno(THUNDEROS_EINVAL);
+        return SYSCALL_ERROR;
+    }
+    
+    rwlock_in_use[rwlock_id] = 0;
+    clear_errno();
+    return 0;
+}
+
 /**
  * sys_fork - Create a child process
  * 
@@ -1718,6 +2041,70 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         case SYS_GETSID:
             return_value = sys_getsid((int)argument0);
+            break;
+            
+        case SYS_MUTEX_CREATE:
+            return_value = sys_mutex_create();
+            break;
+            
+        case SYS_MUTEX_LOCK:
+            return_value = sys_mutex_lock((int)argument0);
+            break;
+            
+        case SYS_MUTEX_TRYLOCK:
+            return_value = sys_mutex_trylock((int)argument0);
+            break;
+            
+        case SYS_MUTEX_UNLOCK:
+            return_value = sys_mutex_unlock((int)argument0);
+            break;
+            
+        case SYS_MUTEX_DESTROY:
+            return_value = sys_mutex_destroy((int)argument0);
+            break;
+            
+        case SYS_COND_CREATE:
+            return_value = sys_cond_create();
+            break;
+            
+        case SYS_COND_WAIT:
+            return_value = sys_cond_wait((int)argument0, (int)argument1);
+            break;
+            
+        case SYS_COND_SIGNAL:
+            return_value = sys_cond_signal((int)argument0);
+            break;
+            
+        case SYS_COND_BROADCAST:
+            return_value = sys_cond_broadcast((int)argument0);
+            break;
+            
+        case SYS_COND_DESTROY:
+            return_value = sys_cond_destroy((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_CREATE:
+            return_value = sys_rwlock_create();
+            break;
+            
+        case SYS_RWLOCK_READ_LOCK:
+            return_value = sys_rwlock_read_lock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_READ_UNLOCK:
+            return_value = sys_rwlock_read_unlock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_WRITE_LOCK:
+            return_value = sys_rwlock_write_lock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_WRITE_UNLOCK:
+            return_value = sys_rwlock_write_unlock((int)argument0);
+            break;
+            
+        case SYS_RWLOCK_DESTROY:
+            return_value = sys_rwlock_destroy((int)argument0);
             break;
             
         case SYS_FORK:

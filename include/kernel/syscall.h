@@ -56,8 +56,24 @@
 #define SYS_SETPGID     43  // Set process group ID
 #define SYS_GETPGID     44  // Get process group ID
 #define SYS_GETSID      45  // Get session ID
+#define SYS_MUTEX_CREATE  46  // Create a mutex
+#define SYS_MUTEX_LOCK    47  // Lock a mutex (blocking)
+#define SYS_MUTEX_TRYLOCK 48  // Try to lock a mutex (non-blocking)
+#define SYS_MUTEX_UNLOCK  49  // Unlock a mutex
+#define SYS_MUTEX_DESTROY 50  // Destroy a mutex
+#define SYS_COND_CREATE   51  // Create a condition variable
+#define SYS_COND_WAIT     52  // Wait on condition variable (blocking)
+#define SYS_COND_SIGNAL   53  // Signal one waiter on condition variable
+#define SYS_COND_BROADCAST 54 // Wake all waiters on condition variable
+#define SYS_COND_DESTROY  55  // Destroy a condition variable
+#define SYS_RWLOCK_CREATE      56  // Create a reader-writer lock
+#define SYS_RWLOCK_READ_LOCK   57  // Acquire read lock (blocking)
+#define SYS_RWLOCK_READ_UNLOCK 58  // Release read lock
+#define SYS_RWLOCK_WRITE_LOCK  59  // Acquire write lock (blocking)
+#define SYS_RWLOCK_WRITE_UNLOCK 60 // Release write lock
+#define SYS_RWLOCK_DESTROY     61  // Destroy a reader-writer lock
 
-#define SYSCALL_COUNT   46
+#define SYSCALL_COUNT   62
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)
