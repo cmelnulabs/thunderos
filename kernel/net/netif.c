@@ -41,10 +41,15 @@ int netif_init(void)
     /* Initialize ARP cache */
     arp_init();
     
-    /* Pre-populate QEMU SLIRP gateway MAC address */
-    /* QEMU SLIRP uses 52:55:0a:00:02:02 for 10.0.2.2 gateway */
-    uint8_t gateway_mac[6] = {0x52, 0x55, 0x0a, 0x00, 0x02, 0x02};
-    arp_cache_add(g_netif.gateway, gateway_mac);
+    /*
+     * Pre-populate ARP cache with QEMU SLIRP gateway MAC address.
+     * QEMU's user-mode networking (SLIRP) uses a fixed MAC for the
+     * gateway at 10.0.2.2. This avoids the need for ARP resolution.
+     */
+    static const uint8_t QEMU_SLIRP_GATEWAY_MAC[ETH_ALEN] = {
+        0x52, 0x55, 0x0a, 0x00, 0x02, 0x02
+    };
+    arp_cache_add(g_netif.gateway, QEMU_SLIRP_GATEWAY_MAC);
     
     clear_errno();
     return 0;

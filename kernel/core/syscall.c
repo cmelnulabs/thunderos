@@ -2110,11 +2110,10 @@ uint64_t syscall_handler(uint64_t syscall_number,
             break;
             
         case SYS_FORK:
-            // Fork is handled in syscall_handler_with_frame
-            // This should not be reached
+            /* Fork is handled in syscall_handler_with_frame */
+            /* This should not be reached */
             hal_uart_puts("[WARN] SYS_FORK called from old syscall_handler\n");
             return_value = SYSCALL_ERROR;
-            break;
             break;
             
         case SYS_EXEC:
@@ -2122,22 +2121,22 @@ uint64_t syscall_handler(uint64_t syscall_number,
             break;
             
         case SYS_NET_PING:
-            // Ping syscall: argument0 = IP address (in network byte order)
+            /* Ping syscall: argument0 = IP address (in network byte order) */
             return_value = (uint64_t)ping((uint32_t)argument0);
             break;
             
         case SYS_NET_IFCONFIG:
-            // Get network interface information (not implemented yet)
+            /* Get network interface information (not implemented yet) */
             return_value = SYSCALL_ERROR;
             break;
             
         case SYS_NET_SEND:
-            // Raw network send (not implemented yet)
+            /* Raw network send (not implemented yet) */
             return_value = SYSCALL_ERROR;
             break;
             
         case SYS_NET_RECV:
-            // Raw network receive (not implemented yet)
+            /* Raw network receive (not implemented yet) */
             return_value = SYSCALL_ERROR;
             break;
             

@@ -60,6 +60,9 @@
 #define VIRTQ_DESC_F_NEXT               1
 #define VIRTQ_DESC_F_WRITE              2
 
+/* Timeout for TX completion polling */
+#define VIRTIO_NET_TX_TIMEOUT           1000000
+
 /* Global device state */
 static virtio_net_device_t *g_net_device = NULL;
 
@@ -186,7 +189,11 @@ static int virtqueue_get_used_buf(virtqueue_net_t *vq, uint16_t *desc_idx, uint3
 {
     read_barrier();
     
-    if (vq->last_seen_used == vq->used->idx) {
+    /* Read used index with volatile to prevent caching */
+    volatile uint16_t *used_idx_ptr = &vq->used->idx;
+    uint16_t device_idx = *used_idx_ptr;
+    
+    if (vq->last_seen_used == device_idx) {
         return -1;  /* No new completions */
     }
     
@@ -481,7 +488,6 @@ int virtio_net_send(const void *data, size_t len)
     hdr->gso_size = 0;
     hdr->csum_start = 0;
     hdr->csum_offset = 0;
-    hdr->num_buffers = 0;
     
     /* Copy data */
     uint8_t *dst = (uint8_t *)data_region->virt_addr;
@@ -509,7 +515,7 @@ int virtio_net_send(const void *data, size_t len)
     virtqueue_notify(g_net_device, VIRTIO_NET_QUEUE_TX);
     
     /* Poll for completion (synchronous for now) */
-    uint32_t timeout = 1000000;
+    uint32_t timeout = VIRTIO_NET_TX_TIMEOUT;
     while (timeout > 0) {
         uint32_t int_status = VIRTIO_READ32(g_net_device, VIRTIO_MMIO_INTERRUPT_STATUS);
         if (int_status) {

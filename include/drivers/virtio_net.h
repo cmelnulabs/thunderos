@@ -78,6 +78,9 @@
 /**
  * VirtIO Network Header
  * Prepended to every packet in both directions
+ * 
+ * Note: Without VIRTIO_NET_F_MRG_RXBUF, this is 10 bytes.
+ * With VIRTIO_NET_F_MRG_RXBUF, add 2 more bytes for num_buffers.
  */
 typedef struct {
     uint8_t flags;              /* VIRTIO_NET_HDR_F_* flags */
@@ -86,7 +89,7 @@ typedef struct {
     uint16_t gso_size;          /* GSO segment size */
     uint16_t csum_start;        /* Checksum start offset */
     uint16_t csum_offset;       /* Checksum offset from csum_start */
-    uint16_t num_buffers;       /* Number of buffers (only with MRG_RXBUF) */
+    /* Note: num_buffers only present with MRG_RXBUF - we don't use it */
 } __attribute__((packed)) virtio_net_hdr_t;
 
 /**

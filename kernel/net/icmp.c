@@ -11,10 +11,16 @@
 #include <kernel/errno.h>
 #include <hal/hal_uart.h>
 
-/* Use hal_timer_get_ticks for milliseconds (each tick = 100ms) */
+/* Constants */
+#define TIMER_TICK_MS           100     /* Timer tick period in milliseconds */
+#define PING_TIMEOUT_MS         5000    /* Ping timeout in milliseconds */
+#define PING_POLL_DELAY         1000    /* Delay loop iterations between polls */
+#define PING_INITIAL_ID         0x1234  /* Initial ping identifier */
+
+/* Convert timer ticks to milliseconds */
 static inline uint64_t time_get_ms(void) {
     extern uint64_t hal_timer_get_ticks(void);
-    return hal_timer_get_ticks() * 100;
+    return hal_timer_get_ticks() * TIMER_TICK_MS;
 }
 
 /* Global ping state */
@@ -149,7 +155,7 @@ void icmp_recv(ip4_addr_t src_ip, const void *data, size_t len)
  */
 int ping(ip4_addr_t dst_ip)
 {
-    static uint16_t ping_id = 0x1234;
+    static uint16_t ping_id = PING_INITIAL_ID;
     static uint16_t ping_seq = 0;
     
     /* Setup ping state */
@@ -169,13 +175,12 @@ int ping(ip4_addr_t dst_ip)
     }
     
     /* Poll for reply with timeout */
-    uint64_t timeout = 5000;  /* 5 seconds */
     while (g_ping_state.waiting && 
-           (time_get_ms() - g_ping_state.send_time) < timeout) {
+           (time_get_ms() - g_ping_state.send_time) < PING_TIMEOUT_MS) {
         netif_poll();
         
-        /* Small delay */
-        for (volatile int i = 0; i < 1000; i++);
+        /* Small delay to avoid spinning too hard */
+        for (volatile int delay = 0; delay < PING_POLL_DELAY; delay++);
     }
     
     if (g_ping_state.received) {
@@ -201,7 +206,7 @@ int ping_check(void)
     netif_poll();
     
     /* Check timeout */
-    if ((time_get_ms() - g_ping_state.send_time) > 5000) {
+    if ((time_get_ms() - g_ping_state.send_time) > PING_TIMEOUT_MS) {
         g_ping_state.waiting = 0;
         return -1;
     }

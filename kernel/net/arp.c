@@ -11,10 +11,14 @@
 #include <kernel/errno.h>
 #include <hal/hal_uart.h>
 
-/* Use hal_timer_get_ticks for milliseconds (each tick = 100ms) */
+/* Constants */
+#define TIMER_TICK_MS           100     /* Timer tick period in milliseconds */
+#define ARP_POLL_DELAY          10000   /* Delay loop iterations between polls */
+
+/* Convert timer ticks to milliseconds */
 static inline uint64_t time_get_ms(void) {
     extern uint64_t hal_timer_get_ticks(void);
-    return hal_timer_get_ticks() * 100;
+    return hal_timer_get_ticks() * TIMER_TICK_MS;
 }
 
 /* ARP cache */
@@ -155,7 +159,7 @@ int arp_resolve(ip4_addr_t ip, uint8_t *mac, uint32_t timeout_ms)
         }
         
         /* Small delay to avoid spinning too hard */
-        for (volatile int i = 0; i < 10000; i++);
+        for (volatile int delay = 0; delay < ARP_POLL_DELAY; delay++);
     }
     
     RETURN_ERRNO(THUNDEROS_ETIMEDOUT);

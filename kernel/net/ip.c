@@ -11,6 +11,11 @@
 #include <kernel/errno.h>
 #include <hal/hal_uart.h>
 
+/* Constants */
+#define IP_VERSION_IHL_DEFAULT  0x45    /* IPv4, IHL=5 (20 bytes, no options) */
+#define IP_DEFAULT_TTL          64      /* Default time-to-live */
+#define IP_BROADCAST            0xFFFFFFFF  /* Broadcast address */
+
 /* IP identification counter */
 static uint16_t ip_id = 0;
 
@@ -56,12 +61,12 @@ int ip_send(ip4_addr_t dst_ip, uint8_t protocol, const void *data, size_t len)
     ip_hdr_t *ip = (ip_hdr_t *)packet;
     
     /* Fill IP header */
-    ip->version_ihl = 0x45;     /* IPv4, 5 words (20 bytes) */
+    ip->version_ihl = IP_VERSION_IHL_DEFAULT;
     ip->tos = 0;
     ip->total_len = htons(IP_HEADER_LEN + len);
     ip->id = htons(ip_id++);
     ip->frag_off = htons(IP_FLAG_DF);  /* Don't fragment */
-    ip->ttl = 64;
+    ip->ttl = IP_DEFAULT_TTL;
     ip->protocol = protocol;
     ip->checksum = 0;
     ip->src_addr = htonl(g_netif.ip_addr);
@@ -132,7 +137,7 @@ void ip_recv(const void *data, size_t len)
     
     /* Check if packet is for us */
     ip4_addr_t dst = ntohl(ip->dst_addr);
-    if (dst != g_netif.ip_addr && dst != 0xFFFFFFFF) {
+    if (dst != g_netif.ip_addr && dst != IP_BROADCAST) {
         return;  /* Not for us */
     }
     
