@@ -60,65 +60,16 @@ Development Philosophy
 Getting Started
 ---------------
 
-Prerequisites
-~~~~~~~~~~~~~
+To build and run ThunderOS, see the :doc:`development` guide for complete instructions 
+including prerequisites, build options (Docker or native), and testing.
 
-* RISC-V GCC toolchain (``riscv64-unknown-elf-gcc``)
-* QEMU 10.1.2+ with RISC-V support (``qemu-system-riscv64``)
-* GNU Make
-* Basic knowledge of C and assembly
-
-Building
-~~~~~~~~
-
-Using the build script (recommended):
+**Quick Start:**
 
 .. code-block:: bash
 
    git clone <repository>
    cd thunderos
-   ./build_os.sh
-
-Or manually with Make:
-
-.. code-block:: bash
-
-   make all
-
-Running
-~~~~~~~
-
-Build and test in QEMU:
-
-.. code-block:: bash
-
-   make qemu
-
-Or run automated tests:
-
-.. code-block:: bash
-
-   # Run full test suite
-   make test
-   
-   # Or run individual test scripts
-   tests/scripts/test_boot.sh
-   tests/scripts/test_integration.sh
-   tests/scripts/test_user_mode.sh
-   
-   # Or run all tests
-   tests/scripts/run_all_tests.sh
-
-Building Documentation
-~~~~~~~~~~~~~~~~~~~~~~
-
-Generate HTML documentation:
-
-.. code-block:: bash
-
-   ./build_docs.sh
-
-Documentation will be available at ``docs/build/html/index.html``
+   make run              # Build and run in QEMU
 
 Project Structure
 -----------------
@@ -126,26 +77,29 @@ Project Structure
 .. code-block:: text
 
    thunderos/
-   ├── boot/              # Bootloader (assembly)
-   ├── kernel/            # Kernel code
+   ├── boot/              # Bootloader (assembly entry point)
+   ├── kernel/            # Kernel source code
    │   ├── arch/riscv64/  # Architecture-specific code
-   │   ├── core/          # Core kernel (scheduler, syscalls, etc.)
-   │   └── mm/            # Memory management (PMM, paging)
+   │   ├── core/          # Core kernel (scheduler, syscalls, signals, etc.)
+   │   ├── drivers/       # Device drivers (VirtIO block/net)
+   │   ├── fs/            # Filesystem (ext2, VFS)
+   │   ├── mm/            # Memory management (PMM, paging, DMA)
+   │   └── utils/         # Utility functions (kstring)
    ├── include/           # Header files
    │   ├── arch/          # Architecture headers
+   │   ├── drivers/       # Driver headers
+   │   ├── fs/            # Filesystem headers
    │   ├── hal/           # Hardware Abstraction Layer
    │   ├── kernel/        # Kernel subsystem headers
    │   └── mm/            # Memory management headers
+   ├── userland/          # User-space programs
    ├── tests/             # Automated test suite
-   │   ├── test_*.sh      # Integration test scripts
-   │   ├── test_*.c       # Unit test programs
    │   ├── framework/     # Test framework (kunit)
-   │   └── README.md      # Test documentation
+   │   ├── scripts/       # Integration test scripts
+   │   └── unit/          # Unit test programs
    ├── docs/              # Sphinx documentation
    ├── build/             # Build artifacts (generated)
    ├── .github/           # GitHub Actions CI/CD
-   ├── build_os.sh        # Build kernel script
-   ├── build_docs.sh      # Build documentation script
    ├── Makefile           # Main build system
    └── README.md          # Project documentation
 

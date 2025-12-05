@@ -6,6 +6,8 @@
  * It configures all the M-mode CSRs that OpenSBI would normally set up.
  */
 
+#include <limits.h>
+
 // CSR read/write macros
 #define r_mstatus() ({ unsigned long __tmp; \
   asm volatile("csrr %0, mstatus" : "=r"(__tmp)); \
@@ -84,24 +86,24 @@
   asm volatile("csrw 0x14D, %0" :: "r"(x)); })
 
 // mstatus bits
-#define MSTATUS_MPP_MASK (3L << 11)
-#define MSTATUS_MPP_M (3L << 11)
-#define MSTATUS_MPP_S (1L << 11)
-#define MSTATUS_MPP_U (0L << 11)
-#define MSTATUS_MIE (1L << 3)
+#define MSTATUS_MPP_MASK (0b11L << 11)      // Bits 12:11 mask
+#define MSTATUS_MPP_M    (0b11L << 11)      // MPP = 11 (Machine mode)
+#define MSTATUS_MPP_S    (0b01L << 11)      // MPP = 01 (Supervisor mode)
+#define MSTATUS_MPP_U    (0b00L << 11)      // MPP = 00 (User mode)
+#define MSTATUS_MIE      (1L << 3)          // Bit 3: Machine Interrupt Enable
 
 // MIE register bits
-#define MIE_MEIE (1L << 11)  // M-mode external interrupt enable
-#define MIE_MTIE (1L << 7)   // M-mode timer interrupt enable
-#define MIE_MSIE (1L << 3)   // M-mode software interrupt enable
-#define MIE_SEIE (1L << 9)   // S-mode external interrupt enable
-#define MIE_STIE (1L << 5)   // S-mode timer interrupt enable
-#define MIE_SSIE (1L << 1)   // S-mode software interrupt enable
+#define MIE_MEIE (0b1L << 11)  // Bit 11: M-mode external interrupt enable
+#define MIE_MTIE (0b1L << 7)   // Bit 7:  M-mode timer interrupt enable
+#define MIE_MSIE (0b1L << 3)   // Bit 3:  M-mode software interrupt enable
+#define MIE_SEIE (0b1L << 9)   // Bit 9:  S-mode external interrupt enable
+#define MIE_STIE (0b1L << 5)   // Bit 5:  S-mode timer interrupt enable
+#define MIE_SSIE (0b1L << 1)   // Bit 1:  S-mode software interrupt enable
 
 // SIE register bits
-#define SIE_SEIE (1L << 9)   // S-mode external interrupt enable
-#define SIE_STIE (1L << 5)   // S-mode timer interrupt enable
-#define SIE_SSIE (1L << 1)   // S-mode software interrupt enable
+#define SIE_SEIE (0b1L << 9)   // Bit 9: S-mode external interrupt enable
+#define SIE_STIE (0b1L << 5)   // Bit 5: S-mode timer interrupt enable
+#define SIE_SSIE (0b1L << 1)   // Bit 1: S-mode software interrupt enable
 
 // Forward declaration
 void kernel_main(void);
@@ -142,7 +144,7 @@ void timerinit(void) {
     
     // Set stimecmp to maximum value to prevent spurious interrupts
     // S-mode will program this properly when ready
-    unsigned long max_time = ~0UL;
+    unsigned long max_time = ULONG_MAX;
     w_stimecmp(max_time);
     
     // Enable software and external interrupts in sie, but NOT timer yet
@@ -159,7 +161,7 @@ void timerinit(void) {
  */
 void start(void)
 {
-    unsigned long x;
+    unsigned long x = 0;
     
     m_uart_puts("\n[M-MODE] ThunderOS starting in M-mode\n");
     

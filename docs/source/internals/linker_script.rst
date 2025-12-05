@@ -161,25 +161,38 @@ Base Address
    * Special variable representing current address
    * Assignment sets starting address for all sections
 
-**Why 0x80200000?**
-   * OpenSBI loads at 0x80000000 (512KB reserved)
-   * Kernel starts at +2MB offset (0x80200000)
-   * Standard RISC-V convention for supervised kernels
+**Why 0x80000000?**
+   * With ``-bios none``, QEMU starts execution directly at 0x80000000
+   * No external firmware (OpenSBI) - ThunderOS handles M-mode initialization
+   * Full control of the boot process from the first instruction
 
-**Memory Map:**
+**Memory Map (QEMU virt machine):**
 
 .. code-block:: text
 
-   0x80000000  ┌──────────────────┐
-               │    OpenSBI       │ 128KB firmware
-               │   (M-mode)       │
-   0x80020000  ├──────────────────┤
-               │   (Reserved)     │
-               │                  │
-   0x80200000  ├──────────────────┤ ← Kernel starts here
-               │   ThunderOS      │
-               │   (.text)        │
-               │                  │
+   ┌─────────────────────┬──────────────┬─────────────────────────────────────┐
+   │ Address Range       │ Size         │ Description                         │
+   ├─────────────────────┼──────────────┼─────────────────────────────────────┤
+   │ 0x00001000          │ 4KB          │ Boot ROM (QEMU reset vector)        │
+   │ 0x02000000          │ 64KB         │ CLINT (Core Local Interruptor)      │
+   │ 0x0C000000          │ 64MB         │ PLIC (Platform-Level Interrupt Ctr) │
+   │ 0x10000000          │ 256B         │ UART0 (NS16550A serial console)     │
+   │ 0x10001000+         │ varies       │ VirtIO MMIO devices (block, GPU)    │
+   ├─────────────────────┼──────────────┼─────────────────────────────────────┤
+   │ 0x80000000          │ ~1MB         │ ThunderOS Kernel                    │
+   │   ├─ .text.entry    │              │   M-mode entry point (entry.S)      │
+   │   ├─ .text.boot     │              │   S-mode boot code (boot.S)         │
+   │   ├─ .text          │              │   Kernel code                       │
+   │   ├─ .rodata        │              │   Read-only data                    │
+   │   ├─ .data          │              │   Initialized data                  │
+   │   └─ .bss           │              │   Uninitialized data                │
+   │ _kernel_end         │              │   End of kernel image               │
+   ├─────────────────────┼──────────────┼─────────────────────────────────────┤
+   │ _kernel_end -       │ ~127MB       │ Free RAM (PMM, DMA, user processes) │
+   │ 0x88000000          │              │                                     │
+   └─────────────────────┴──────────────┴─────────────────────────────────────┘
+
+   Total RAM: 128MB (0x80000000 - 0x88000000)
 
 Text Section
 ~~~~~~~~~~~~
