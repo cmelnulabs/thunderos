@@ -596,7 +596,6 @@ Stack Definition
 
 **Why 16KB?**
    * Enough for typical kernel stack usage
-   * Each function call uses ~16-64 bytes
    * Deep call chains or large local arrays need more
    * Can be increased if needed (adjust ``.space`` directive)
 

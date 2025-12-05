@@ -169,7 +169,6 @@ Future Enhancements
 See Also
 --------
 
-* :doc:`timer_clint` - Timer interrupts using trap handler
 * :doc:`../riscv/interrupts_exceptions` - RISC-V trap mechanism
 * :doc:`../riscv/csr_registers` - CSR reference
 * :doc:`testing_framework` - Trap handler tests

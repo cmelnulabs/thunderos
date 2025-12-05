@@ -291,6 +291,5 @@ References
 See Also
 --------
 
-* :doc:`timer` - Timer driver documentation
+* :doc:`hal_timer` - Timer driver using interrupts
 * :doc:`../architecture` - System architecture
-* :doc:`../internals/index` - Internal implementation details

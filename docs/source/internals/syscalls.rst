@@ -2258,5 +2258,5 @@ See Also
 --------
 
 * :doc:`trap_handler` - Trap handling mechanism
-* :doc:`process` - Process management
+* :doc:`process_management` - Process management
 * :doc:`../riscv/interrupts_exceptions` - RISC-V trap architecture
