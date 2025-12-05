@@ -1,9 +1,9 @@
 ThunderOS Documentation
 =======================
 
-**ThunderOS** is a RISC-V operating system specialized for AI workloads. 
-It is designed from scratch to take advantage of RISC-V's open architecture 
-and extensibility, particularly the Vector Extension (RVV) for AI acceleration.
+**ThunderOS** is a lightweight, educational RISC-V operating system designed 
+for learning OS development and embedded systems experimentation. It provides
+a clean, well-documented foundation for understanding how operating systems work.
 
 **License**: GNU General Public License v3.0 (GPL v3)
 
@@ -21,11 +21,11 @@ and extensibility, particularly the Vector Extension (RVV) for AI acceleration.
 Project Goals
 -------------
 
-* Educational OS implementation in RISC-V
-* Optimized for AI workload scheduling
-* Support for RISC-V Vector Extension (RVV)
-* Clean, well-documented codebase
-* Hardware accelerator integration
+* Educational OS implementation for RISC-V
+* Clean, readable, well-documented codebase
+* Practical understanding of OS concepts
+* Support for standard RISC-V extensions
+* Foundation for further experimentation
 
 Quick Start
 -----------
@@ -41,9 +41,9 @@ Run in QEMU::
 Current Status
 --------------
 
-**Version 0.4.0 - "Persistence"** ✅ RELEASED
+**Version 0.9.0 - "Synchronization"** ✅ RELEASED
 
-ThunderOS v0.4.0 includes full persistence with VirtIO, ext2, ELF loading, and signal handling!
+ThunderOS v0.9.0 includes blocking I/O, synchronization primitives, and 62 system calls!
 
 .. list-table::
    :header-rows: 1
@@ -66,7 +66,7 @@ ThunderOS v0.4.0 includes full persistence with VirtIO, ext2, ELF loading, and s
      - ✓ Implemented
    * - User Mode (U-mode) Support
      - ✓ Implemented
-   * - System Calls (24 syscalls)
+   * - System Calls (62 syscalls)
      - ✓ Implemented
    * - Privilege Separation
      - ✓ Implemented
@@ -82,12 +82,16 @@ ThunderOS v0.4.0 includes full persistence with VirtIO, ext2, ELF loading, and s
      - ✓ Implemented
    * - Process Memory Isolation
      - ✓ Implemented
+   * - Pipes and IPC
+     - ✓ Implemented
+   * - Synchronization Primitives
+     - ✓ Implemented
    * - Automated Testing Framework
      - ✓ Implemented
    * - CI/CD Pipeline (GitHub Actions)
      - ✓ Implemented
-   * - AI Accelerators
-     - ⏳ TODO (v1.0)
+   * - Networking (VirtIO-net)
+     - 🚧 In Progress
 
 Indices and tables
 ==================

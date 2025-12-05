@@ -1,8 +1,8 @@
 Introduction
 ============
 
-ThunderOS is a minimal, educational operating system designed for the RISC-V 64-bit 
-architecture with a focus on AI workload optimization.
+ThunderOS is a lightweight, educational operating system designed for the RISC-V 64-bit 
+architecture, providing a clean foundation for learning OS development.
 
 What is ThunderOS?
 ------------------
@@ -10,9 +10,9 @@ What is ThunderOS?
 ThunderOS is built from the ground up to explore:
 
 * **RISC-V Architecture**: Understanding the modern, open-source instruction set
-* **AI-Specific Optimizations**: Scheduling, memory management, and hardware acceleration for ML workloads
+* **Operating System Fundamentals**: Memory management, process scheduling, and I/O
 * **Systems Programming**: Low-level kernel development in C and Assembly
-* **Hardware-Software Co-design**: Leveraging RISC-V extensions like RVV (Vector Extension)
+* **Hardware-Software Integration**: Device drivers, interrupts, and hardware abstraction
 
 Why RISC-V?
 -----------
@@ -28,21 +28,9 @@ RISC-V is an open standard instruction set architecture (ISA) that offers severa
 **Clean Architecture**
    Modern design without legacy baggage from x86 or ARM
 
-**AI-Friendly**
-   Vector Extension (RVV) designed for data-parallel workloads
-   Custom extensions possible for specialized accelerators
-
-Why AI Focus?
--------------
-
-Modern AI workloads have unique requirements:
-
-* **Large Memory Footprint**: Neural networks can be gigabytes in size
-* **Parallel Execution**: Matrix operations benefit from vector/SIMD instructions
-* **Predictable Latency**: Inference tasks need deterministic response times
-* **Hardware Acceleration**: TPUs, NPUs, and custom accelerators
-
-ThunderOS aims to provide OS-level support optimized for these characteristics.
+**Educational Value**
+   Simpler to understand than proprietary architectures
+   Excellent tooling and emulation support (QEMU)
 
 Target Audience
 ---------------
@@ -51,7 +39,7 @@ This project is designed for:
 
 * Computer science students learning OS development
 * Systems programmers interested in RISC-V
-* AI engineers wanting to understand low-level optimization
+* Embedded systems engineers exploring new platforms
 * Hobbyists building custom RISC-V systems
 
 Development Philosophy

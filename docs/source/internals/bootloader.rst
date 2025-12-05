@@ -350,7 +350,7 @@ To verify bootloader works:
    
       OpenSBI v0.9
       ...
-      ThunderOS - RISC-V AI OS
+      ThunderOS - RISC-V OS
       Kernel loaded at 0x80200000
       [OK] UART initialized
 

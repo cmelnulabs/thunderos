@@ -534,13 +534,14 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 - Advanced networking (IPv6, wireless)
 - Desktop environment (X11 or Wayland port)
 
-### Version 2.0 - "AI Integration" (Original Vision!)
-- AI accelerator hardware support
-- Machine learning framework integration (TensorFlow Lite, ONNX)
-- Neural network inference engine
-- Specialized AI process scheduling
-- GPU compute support for ML workloads
-- AI-optimized memory management
+### Version 2.0 - "Advanced Features"
+- Hardware accelerator support
+- GPU compute capabilities
+- Advanced scheduling algorithms
+- Performance optimization framework
+- Extended hardware platform support
+
+*Note: AI/ML integration may be developed as a separate project building on ThunderOS.*
 
 ---
 
