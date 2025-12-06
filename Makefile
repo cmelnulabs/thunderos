@@ -415,9 +415,9 @@ qemu-debug-mem: $(KERNEL_ELF) $(BUILD_DIR)/fs.img
 	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo "$(BOLD)$(YELLOW)  Memory Debug Mode$(RESET)"
 	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
-	@echo "  $(CYAN)Logging:$(RESET) guest errors, interrupts only"
+	@echo "  $(CYAN)Logging:$(RESET) guest errors, interrupts, MMU, page allocations"
 	@echo "  $(CYAN)Output:$(RESET)  memory_debug.log"
-	@echo "  $(CYAN)Tip:$(RESET)     Add -d mmu for verbose MMU logging (large files!)"
+	@echo "  $(CYAN)Warning:$(RESET) Large log files - run for short durations only"
 	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 	@echo ""
 	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
@@ -425,13 +425,13 @@ qemu-debug-mem: $(KERNEL_ELF) $(BUILD_DIR)/fs.img
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
 			-device virtio-blk-device,drive=hd0 \
-			-d guest_errors,int -D memory_debug.log; \
+			-d guest_errors,int,mmu,page -D memory_debug.log; \
 	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
 		/tmp/qemu-10.1.2/build/qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
 			-global virtio-mmio.force-legacy=false \
 			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
 			-device virtio-blk-device,drive=hd0 \
-			-d guest_errors,int -D memory_debug.log; \
+			-d guest_errors,int,mmu,page -D memory_debug.log; \
 	else \
 		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
 		exit 1; \
