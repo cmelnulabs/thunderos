@@ -87,8 +87,8 @@ static int gpu_queue_init(virtio_gpu_device_t *dev, virtio_gpu_queue_t *vq,
     vq->used_phys = used_region->phys_addr;
     
     /* Initialize free descriptor list */
-    for (uint16_t i = 0; i < queue_size - 1; i++) {
-        vq->desc[i].next = i + 1;
+    for (uint32_t i = 0; i < queue_size - 1; i++) {
+        vq->desc[i].next = (uint16_t)(i + 1);
     }
     vq->desc[queue_size - 1].next = 0;
     vq->free_head = 0;
@@ -511,7 +511,7 @@ int virtio_gpu_init(uintptr_t base_addr, uint32_t irq)
     }
     
     g_gpu_device->fb_format = VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM;
-    g_gpu_device->fb_size = g_gpu_device->fb_width * g_gpu_device->fb_height * 4;
+    g_gpu_device->fb_size = (size_t)g_gpu_device->fb_width * g_gpu_device->fb_height * 4;
     
     /* Allocate framebuffer */
     dma_region_t *fb_region = dma_alloc(g_gpu_device->fb_size, DMA_ZERO);

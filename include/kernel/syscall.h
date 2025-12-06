@@ -89,16 +89,16 @@
  * @param arg0-arg5 Syscall arguments (from a0-a5)
  * @return Return value (placed in a0)
  */
-uint64_t syscall_handler(uint64_t syscall_num, 
-                        uint64_t arg0, uint64_t arg1, uint64_t arg2,
-                        uint64_t arg3, uint64_t arg4, uint64_t arg5);
+uint64_t syscall_handler(uint64_t syscall_number, 
+                        uint64_t argument0, uint64_t argument1, uint64_t argument2,
+                        uint64_t argument3, uint64_t argument4, uint64_t argument5);
 
 // Syscall handler with trap frame (for syscalls like fork that need full register state)
 struct trap_frame;
 uint64_t syscall_handler_with_frame(struct trap_frame *tf,
-                                    uint64_t syscall_num, 
-                                    uint64_t arg0, uint64_t arg1, uint64_t arg2,
-                                    uint64_t arg3, uint64_t arg4, uint64_t arg5);
+                                    uint64_t syscall_number, 
+                                    uint64_t argument0, uint64_t argument1, uint64_t argument2,
+                                    uint64_t argument3, uint64_t argument4, uint64_t argument5);
 
 /* Process info structure for SYS_GETPROCS */
 #define PROC_NAME_MAX 32
@@ -125,11 +125,11 @@ typedef struct {
 // Individual syscall implementations
 uint64_t sys_exit(int status);
 uint64_t sys_waitpid(int pid, int *wstatus, int options);
-uint64_t sys_write(int fd, const char *buf, size_t len);
-uint64_t sys_read(int fd, char *buf, size_t len);
+uint64_t sys_write(int file_descriptor, const char *buffer, size_t byte_count);
+uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count);
 uint64_t sys_getpid(void);
 uint64_t sys_sbrk(int increment);
-uint64_t sys_sleep(uint64_t ms);
+uint64_t sys_sleep(uint64_t milliseconds);
 uint64_t sys_yield(void);
 uint64_t sys_fork(struct trap_frame *tf);
 uint64_t sys_getppid(void);

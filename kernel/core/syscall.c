@@ -213,7 +213,7 @@ uint64_t sys_sbrk(int heap_increment) {
     }
     
     // Don't let heap grow into stack (leave safety margin)
-    uint64_t stack_bottom = USER_STACK_TOP - USER_STACK_SIZE;
+    uint64_t stack_bottom = USER_STACK_TOP - (uint64_t)USER_STACK_SIZE;
     if (new_brk >= stack_bottom - HEAP_STACK_SAFETY_MARGIN) {
         return SYSCALL_ERROR;
     }
@@ -505,6 +505,10 @@ uint64_t sys_read(int file_descriptor, char *buffer, size_t byte_count) {
                 // This provides immediate response without waiting for timer
                 // Disable interrupts briefly to avoid race with timer polling
                 if (tty == vterm_get_active_index() && hal_uart_data_available()) {
+                    // Forward declarations for interrupt control
+                    extern int interrupt_save_disable(void);
+                    extern void interrupt_restore(int state);
+                    
                     // Disable interrupts to prevent timer from also reading UART
                     int old_state = interrupt_save_disable();
                     

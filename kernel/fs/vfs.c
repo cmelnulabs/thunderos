@@ -107,10 +107,8 @@ static int normalize_resolve_components(const char *working, char *normalized, s
         
         size_t component_length = cursor - component_start;
         
-        if (component_length == 0) {
-            /* Empty component (double slash), skip */
-        } else if (component_length == 1 && component_start[0] == '.') {
-            /* Current directory ".", skip */
+        if (component_length == 0 || (component_length == 1 && component_start[0] == '.')) {
+            /* Empty component (double slash) or current directory ".", skip */
         } else if (component_length == 2 && component_start[0] == '.' && component_start[1] == '.') {
             /* Parent directory "..", pop if possible */
             if (component_count > 0) {

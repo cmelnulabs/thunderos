@@ -444,6 +444,9 @@ void vterm_putc(char c)
         
     case '\0':
         return;
+        
+    default:
+        break;
     }
     
     /* Skip non-printable characters */
@@ -660,6 +663,8 @@ char vterm_process_input(char c)
             case 'S':  /* F4 */
                 vterm_switch(3);
                 return 0;
+            default:
+                break;
             }
             /* Unknown ESC O x sequence, pass through */
             input_buffer_put_to(g_active_terminal, 0x1B);
@@ -708,6 +713,8 @@ char vterm_process_input(char c)
                         case '5':  /* F5: ESC [ 1 5 ~ */
                             vterm_switch(4);
                             return 0;
+                        default:
+                            break;
                         case '7':  /* F6: ESC [ 1 7 ~ */
                             vterm_switch(5);
                             return 0;
@@ -854,6 +861,9 @@ static void vterm_putc_internal(vterm_t *term, int index, char c)
         
     case '\0':
         return;
+        
+    default:
+        break;
     }
     
     /* Skip non-printable characters */

@@ -8,123 +8,108 @@ High-Level Overview
 
 .. code-block:: text
 
-                    ┌─────────────────────────────┐
-                    │   User Space (v0.2.0+)      │
-                    │  - ELF binaries          ✓  │
-                    │  - Signal handling       ✓  │
-                    │  - Memory isolation      ✓  │
-                    └─────────────────────────────┘
-                               │ syscalls
-                    ┌──────────▼──────────────────┐
-                    │      Kernel Space           │
-                    │  ┌──────────────────────┐   │
-                    │  │   Process Scheduler  │   │
-                    │  │  - Round-robin    ✓  │   │
-                    │  │  - Time slicing   ✓  │   │
-                    │  │  - Preemptive     ✓  │   │
-                    │  └──────────────────────┘   │
-                    │  ┌──────────────────────┐   │
-                    │  │  Memory Management   │   │
-                    │  │  - PMM (bitmap)   ✓  │   │
-                    │  │  - kmalloc        ✓  │   │
-                    │  │  - Sv39 paging    ✓  │   │
-                    │  └──────────────────────┘   │
-                    │  ┌──────────────────────┐   │
-                    │  │   Interrupt System   │   │
-                    │  │  - Trap Handler   ✓  │   │
-                    │  │  - Timer (CLINT)  ✓  │   │
-                    │  │  - PLIC           ✓  │   │
-                    │  └──────────────────────┘   │
-                    │  ┌──────────────────────┐   │
-                    │  │   Device Drivers     │   │
-                    │  │   - UART (HAL)    ✓  │   │
-                    │  │   - Timer (HAL)   ✓  │   │
-                    │  │   - VirtIO Block  ✓  │   │
-                    │  └──────────────────────┘   │
-                    │  ┌──────────────────────┐   │
-                    │  │   Filesystems        │   │
-                    │  │   - VFS Layer     ✓  │   │
-                    │  │   - ext2          ✓  │   │
-                    │  └──────────────────────┘   │
-                    │  ┌──────────────────────┐   │
-                    │  │   Testing Framework  │   │
-                    │  │   - KUnit-style   ✓  │   │
-                    │  └──────────────────────┘   │
-                    └─────────────────────────────┘
-                               │
-                    ┌──────────▼──────────────────┐
-                    │     Hardware (QEMU)         │
-                    │  - RISC-V 64-bit CPU        │
-                    │  - Memory (128MB)           │
-                    │  - UART (NS16550A)          │
-                    │  - PLIC/CLINT               │
-                    └─────────────────────────────┘
+   ╔═══════════════════════════════════════════════════════════════════════════╗
+   ║                              USER SPACE                                   ║
+   ╠═══════════════════════════════════════════════════════════════════════════╣
+   ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       ║
+   ║  │    Shell    │  │     ls      │  │    cat      │  │  User Apps  │       ║
+   ║  │  (builtin)  │  │   (ELF)     │  │   (ELF)     │  │   (ELF)     │       ║
+   ║  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘       ║
+   ║         └────────────────┴────────────────┴────────────────┘              ║
+   ║                                   │                                       ║
+   ║                          System Call Interface                            ║
+   ║                    (62 syscalls: read, write, fork, exec...)              ║
+   ╠═══════════════════════════════════════════════════════════════════════════╣
+   ║                             KERNEL SPACE                                  ║
+   ╠═══════════════════════════════════════════════════════════════════════════╣
+   ║                                                                           ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐  ║
+   ║  │                        CORE SUBSYSTEMS                              │  ║
+   ║  ├─────────────────┬─────────────────┬─────────────────────────────────┤  ║
+   ║  │   Scheduler     │    Signals      │         Synchronization         │  ║
+   ║  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ║
+   ║  │  • Preemptive   │  • SIGINT       │  • Mutexes      • Semaphores    │  ║
+   ║  │  • Round-robin  │  • SIGKILL      │  • Condvars     • RW Locks      │  ║
+   ║  │  • Time slicing │  • SIGCHLD      │  • Wait Queues  • Pipes         │  ║
+   ║  └─────────────────┴─────────────────┴─────────────────────────────────┘  ║
+   ║                                                                           ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐  ║
+   ║  │                      MEMORY MANAGEMENT                              │  ║
+   ║  ├───────────────────┬───────────────────┬─────────────────────────────┤  ║
+   ║  │   Physical MM     │   Virtual MM      │         Allocators          │  ║
+   ║  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ║
+   ║  │  • Bitmap alloc   │  • Sv39 paging    │  • kmalloc/kfree            │  ║
+   ║  │  • 4KB pages      │  • User/Kernel    │  • DMA allocator            │  ║
+   ║  │  • 128MB RAM      │  • Memory isolate │  • Per-process heaps        │  ║
+   ║  └───────────────────┴───────────────────┴─────────────────────────────┘  ║
+   ║                                                                           ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐  ║
+   ║  │                       FILESYSTEMS                                   │  ║
+   ║  ├───────────────────────────────┬─────────────────────────────────────┤  ║
+   ║  │   Virtual File System (VFS)   │            ext2 Driver              │  ║
+   ║  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ║
+   ║  │  • Unified file operations    │  • Superblock, inodes, directories  │  ║
+   ║  │  • File descriptors           │  • Block allocation (bitmap)        │  ║
+   ║  │  • Path resolution            │  • Read/Write/Create/Delete         │  ║
+   ║  └───────────────────────────────┴─────────────────────────────────────┘  ║
+   ║                                                                           ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐  ║
+   ║  │                       DEVICE DRIVERS                                │  ║
+   ║  ├─────────────┬─────────────┬─────────────┬─────────────┬─────────────┤  ║
+   ║  │    UART     │  VirtIO-BLK │  VirtIO-GPU │ Framebuffer │    Timer    │  ║
+   ║  │  (console)  │   (disk)    │  (display)  │  (console)  │   (CLINT)   │  ║
+   ║  └─────────────┴─────────────┴─────────────┴─────────────┴─────────────┘  ║
+   ║                                                                           ║
+   ║  ┌─────────────────────────────────────────────────────────────────────┐  ║
+   ║  │                    INTERRUPT HANDLING                               │  ║
+   ║  ├───────────────────────────────┬─────────────────────────────────────┤  ║
+   ║  │         Trap Handler          │              PLIC                   │  ║
+   ║  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │  ║
+   ║  │  • Exception dispatch         │  • External interrupt routing       │  ║
+   ║  │  • Syscall entry              │  • Priority handling                │  ║
+   ║  │  • Context save/restore       │  • UART, VirtIO IRQs                │  ║
+   ║  └───────────────────────────────┴─────────────────────────────────────┘  ║
+   ║                                                                           ║
+   ╠═══════════════════════════════════════════════════════════════════════════╣
+   ║                              HARDWARE                                     ║
+   ╠═══════════════════════════════════════════════════════════════════════════╣
+   ║                                                                           ║
+   ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       ║
+   ║  │  RISC-V 64  │  │   Memory    │  │   VirtIO    │  │  NS16550A   │       ║
+   ║  │    CPU      │  │   128 MB    │  │   MMIO      │  │    UART     │       ║
+   ║  │  (RV64GC)   │  │    RAM      │  │  Devices    │  │  Console    │       ║
+   ║  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘       ║
+   ║                                                                           ║
+   ║                         QEMU virt Machine                                 ║
+   ╚═══════════════════════════════════════════════════════════════════════════╝
 
 Boot Process
 ------------
 
-The boot sequence follows this flow:
+ThunderOS uses a two-stage boot with ``-bios none`` mode (no external firmware):
 
-1. **Power On / Reset**
-   
-   * CPU starts at reset vector (implementation-dependent)
-   * In QEMU virt machine: 0x1000
+1. **M-mode entry** (``entry.S``) → hardware init → ``mret`` to S-mode
+2. **S-mode boot** (``boot.S``) → BSS clear → ``kernel_main()``
+3. **Kernel init** → drivers, memory, filesystem → launch shell
 
-2. **Firmware Stage (OpenSBI)**
-   
-   * OpenSBI loads at 0x80000000
-   * Initializes hardware (UART, timers, interrupts)
-   * Provides SBI (Supervisor Binary Interface) services
-   * Runs in M-mode (Machine mode - highest privilege)
-
-3. **Bootloader (boot.S)**
-   
-   * Loads at 0x80200000
-   * Entry point: ``_start``
-   * Runs in S-mode (Supervisor mode)
-   * Responsibilities:
-   
-     * Disable interrupts
-     * Setup stack pointer
-     * Clear BSS section
-     * Jump to C kernel
-
-4. **Kernel Initialization (kernel_main)**
-   
-   * Initialize UART
-   * Setup trap handler
-   * Initialize timer (CLINT)
-   * Enable interrupts
-   * Print boot messages
-   * Enter idle loop (WFI - Wait For Interrupt)
+See :doc:`internals/bootloader` for detailed boot flow and implementation.
 
 Memory Layout
 -------------
 
-ThunderOS uses the following memory map on QEMU virt machine:
+ThunderOS runs on QEMU virt machine with 128MB RAM at ``0x80000000``:
 
-.. code-block:: text
+* **Kernel** loads at ``0x80000000`` (~1MB)
+* **Free RAM** from ``_kernel_end`` to ``0x88000000`` (~127MB)
+* **Device MMIO**: UART at ``0x10000000``, PLIC at ``0x0C000000``, VirtIO at ``0x10001000+``
 
-   ┌─────────────────────┬──────────────┬─────────────────────┐
-   │ Address Range       │ Size         │ Description         │
-   ├─────────────────────┼──────────────┼─────────────────────┤
-   │ 0x00001000          │ 4KB          │ Boot ROM            │
-   │ 0x02000000          │ 16KB         │ CLINT (timer)       │
-   │ 0x0C000000          │ 32MB         │ PLIC (interrupts)   │
-   │ 0x10000000          │ 256B         │ UART0               │
-   │ 0x80000000          │ 128KB        │ OpenSBI (firmware)  │
-   │ 0x80200000          │ ~1MB         │ ThunderOS Kernel    │
-   │   ├─ .text          │              │   Code segment      │
-   │   ├─ .rodata        │              │   Read-only data    │
-   │   ├─ .data          │              │   Initialized data  │
-   │   └─ .bss           │              │   Uninitialized     │
-   │ 0x87000000          │ ~120MB       │ Free RAM            │
-   └─────────────────────┴──────────────┴─────────────────────┘
+See :doc:`internals/linker_script` for complete memory map and section layout.
 
 Privilege Levels
 ----------------
 
-RISC-V defines multiple privilege levels:
+RISC-V defines multiple privilege levels. ThunderOS uses ``-bios none`` mode, 
+handling both M-mode initialization and S-mode kernel operation:
 
 .. list-table::
    :header-rows: 1
@@ -132,184 +117,89 @@ RISC-V defines multiple privilege levels:
 
    * - Level
      - Name
-     - Usage
+     - Usage in ThunderOS
    * - 0 (U)
      - User
-     - Application code (future)
+     - User applications (shell, ls, cat)
    * - 1 (S)
      - Supervisor
-     - **ThunderOS kernel runs here**
+     - **Kernel runs here** (after M-mode init)
    * - 3 (M)
      - Machine
-     - OpenSBI firmware
+     - Early boot only (entry.S → start.c)
 
-ThunderOS runs in **S-mode** and relies on OpenSBI (M-mode) for:
-
-* Timer interrupts via SBI calls
-* Console I/O (early boot)
-* System reset/shutdown
+See :doc:`riscv/csr_registers` for privilege-related CSR documentation.
 
 Key Components
 --------------
 
-Bootloader
-~~~~~~~~~~
+For detailed documentation of each kernel subsystem, see :doc:`internals/index`.
 
-* **File**: ``boot/boot.S``
-* **Purpose**: First code executed after firmware
-* **Language**: RISC-V assembly
-* **Status**: ✓ Implemented
-* Responsibilities:
+.. list-table::
+   :header-rows: 1
+   :widths: 25 35 40
 
-  * Disable interrupts
-  * Environment setup (stack, BSS)
-  * Transfer control to C code
-
-See :doc:`internals/bootloader` for details.
-
-UART Driver
-~~~~~~~~~~~
-
-* **Files**: ``kernel/drivers/uart.c``, ``include/uart.h``
-* **Purpose**: Serial console I/O
-* **Hardware**: NS16550A compatible UART
-* **Status**: ✓ Implemented
-* Functions:
-
-  * ``uart_init()`` - Initialize driver
-  * ``uart_putc()`` - Output character
-  * ``uart_puts()`` - Output string
-  * ``uart_getc()`` - Input character
-
-See :doc:`internals/uart_driver` for details.
-
-Trap Handler
-~~~~~~~~~~~~
-
-* **Files**: ``kernel/arch/riscv64/trap_entry.S``, ``kernel/arch/riscv64/trap.c``, ``include/trap.h``
-* **Purpose**: Handle exceptions and interrupts
-* **Status**: ✓ Implemented
-* Components:
-
-  * ``trap_vector`` - Assembly entry point (saves/restores context)
-  * ``trap_handler()`` - C handler (dispatches by cause)
-  * ``handle_exception()`` - Exception handler
-  * ``handle_interrupt()`` - Interrupt dispatcher
-
-Features:
-
-* Complete register save/restore (34 registers)
-* Exception identification and reporting
-* Interrupt routing (timer, software, external)
-* Integration with timer driver
-
-See :doc:`internals/trap_handler` for details.
-
-Timer Driver (CLINT)
-~~~~~~~~~~~~~~~~~~~~
-
-* **Files**: ``kernel/drivers/clint.c``, ``include/clint.h``
-* **Purpose**: Periodic timer interrupts for timekeeping
-* **Hardware**: CLINT (Core Local Interruptor) via SBI
-* **Status**: ✓ Implemented
-* Functions:
-
-  * ``clint_init()`` - Initialize timer and enable interrupts
-  * ``clint_get_ticks()`` - Get tick counter
-  * ``clint_set_timer()`` - Schedule next interrupt
-  * ``clint_handle_timer()`` - Interrupt handler
-
-Features:
-
-* SBI-based timer programming (S-mode compatible)
-* Configurable interrupt interval (default: 1 second)
-* Tick counter for timekeeping
-* Uses ``rdtime`` instruction for precise timing
-
-See :doc:`internals/hal_timer` for details.
-
-Testing Framework
-~~~~~~~~~~~~~~~~~
-
-* **Files**: ``tests/framework/kunit.{c,h}``
-* **Purpose**: Automated kernel testing
-* **Status**: ✓ Implemented
-Features:
-
-* KUnit-inspired API
-* Assertion macros (EXPECT_EQ, EXPECT_NE, etc.)
-* Test suite organization
-* Formatted TAP-style output
-* Kernel-embedded unit tests
-
-Test Suites:
-
-* ``tests/unit/test_memory_mgmt.c`` - Memory management tests (10 tests)
-* ``tests/unit/test_memory_isolation.c`` - Process isolation tests (15 tests)
-* ``tests/unit/test_elf.c`` - ELF loader tests (8 tests)
-* ``tests/scripts/run_all_tests.sh`` - Integration test runner
-
-See :doc:`internals/testing_framework` for details.
-
-Kernel Main
-~~~~~~~~~~~
-
-* **File**: ``kernel/main.c``
-* **Purpose**: Main kernel entry point
-* **Current functionality**:
-
-  * Initialize UART
-  * Setup trap handler
-  * Initialize timer
-  * Print boot messages
-  * Idle loop with WFI (Wait For Interrupt)
+   * - Subsystem
+     - Key Files
+     - Documentation
+   * - Boot
+     - ``boot/boot.S``, ``boot/entry.S``
+     - :doc:`internals/bootloader`
+   * - Interrupts
+     - ``kernel/arch/riscv64/trap*.c``
+     - :doc:`internals/interrupt_handling`
+   * - Timer
+     - ``kernel/arch/riscv64/drivers/timer.c``
+     - :doc:`internals/hal_timer`
+   * - Memory
+     - ``kernel/mm/pmm.c``, ``paging.c``, ``kmalloc.c``
+     - :doc:`internals/pmm`, :doc:`internals/paging`
+   * - Processes
+     - ``kernel/core/process.c``, ``scheduler.c``
+     - :doc:`internals/process_management`
+   * - Filesystem
+     - ``kernel/fs/vfs.c``, ``ext2_*.c``
+     - :doc:`internals/ext2_filesystem`
+   * - Drivers
+     - ``kernel/drivers/virtio_*.c``
+     - :doc:`internals/virtio_block`
+   * - Testing
+     - ``tests/framework/kunit.c``
+     - :doc:`internals/testing_framework`
 
 Build System
 ------------
 
-The build process uses GNU Make:
+ThunderOS uses GNU Make with a RISC-V cross-compiler toolchain. Key targets:
 
-.. code-block:: make
+* ``make run`` - Build and run in QEMU
+* ``make test`` - Run automated test suite
+* ``make debug`` - Run with GDB server attached
 
-   # Toolchain
-   CC = riscv64-unknown-elf-gcc
-   LD = riscv64-unknown-elf-ld
-   
-   # Flags
-   CFLAGS = -march=rv64gc -mabi=lp64d -ffreestanding
-   LDFLAGS = -T kernel/arch/riscv64/kernel.ld
+For complete build instructions, prerequisites, and Docker setup, see :doc:`development`.
 
-Build targets:
+QEMU Target Platform
+--------------------
 
-* ``make all`` - Build kernel ELF and binary
-* ``make clean`` - Remove build artifacts
-* ``make qemu`` - Run kernel in QEMU
-* ``make debug`` - Run with GDB server
-* ``make dump`` - Generate disassembly
+ThunderOS targets the QEMU ``virt`` machine, a generic RISC-V virtual platform providing:
 
-QEMU Configuration
-------------------
+.. list-table::
+   :widths: 30 70
 
-ThunderOS requires QEMU 10.1.2+ and targets the ``virt`` machine:
+   * - **CPU**
+     - RV64GC (1 core, configurable)
+   * - **RAM**
+     - 128MB at ``0x80000000``
+   * - **UART**
+     - NS16550A at ``0x10000000``
+   * - **Interrupts**
+     - PLIC at ``0x0C000000``, CLINT at ``0x02000000``
+   * - **Storage**
+     - VirtIO block device (ext2 filesystem)
+   * - **Display**
+     - VirtIO GPU (optional)
 
-.. code-block:: bash
-
-   qemu-system-riscv64 \
-     -machine virt \      # Generic virtual RISC-V board
-     -m 128M \            # 128MB RAM
-     -nographic \         # No GUI, use terminal
-     -serial mon:stdio \  # Serial to stdout
-     -bios none \         # No firmware (kernel includes M-mode code)
-     -kernel thunderos.elf
-
-The ``virt`` machine provides:
-
-* 1 RISC-V CPU (configurable)
-* RAM at 0x80000000
-* UART at 0x10000000
-* PLIC at 0x0C000000
-* ACLINT at 0x02000000
-* VirtIO devices (block storage, etc.)
+See :doc:`development` for QEMU invocation examples and debugging setup.
 
 Future Architecture
 -------------------

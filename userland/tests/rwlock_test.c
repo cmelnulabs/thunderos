@@ -64,7 +64,7 @@ static inline long fork(void) {
     return syscall0(SYS_FORK);
 }
 
-static inline long waitpid(int pid, int *status, int options) {
+static inline long waitpid(int pid, const int *status, int options) {
     return syscall3(SYS_WAIT, pid, status, options);
 }
 

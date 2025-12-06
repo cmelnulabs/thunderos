@@ -129,10 +129,10 @@ typedef struct vfs_filesystem {
  */
 typedef struct {
     vfs_node_t *node;                  /* File node (NULL for pipes) */
+    void *pipe;                        /* Pipe pointer (if VFS_TYPE_PIPE) */
     uint32_t flags;                    /* Open flags */
     uint32_t pos;                      /* Current file position */
     int in_use;                        /* 1 if FD is allocated */
-    void *pipe;                        /* Pipe pointer (if VFS_TYPE_PIPE) */
     uint32_t type;                     /* File type (VFS_TYPE_FILE, VFS_TYPE_PIPE, etc.) */
 } vfs_file_t;
 

@@ -48,11 +48,11 @@ static inline long write(int fd, const char *buf, size_t len) {
     return syscall3(SYS_WRITE, fd, buf, len);
 }
 
-static inline long read(int fd, char *buf, size_t len) {
+static inline long read(int fd, const char *buf, size_t len) {
     return syscall3(SYS_READ, fd, buf, len);
 }
 
-static inline long pipe(int pipefd[2]) {
+static inline long pipe(const int pipefd[2]) {
     return syscall1(SYS_PIPE, pipefd);
 }
 
@@ -60,7 +60,7 @@ static inline long fork(void) {
     return syscall1(SYS_FORK, 0);
 }
 
-static inline long waitpid(int pid, int *wstatus, int options) {
+static inline long waitpid(int pid, const int *wstatus, int options) {
     return syscall3(SYS_WAIT, pid, wstatus, options);
 }
 
@@ -93,7 +93,7 @@ static int strcmp(const char *s1, const char *s2) {
 
 // Main test program
 void _start(void) {
-    int pipefd[2];
+    int pipefd[2] = {-1, -1};
     const char *test_message = "Hello from parent through pipe!";
     char read_buffer[64];
     
@@ -109,11 +109,11 @@ void _start(void) {
     print("  Read FD:  ");
     // Simple number print
     char num[2];
-    num[0] = '0' + pipefd[0];
+    num[0] = (char)('0' + pipefd[0]);
     num[1] = '\0';
     print(num);
     print("\n  Write FD: ");
-    num[0] = '0' + pipefd[1];
+    num[0] = (char)('0' + pipefd[1]);
     print(num);
     print("\n\n");
     
@@ -211,7 +211,7 @@ void _start(void) {
         // Wait for child
         print("[PARENT] Waiting for child to exit...\n");
         int status;
-        waitpid(pid, &status, 0);
+        (void)waitpid(pid, &status, 0);
         
         print("[PARENT] Child exited\n");
         print("\n[PASS] All pipe tests completed successfully!\n");

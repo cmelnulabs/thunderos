@@ -8,10 +8,10 @@
 
 /* Helper macros for PLIC register access */
 #define PLIC_REG(offset) ((volatile uint32_t *)(PLIC_BASE + (offset)))
-#define PLIC_PRIORITY_REG(irq) PLIC_REG(PLIC_PRIORITY_OFFSET + ((irq) * 4))
-#define PLIC_ENABLE_REG(context, word) PLIC_REG(PLIC_ENABLE_OFFSET + ((context) * 0x80) + ((word) * 4))
-#define PLIC_THRESHOLD_REG(context) PLIC_REG(PLIC_THRESHOLD_OFFSET + ((context) * 0x1000))
-#define PLIC_CLAIM_REG(context) PLIC_REG(PLIC_CLAIM_OFFSET + ((context) * 0x1000))
+#define PLIC_PRIORITY_REG(irq) PLIC_REG(PLIC_PRIORITY_OFFSET + ((unsigned long)(irq) * 4UL))
+#define PLIC_ENABLE_REG(context, word) PLIC_REG(PLIC_ENABLE_OFFSET + ((unsigned long)(context) * 0x80UL) + ((unsigned long)(word) * 4UL))
+#define PLIC_THRESHOLD_REG(context) PLIC_REG(PLIC_THRESHOLD_OFFSET + ((unsigned long)(context) * 0x1000UL))
+#define PLIC_CLAIM_REG(context) PLIC_REG(PLIC_CLAIM_OFFSET + ((unsigned long)(context) * 0x1000UL))
 
 /* Number of words needed for enable bits (128 interrupts / 32 bits per word) */
 #define PLIC_ENABLE_WORDS 4

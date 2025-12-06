@@ -188,7 +188,7 @@ void _start(void) {
     const char *path = (cwd != 0) ? cwd : "/";
     
     // Open the directory
-    int fd = syscall(SYS_OPEN, (long)path, O_RDONLY, 0);
+    int fd = (int)syscall(SYS_OPEN, (long)path, O_RDONLY, 0);
     if (fd < 0) {
         print("ls: cannot access '");
         print(path);

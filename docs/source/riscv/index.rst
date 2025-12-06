@@ -152,13 +152,13 @@ Technical Advantages
 3. **Modern Design**: Avoids legacy x86/ARM baggage
 4. **Open**: Can implement in hardware without licensing
 
-For AI Workloads
-~~~~~~~~~~~~~~~~
+For High-Performance Computing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. **Vector Extension (RVV)**: Flexible, scalable SIMD
-2. **Custom Instructions**: Can add AI accelerator instructions
+1. **Vector Extension (RVV)**: Flexible, scalable SIMD operations
+2. **Custom Instructions**: Domain-specific optimizations possible
 3. **Memory Model**: Designed for weak ordering (performance)
-4. **Growing Ecosystem**: Increasing AI accelerator support
+4. **Growing Ecosystem**: Increasing hardware support
 
 Resources
 ---------

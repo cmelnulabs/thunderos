@@ -15,32 +15,34 @@ void handle_external_interrupt(void);
 
 // CSR read helpers
 static inline unsigned long read_scause(void) {
-    unsigned long x;
+    unsigned long x = 0;
     asm volatile("csrr %0, scause" : "=r"(x));
     return x;
 }
 
 static inline unsigned long read_stval(void) {
-    unsigned long x;
+    unsigned long x = 0;
     asm volatile("csrr %0, stval" : "=r"(x));
     return x;
 }
 
 static inline unsigned long read_sstatus(void) {
-    unsigned long x;
+    unsigned long x = 0;
     asm volatile("csrr %0, sstatus" : "=r"(x));
     return x;
 }
 
+// SPP bit in sstatus register (bit 8) indicates previous privilege level
+#define SSTATUS_SPP_BIT 8
+
 // Check if trap occurred from user mode
 static int trap_from_user_mode(void) {
-    // SPP bit (bit 8) indicates previous privilege level
     // SPP=0 means we were in user mode, SPP=1 means supervisor mode
-    return (read_sstatus() & (1 << 8)) == 0;
+    return (read_sstatus() & (1UL << SSTATUS_SPP_BIT)) == 0;
 }
 
 // Exception names for debugging
-static const char *exception_names[] = {
+static const char * const g_exception_names[] = {
     "Instruction address misaligned",
     "Instruction access fault",
     "Illegal instruction",
@@ -130,8 +132,8 @@ static void handle_exception(struct trap_frame *tf, unsigned long cause) {
         hal_uart_puts("\n");
         
         hal_uart_puts("Exception: ");
-        if (cause < sizeof(exception_names) / sizeof(exception_names[0])) {
-            hal_uart_puts(exception_names[cause]);
+        if (cause < sizeof(g_exception_names) / sizeof(g_exception_names[0])) {
+            hal_uart_puts(g_exception_names[cause]);
         } else {
             hal_uart_puts("Unknown");
         }
@@ -168,8 +170,8 @@ static void handle_exception(struct trap_frame *tf, unsigned long cause) {
     hal_uart_puts("\n!!! KERNEL EXCEPTION !!!\n");
     hal_uart_puts("Cause: ");
     
-    if (cause < sizeof(exception_names) / sizeof(exception_names[0])) {
-        hal_uart_puts(exception_names[cause]);
+    if (cause < sizeof(g_exception_names) / sizeof(g_exception_names[0])) {
+        hal_uart_puts(g_exception_names[cause]);
     } else {
         hal_uart_puts("Unknown");
     }

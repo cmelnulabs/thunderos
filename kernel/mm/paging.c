@@ -635,7 +635,7 @@ void switch_page_table(page_table_t *page_table) {
  * Convenience wrapper for common case of translating kernel virtual addresses.
  */
 uintptr_t translate_virt_to_phys(uintptr_t vaddr) {
-    uintptr_t paddr;
+    uintptr_t paddr = 0;
     
     // Try using page table translation
     if (virt_to_phys(&kernel_page_table, vaddr, &paddr) == 0) {

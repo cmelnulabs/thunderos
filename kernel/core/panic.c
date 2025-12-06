@@ -39,7 +39,10 @@ void kernel_panic(const char *message) {
     hal_uart_puts("Register dump:\n");
     
     // Read some key RISC-V CSRs for debugging
-    unsigned long sstatus, sepc, scause, stval;
+    unsigned long sstatus;
+    unsigned long sepc;
+    unsigned long scause;
+    unsigned long stval;
     
     asm volatile("csrr %0, sstatus" : "=r"(sstatus));
     asm volatile("csrr %0, sepc" : "=r"(sepc));

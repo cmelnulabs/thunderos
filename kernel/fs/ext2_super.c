@@ -23,7 +23,7 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
     /* Read sectors */
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_read(sector + i, 
-                                  (uint8_t *)buffer + (i * 512), 1);
+                                  (uint8_t *)buffer + ((size_t)i * 512), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;
@@ -124,7 +124,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     uint32_t gdt_block = fs->superblock->s_first_data_block + 1;
     for (uint32_t i = 0; i < gdt_blocks; i++) {
         ret = read_block(device, gdt_block + i, 
-                        (uint8_t *)fs->group_desc + (i * fs->block_size),
+                        (uint8_t *)fs->group_desc + ((size_t)i * fs->block_size),
                         fs->block_size);
         if (ret != 0) {
             kfree(fs->group_desc);

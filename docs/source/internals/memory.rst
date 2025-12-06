@@ -684,9 +684,9 @@ Future Enhancements
 See Also
 --------
 
-**Related Documentation:**
-
-- :doc:`paging` - Page table implementation
+* :doc:`paging` - Page table implementation
+* :doc:`pmm` - Physical memory management
+* :doc:`kmalloc` - Kernel heap allocation
 - :doc:`pmm` - Physical memory allocator
 - :doc:`kmalloc` - Kernel heap allocator
 - :doc:`dma` - DMA memory allocator

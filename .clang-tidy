@@ -1,0 +1,74 @@
+---
+Checks: |
+  *,
+  -abseil-*,
+  -android-*,
+  -fuchsia-*,
+  -google-*,
+  -llvm-*,
+  -objc-*,
+  -zircon-*,
+  -readability-identifier-length,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cert-err33-c,
+  -misc-unused-parameters,
+  -altera-unroll-loops,
+  -altera-id-dependent-backward-branch,
+  -hicpp-no-assembler,
+  -performance-no-int-to-ptr,
+  -hicpp-braces-around-statements,
+  -readability-braces-around-statements,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  -readability-redundant-declaration,
+  -bugprone-narrowing-conversions,
+  -cppcoreguidelines-narrowing-conversions,
+  -clang-analyzer-core.DivideZero,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -altera-struct-pack-align,
+  -bugprone-implicit-widening-of-multiplication-result
+  -readability-braces-around-statements,
+  -hicpp-signed-bitwise,
+  -cert-str34-c,
+  -cppcoreguidelines-pro-type-cstyle-cast,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  -readability-magic-numbers,
+  -readability-function-size,
+  -readability-function-cognitive-complexity,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cert-msc32-c,
+  -cert-msc51-cpp,
+  -readability-identifier-naming,
+  -hicpp-uppercase-literal-suffix,
+  -readability-uppercase-literal-suffix,
+  -cert-dcl03-c,
+  -hicpp-function-size,
+  -altera-struct-pack-align,
+  -hicpp-no-assembler,
+  -clang-diagnostic-unused-parameter,
+  -clang-diagnostic-unused-function,
+  -clang-diagnostic-unused-variable,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -concurrency-mt-unsafe,
+  -cppcoreguidelines-init-variables
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+FormatStyle: 'none'
+CheckOptions:
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: 'g_'
+  - key: readability-identifier-naming.MacroCase
+    value: UPPER_CASE
+  - key: bugprone-implicit-widening-of-multiplication-result.UseCXXStaticCastsInCppSources
+    value: 'false'
+  - key: hicpp-no-assembler
+    value: 'false'

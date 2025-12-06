@@ -1,15 +1,16 @@
 /* 
- * ThunderOS - Boot entry point
+ * ThunderOS - S-mode Boot Initialization
  * RISC-V 64-bit assembly
  *
- * This is the first code that runs after the OpenSBI firmware transfers
- * control to the kernel. It sets up the minimal environment needed to
- * run C code, then jumps to kernel_main().
+ * This code runs in Supervisor mode after M-mode initialization completes.
+ * It sets up the minimal S-mode environment needed to run C code, then
+ * jumps to kernel_main().
  *
- * Execution flow:
- *   1. OpenSBI (M-mode) loads this code at 0x80200000
- *   2. OpenSBI jumps to _start (this file, S-mode)
- *   3. We setup stack, clear BSS, jump to kernel_main()
+ * Execution flow (with -bios none):
+ *   1. QEMU starts at 0x80000000 → entry.S (_entry, M-mode)
+ *   2. entry.S calls start() in start.c (M-mode CSR configuration)
+ *   3. start() does mret → _start (this file, S-mode)
+ *   4. We setup S-mode stack, clear BSS, jump to kernel_main()
  */
 
 .section .text.boot          # Place code in the .text.boot section (linked first)

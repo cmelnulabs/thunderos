@@ -1,8 +1,8 @@
 Introduction
 ============
 
-ThunderOS is a minimal, educational operating system designed for the RISC-V 64-bit 
-architecture with a focus on AI workload optimization.
+ThunderOS is a lightweight, educational operating system designed for the RISC-V 64-bit 
+architecture, providing a clean foundation for learning OS development.
 
 What is ThunderOS?
 ------------------
@@ -10,9 +10,9 @@ What is ThunderOS?
 ThunderOS is built from the ground up to explore:
 
 * **RISC-V Architecture**: Understanding the modern, open-source instruction set
-* **AI-Specific Optimizations**: Scheduling, memory management, and hardware acceleration for ML workloads
+* **Operating System Fundamentals**: Memory management, process scheduling, and I/O
 * **Systems Programming**: Low-level kernel development in C and Assembly
-* **Hardware-Software Co-design**: Leveraging RISC-V extensions like RVV (Vector Extension)
+* **Hardware-Software Integration**: Device drivers, interrupts, and hardware abstraction
 
 Why RISC-V?
 -----------
@@ -28,21 +28,9 @@ RISC-V is an open standard instruction set architecture (ISA) that offers severa
 **Clean Architecture**
    Modern design without legacy baggage from x86 or ARM
 
-**AI-Friendly**
-   Vector Extension (RVV) designed for data-parallel workloads
-   Custom extensions possible for specialized accelerators
-
-Why AI Focus?
--------------
-
-Modern AI workloads have unique requirements:
-
-* **Large Memory Footprint**: Neural networks can be gigabytes in size
-* **Parallel Execution**: Matrix operations benefit from vector/SIMD instructions
-* **Predictable Latency**: Inference tasks need deterministic response times
-* **Hardware Acceleration**: TPUs, NPUs, and custom accelerators
-
-ThunderOS aims to provide OS-level support optimized for these characteristics.
+**Educational Value**
+   Simpler to understand than proprietary architectures
+   Excellent tooling and emulation support (QEMU)
 
 Target Audience
 ---------------
@@ -51,7 +39,7 @@ This project is designed for:
 
 * Computer science students learning OS development
 * Systems programmers interested in RISC-V
-* AI engineers wanting to understand low-level optimization
+* Embedded systems engineers exploring new platforms
 * Hobbyists building custom RISC-V systems
 
 Development Philosophy
@@ -72,65 +60,16 @@ Development Philosophy
 Getting Started
 ---------------
 
-Prerequisites
-~~~~~~~~~~~~~
+To build and run ThunderOS, see the :doc:`development` guide for complete instructions 
+including prerequisites, build options (Docker or native), and testing.
 
-* RISC-V GCC toolchain (``riscv64-unknown-elf-gcc``)
-* QEMU 10.1.2+ with RISC-V support (``qemu-system-riscv64``)
-* GNU Make
-* Basic knowledge of C and assembly
-
-Building
-~~~~~~~~
-
-Using the build script (recommended):
+**Quick Start:**
 
 .. code-block:: bash
 
    git clone <repository>
    cd thunderos
-   ./build_os.sh
-
-Or manually with Make:
-
-.. code-block:: bash
-
-   make all
-
-Running
-~~~~~~~
-
-Build and test in QEMU:
-
-.. code-block:: bash
-
-   make qemu
-
-Or run automated tests:
-
-.. code-block:: bash
-
-   # Run full test suite
-   make test
-   
-   # Or run individual test scripts
-   tests/scripts/test_boot.sh
-   tests/scripts/test_integration.sh
-   tests/scripts/test_user_mode.sh
-   
-   # Or run all tests
-   tests/scripts/run_all_tests.sh
-
-Building Documentation
-~~~~~~~~~~~~~~~~~~~~~~
-
-Generate HTML documentation:
-
-.. code-block:: bash
-
-   ./build_docs.sh
-
-Documentation will be available at ``docs/build/html/index.html``
+   make run              # Build and run in QEMU
 
 Project Structure
 -----------------
@@ -138,26 +77,29 @@ Project Structure
 .. code-block:: text
 
    thunderos/
-   ├── boot/              # Bootloader (assembly)
-   ├── kernel/            # Kernel code
+   ├── boot/              # Bootloader (assembly entry point)
+   ├── kernel/            # Kernel source code
    │   ├── arch/riscv64/  # Architecture-specific code
-   │   ├── core/          # Core kernel (scheduler, syscalls, etc.)
-   │   └── mm/            # Memory management (PMM, paging)
+   │   ├── core/          # Core kernel (scheduler, syscalls, signals, etc.)
+   │   ├── drivers/       # Device drivers (VirtIO block/net)
+   │   ├── fs/            # Filesystem (ext2, VFS)
+   │   ├── mm/            # Memory management (PMM, paging, DMA)
+   │   └── utils/         # Utility functions (kstring)
    ├── include/           # Header files
    │   ├── arch/          # Architecture headers
+   │   ├── drivers/       # Driver headers
+   │   ├── fs/            # Filesystem headers
    │   ├── hal/           # Hardware Abstraction Layer
    │   ├── kernel/        # Kernel subsystem headers
    │   └── mm/            # Memory management headers
+   ├── userland/          # User-space programs
    ├── tests/             # Automated test suite
-   │   ├── test_*.sh      # Integration test scripts
-   │   ├── test_*.c       # Unit test programs
    │   ├── framework/     # Test framework (kunit)
-   │   └── README.md      # Test documentation
+   │   ├── scripts/       # Integration test scripts
+   │   └── unit/          # Unit test programs
    ├── docs/              # Sphinx documentation
    ├── build/             # Build artifacts (generated)
    ├── .github/           # GitHub Actions CI/CD
-   ├── build_os.sh        # Build kernel script
-   ├── build_docs.sh      # Build documentation script
    ├── Makefile           # Main build system
    └── README.md          # Project documentation
 

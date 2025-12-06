@@ -50,8 +50,19 @@ void _start(long argc, char **argv) {
         syscall(SYS_EXIT, 1, 0, 0);
     }
     
+    char *endptr;
     long seconds = atol(argv[1]);
-    if (seconds <= 0) {
+    
+    /* Validate: check if input is valid (has digits) */
+    const char *p = argv[1];
+    if (*p == '\0' || seconds <= 0) {
+        print("sleep: invalid time interval\n");
+        syscall(SYS_EXIT, 1, 0, 0);
+    }
+    
+    /* Check for non-digit characters */
+    while (*p >= '0' && *p <= '9') p++;
+    if (*p != '\0') {
         print("sleep: invalid time interval\n");
         syscall(SYS_EXIT, 1, 0, 0);
     }

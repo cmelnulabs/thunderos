@@ -221,10 +221,10 @@ static int ext2_vfs_readdir(vfs_node_t *directory, uint32_t entry_index, char *e
     if (entry_found) {
         clear_errno();
         return 0;
-    } else {
-        set_errno(THUNDEROS_ENOENT);
-        return -1;
     }
+    
+    set_errno(THUNDEROS_ENOENT);
+    return -1;
 }
 
 /**

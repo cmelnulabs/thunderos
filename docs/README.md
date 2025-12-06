@@ -1,6 +1,6 @@
 # ThunderOS Documentation
 
-This directory contains comprehensive documentation for ThunderOS, a RISC-V operating system specialized for AI workloads.
+This directory contains comprehensive documentation for ThunderOS, a lightweight educational RISC-V operating system.
 
 ## Documentation Structure
 
