@@ -43,7 +43,7 @@ jobs:
         run: |
           # Check if there are any real errors (not suppressed warnings)
           if grep -q "Real errors (from source code):" clang_tidy_results.txt; then
-            ERROR_COUNT=$(grep "Real errors (from source code):" clang_tidy_results.txt | grep -oE "[0-9]+")
+            ERROR_COUNT=$(grep "Real errors (from source code):" clang_tidy_results.txt -A 1 | tail -1 | tr -d '[:space:]')
             if [ "$ERROR_COUNT" -gt 0 ]; then
               echo "❌ clang-tidy found $ERROR_COUNT error(s) that must be fixed"
               exit 1
