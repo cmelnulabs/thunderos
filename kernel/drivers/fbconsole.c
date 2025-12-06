@@ -258,8 +258,8 @@ void fbcon_putc(char c)
     case '\t':
         tab();
         return;
-    case '\0':
-        return;
+    default:
+        break;
     }
     
     /* Skip non-printable characters */

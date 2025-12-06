@@ -76,8 +76,8 @@ static int virtqueue_init(virtio_blk_device_t *dev, uint32_t queue_size)
     vq->used_phys = used_region->phys_addr;
     
     /* Initialize free descriptor list (link all descriptors together) */
-    for (uint16_t i = 0; i < queue_size - 1; i++) {
-        vq->desc[i].next = i + 1;
+    for (uint32_t i = 0; i < queue_size - 1; i++) {
+        vq->desc[i].next = (uint16_t)(i + 1);
     }
     vq->desc[queue_size - 1].next = 0;
     vq->free_head = 0;
@@ -206,7 +206,7 @@ static int virtio_blk_do_request(virtio_blk_device_t *dev, virtio_blk_request_t 
     virtqueue_t *vq = &dev->queue;
     
     /* Allocate 3 descriptors: header, data buffer, status */
-    uint16_t desc_idx;
+    uint16_t desc_idx = 0;
     if (virtqueue_alloc_desc_chain(vq, &desc_idx, 3) < 0) {
         return -1;
     }

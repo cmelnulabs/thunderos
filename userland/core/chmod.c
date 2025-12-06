@@ -164,7 +164,7 @@ void _start(int argc, char **argv) {
     
     const char *mode_str = argv[1];
     const char *path = argv[2];
-    uint32_t mode;
+    uint32_t mode = 0;
     
     // Try parsing as octal first
     if (isdigit(mode_str[0])) {

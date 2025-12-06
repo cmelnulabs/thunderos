@@ -88,11 +88,24 @@ void _start(long argc, char **argv) {
         syscall1(SYS_EXIT, 1);
     }
     
-    int pid = atoi(argv[1]);
-    if (pid <= 0) {
+    char *endptr;
+    long pid_long = atoi(argv[1]);
+    
+    /* Validate: check if input is valid */
+    const char *p = argv[1];
+    if (*p == '\0' || pid_long <= 0 || pid_long > 0x7FFFFFFF) {
         print("kill: invalid pid\n");
         syscall1(SYS_EXIT, 1);
     }
+    
+    /* Check for non-digit characters */
+    while (*p >= '0' && *p <= '9') p++;
+    if (*p != '\0') {
+        print("kill: invalid pid\n");
+        syscall1(SYS_EXIT, 1);
+    }
+    
+    int pid = (int)pid_long;
     
     long result = syscall2(SYS_KILL, pid, SIGTERM);
     if (result < 0) {

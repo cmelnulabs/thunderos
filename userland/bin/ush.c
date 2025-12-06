@@ -340,9 +340,16 @@ static void print_char(char c) {
  * Check if two strings are equal up to a given length
  */
 static int strings_equal(const char *str1, const char *str2, int length) {
+    if (!str1 || !str2) {
+        return 0;
+    }
     for (int idx = 0; idx < length; idx++) {
         if (str1[idx] != str2[idx]) {
             return 0;
+        }
+        // If we hit null terminator, only equal if both are null
+        if (str1[idx] == '\0') {
+            return str2[idx] == '\0';
         }
     }
     return 1;
@@ -382,8 +389,8 @@ static void history_init(void) {
 static void history_add(const char *command) {
     /* Skip if same as last command */
     if (g_history_count > 0) {
-        int cmd_length = str_length(command);
-        int last_length = str_length(g_history[g_history_count - 1]);
+        int cmd_length = (int)str_length(command);
+        int last_length = (int)str_length(g_history[g_history_count - 1]);
         if (cmd_length == last_length) {
             if (strings_equal(command, g_history[g_history_count - 1], cmd_length)) {
                 return;
@@ -468,7 +475,7 @@ static void env_init(void) {
 static const char *env_get(const char *name) {
     for (int i = 0; i < MAX_ENV_VARS; i++) {
         if (g_env_vars[i].in_use) {
-            if (strings_equal(g_env_vars[i].name, name, str_length(name)) &&
+            if (strings_equal(g_env_vars[i].name, name, (int)str_length(name)) &&
                 g_env_vars[i].name[str_length(name)] == '\0') {
                 return g_env_vars[i].value;
             }
@@ -484,7 +491,7 @@ static int env_set(const char *name, const char *value) {
     /* Check if already exists */
     for (int i = 0; i < MAX_ENV_VARS; i++) {
         if (g_env_vars[i].in_use) {
-            int name_len = str_length(name);
+            int name_len = (int)str_length(name);
             if (strings_equal(g_env_vars[i].name, name, name_len) &&
                 g_env_vars[i].name[name_len] == '\0') {
                 copy_string(g_env_vars[i].value, value, MAX_ENV_VALUE);
@@ -512,7 +519,7 @@ static int env_set(const char *name, const char *value) {
 static int env_unset(const char *name) {
     for (int i = 0; i < MAX_ENV_VARS; i++) {
         if (g_env_vars[i].in_use) {
-            int name_len = str_length(name);
+            int name_len = (int)str_length(name);
             if (strings_equal(g_env_vars[i].name, name, name_len) &&
                 g_env_vars[i].name[name_len] == '\0') {
                 g_env_vars[i].in_use = 0;
@@ -670,7 +677,7 @@ static void input_clear_line(void) {
  */
 static void input_set_from_history(int index) {
     copy_string(g_input_buffer, g_history[index], INPUT_BUFFER_SIZE);
-    g_input_pos = str_length(g_input_buffer);
+    g_input_pos = (int)str_length(g_input_buffer);
     print_chars(g_input_buffer, g_input_pos);
 }
 
@@ -704,7 +711,7 @@ static int parse_arg_start(const char *input, int input_len, int cmd_len) {
  * Check if input matches a command name
  */
 static int command_matches(const char *input, int cmd_len, const char *command) {
-    int expected_len = str_length(command);
+    int expected_len = (int)str_length(command);
     if (cmd_len != expected_len) {
         return 0;
     }
@@ -1220,7 +1227,7 @@ static void write_to_fd(long fd, const char *str) {
 }
 
 /* Forward declaration for execute_script_line */
-static void execute_script_line(char *line);
+static void execute_script_line(const char *line);
 
 /**
  * Handle 'source' command - run commands from a script file
@@ -1296,7 +1303,7 @@ static void handle_builtin_source(int arg_start, int input_len) {
  * Execute a single line from a script (or directly)
  * This copies the line to g_input_buffer and processes it
  */
-static void execute_script_line(char *line) {
+static void execute_script_line(const char *line) {
     /* Save current input buffer state */
     int saved_pos = g_input_pos;
     
@@ -1310,7 +1317,6 @@ static void execute_script_line(char *line) {
     g_input_pos = i;
     
     /* Process the command (without adding to history - it's a script) */
-    int input_len = g_input_pos;
     
     /* Expand environment variables */
     env_expand(g_input_buffer, g_expanded_buffer, EXPANDED_CMD_SIZE);
@@ -1351,7 +1357,7 @@ static void execute_script_line(char *line) {
     }
     
     /* Recalculate length after redirection parsing */
-    int expanded_len = str_length(g_expanded_buffer);
+    int expanded_len = (int)str_length(g_expanded_buffer);
     
     /* Trim trailing whitespace */
     while (expanded_len > 0 && (g_expanded_buffer[expanded_len - 1] == ' ' || 
@@ -1626,7 +1632,7 @@ static void process_command(void) {
     }
     
     /* Recalculate length after redirection parsing */
-    int expanded_len = str_length(g_expanded_buffer);
+    int expanded_len = (int)str_length(g_expanded_buffer);
     
     /* Trim trailing whitespace */
     while (expanded_len > 0 && (g_expanded_buffer[expanded_len - 1] == ' ' || 

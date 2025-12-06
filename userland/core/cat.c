@@ -60,7 +60,7 @@ static void cat_fd(int fd) {
 
 // Read file and write to stdout
 static int cat_file(const char *filename) {
-    int fd = syscall(SYS_OPEN, (long)filename, O_RDONLY, 0);
+    int fd = (int)syscall(SYS_OPEN, (long)filename, O_RDONLY, 0);
     if (fd < 0) {
         print("cat: ");
         print(filename);

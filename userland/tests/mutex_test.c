@@ -63,7 +63,7 @@ static inline long fork(void) {
     return syscall0(SYS_FORK);
 }
 
-static inline long waitpid(int pid, int *status, int options) {
+static inline long waitpid(int pid, const int *status, int options) {
     return syscall3(SYS_WAIT, pid, status, options);
 }
 
@@ -176,7 +176,7 @@ void _start(void) {
     
     /* Test 2: Lock mutex */
     print("\n[TEST 2] Locking mutex...\n");
-    if (mutex_lock(mutex_id) == 0) {
+    if ((int)mutex_lock(mutex_id) == 0) {
         test_pass("mutex_lock");
     } else {
         test_fail("mutex_lock");
@@ -185,7 +185,7 @@ void _start(void) {
     
     /* Test 3: Trylock should fail (already locked) */
     print("\n[TEST 3] Trylock on locked mutex (should fail)...\n");
-    if (mutex_trylock(mutex_id) < 0) {
+    if ((int)mutex_trylock(mutex_id) < 0) {
         test_pass("mutex_trylock returns error when locked");
     } else {
         test_fail("mutex_trylock should have failed");
@@ -194,7 +194,7 @@ void _start(void) {
     
     /* Test 4: Unlock mutex */
     print("\n[TEST 4] Unlocking mutex...\n");
-    if (mutex_unlock(mutex_id) == 0) {
+    if ((int)mutex_unlock(mutex_id) == 0) {
         test_pass("mutex_unlock");
     } else {
         test_fail("mutex_unlock");
@@ -203,9 +203,9 @@ void _start(void) {
     
     /* Test 5: Trylock should succeed (now unlocked) */
     print("\n[TEST 5] Trylock on unlocked mutex (should succeed)...\n");
-    if (mutex_trylock(mutex_id) == 0) {
+    if ((int)mutex_trylock(mutex_id) == 0) {
         test_pass("mutex_trylock succeeds when unlocked");
-        mutex_unlock(mutex_id);
+        (void)mutex_unlock(mutex_id);
     } else {
         test_fail("mutex_trylock should have succeeded");
         exit(1);
@@ -229,11 +229,11 @@ void _start(void) {
         print("] Trying to acquire mutex...\n");
         
         /* Try to lock - this should block if parent has it */
-        if (mutex_lock(mutex_id) == 0) {
+        if ((int)mutex_lock(mutex_id) == 0) {
             print("  [CHILD] Got mutex!\n");
             print("  [CHILD] Holding mutex for 100ms...\n");
             sleep_ms(100);
-            mutex_unlock(mutex_id);
+            (void)mutex_unlock(mutex_id);
             print("  [CHILD] Released mutex\n");
         } else {
             print("  [CHILD] Failed to get mutex!\n");
@@ -253,7 +253,7 @@ void _start(void) {
         sleep_ms(200);
         
         print("  [PARENT] Releasing mutex...\n");
-        mutex_unlock(mutex_id);
+        (void)mutex_unlock(mutex_id);
         
         /* Wait for child */
         int status;
@@ -277,7 +277,7 @@ void _start(void) {
         test_pass("lock on destroyed mutex fails");
     } else {
         test_fail("lock on destroyed mutex should fail");
-        mutex_unlock(mutex_id);
+        (void)mutex_unlock(mutex_id);
     }
     
     /* Summary */

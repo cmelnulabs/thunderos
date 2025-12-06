@@ -210,7 +210,7 @@ static void setup_trap_frame(struct process *proc, void (*entry_point)(void *), 
     proc->trap_frame->sepc = (unsigned long)entry_point;
     
     // Set stack pointer to top of user stack (grows downward)
-    proc->trap_frame->sp = proc->user_stack + USER_STACK_SIZE;
+    proc->trap_frame->sp = proc->user_stack + (size_t)USER_STACK_SIZE;
     
     // Set first argument for entry point function
     proc->trap_frame->a0 = (unsigned long)arg;
@@ -270,7 +270,7 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->name[PROC_NAME_LEN - 1] = '\0';
     
     // Allocate kernel stack for trap handling and context switching
-    proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
+    proc->kernel_stack = (uintptr_t)kmalloc((size_t)KERNEL_STACK_SIZE);
     if (!proc->kernel_stack) {
         kernel_panic("process_create: Failed to allocate kernel stack");
     }
@@ -279,7 +279,7 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     proc->page_table = get_kernel_page_table();
     
     // Allocate user stack (in kernel space for kernel mode processes)
-    proc->user_stack = (uintptr_t)kmalloc(USER_STACK_SIZE);
+    proc->user_stack = (uintptr_t)kmalloc((size_t)USER_STACK_SIZE);
     if (!proc->user_stack) {
         kernel_panic("process_create: Failed to allocate user stack");
     }
@@ -295,7 +295,7 @@ struct process *process_create(const char *name, void (*entry_point)(void *), vo
     // Set return address to wrapper function that calls entry_point
     proc->context.ra = (unsigned long)process_wrapper;
     // Set stack pointer to top of kernel stack (16-byte aligned for RISC-V ABI)
-    proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    proc->context.sp = proc->kernel_stack + (size_t)KERNEL_STACK_SIZE - STACK_ALIGNMENT;
     
     // Initialize other process fields
     proc->cpu_time = 0;
@@ -373,7 +373,7 @@ void process_exit(int exit_code) {
     // Send SIGCHLD to parent AFTER releasing lock to avoid deadlock
     // (signal_send -> process_wakeup also acquires process_lock)
     if (parent) {
-        extern int signal_send(struct process *target, int signum);
+        extern int signal_send(struct process *proc, int signum);
         signal_send(parent, SIGCHLD);
     }
     
@@ -649,7 +649,7 @@ pid_t process_fork(struct trap_frame *current_tf) {
     child->cwd[cwd_index] = '\0';
     
     /* Allocate kernel stack for child */
-    child->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
+    child->kernel_stack = (uintptr_t)kmalloc((size_t)KERNEL_STACK_SIZE);
     if (!child->kernel_stack) {
         hal_uart_puts("process_fork: failed to allocate kernel stack\n");
         process_free(child);
@@ -752,7 +752,7 @@ pid_t process_fork(struct trap_frame *current_tf) {
     kmemset(&child->context, 0, sizeof(struct context));
     
     // Set up child's kernel stack pointer
-    child->context.sp = child->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    child->context.sp = child->kernel_stack  + (size_t)KERNEL_STACK_SIZE- STACK_ALIGNMENT;
     
     // CRITICAL: Initialize s0 (frame pointer) to point to kernel stack!
     // forked_child_entry is a C function and with -O0 it uses frame pointers.
@@ -842,7 +842,7 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     
     // Map user stack at standard location with read-write permissions
     uintptr_t user_stack_base = USER_STACK_TOP - USER_STACK_SIZE;
-    if (map_user_memory(proc->page_table, user_stack_base, 0, USER_STACK_SIZE, 1) != 0) {
+    if (map_user_memory(proc->page_table, user_stack_base, 0, (size_t)USER_STACK_SIZE, 1) != 0) {
         process_free(proc);
         return NULL;
     }
@@ -854,7 +854,7 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     }
     
     // Allocate kernel stack for trap handling (separate from user stack)
-    proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
+    proc->kernel_stack = (uintptr_t)kmalloc((size_t)KERNEL_STACK_SIZE);
     if (!proc->kernel_stack) {
         process_free(proc);
         return NULL;
@@ -901,7 +901,7 @@ struct process *process_create_user(const char *name, void *user_code, size_t co
     proc->context.ra = (unsigned long)user_mode_entry_wrapper;
     
     // Set kernel stack pointer (16-byte aligned per RISC-V ABI)
-    proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    proc->context.sp = proc->kernel_stack  + (size_t)KERNEL_STACK_SIZE- STACK_ALIGNMENT;
     
     // Initialize process metadata
     proc->cpu_time = 0;
@@ -967,7 +967,7 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->name[PROC_NAME_LEN - 1] = '\0';
     
     // Allocate kernel stack
-    proc->kernel_stack = (uintptr_t)kmalloc(KERNEL_STACK_SIZE);
+    proc->kernel_stack = (uintptr_t)kmalloc((size_t)KERNEL_STACK_SIZE);
     if (!proc->kernel_stack) {
         process_free(proc);
         return NULL;
@@ -985,8 +985,8 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     // Round size up to page boundary
     size_t code_pages = (code_size + PAGE_SIZE - 1) / PAGE_SIZE;
     for (size_t i = 0; i < code_pages; i++) {
-        uintptr_t vaddr = code_base + (i * PAGE_SIZE);
-        uintptr_t paddr = (uintptr_t)code_mem + (i * PAGE_SIZE);
+        uintptr_t vaddr = code_base + ((size_t)i * PAGE_SIZE);
+        uintptr_t paddr = (uintptr_t)code_mem + ((size_t)i * PAGE_SIZE);
         
         // Map as user-readable, writable, and executable
         // TODO: Use proper segment permissions from ELF (R/W/X per segment)
@@ -1016,7 +1016,7 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
         kmemset((void *)translate_phys_to_virt(stack_phys), 0, PAGE_SIZE);
         
         // Map stack page
-        uintptr_t stack_vaddr = stack_base_vaddr + (i * PAGE_SIZE);
+        uintptr_t stack_vaddr = stack_base_vaddr + ((size_t)i * PAGE_SIZE);
         if (map_page(proc->page_table, stack_vaddr, stack_phys,
                            PTE_V | PTE_R | PTE_W | PTE_U) != 0) {
             free_page_table(proc->page_table);
@@ -1072,7 +1072,7 @@ struct process *process_create_elf(const char *name, uint64_t code_base,
     proc->context.ra = (unsigned long)user_mode_entry_wrapper;
     
     // Set kernel stack pointer (16-byte aligned per RISC-V ABI)
-    proc->context.sp = proc->kernel_stack + KERNEL_STACK_SIZE - STACK_ALIGNMENT;
+    proc->context.sp = proc->kernel_stack  + (size_t)KERNEL_STACK_SIZE- STACK_ALIGNMENT;
     
     // Initialize process metadata
     proc->cpu_time = 0;
@@ -1174,11 +1174,11 @@ void forked_child_entry(void) {
     switch_page_table(proc->page_table);
     
     // Setup sscratch with kernel stack pointer for trap entry
-    uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
+    uintptr_t kernel_sp = proc->kernel_stack  + (size_t)KERNEL_STACK_SIZE;
     __asm__ volatile("csrw sscratch, %0" :: "r"(kernel_sp));
     
     // Return to user mode using user_return which restores all registers
-    extern void user_return(struct trap_frame *tf);
+    extern void user_return(struct trap_frame *trap_frame);
     user_return(proc->trap_frame);
     
     kernel_panic("forked_child_entry: user_return returned");
@@ -1195,7 +1195,7 @@ void user_mode_entry_wrapper(void) {
     
     // Setup sscratch with kernel stack pointer for trap entry
     // When trap occurs in user mode, sscratch will swap with sp
-    uintptr_t kernel_sp = proc->kernel_stack + KERNEL_STACK_SIZE;
+    uintptr_t kernel_sp = proc->kernel_stack  + (size_t)KERNEL_STACK_SIZE;
     __asm__ volatile("csrw sscratch, %0" :: "r"(kernel_sp));
     
     // Enter user mode using specialized entry function

@@ -19,7 +19,7 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
     uint32_t num_sectors = block_size / 512;
     
     for (uint32_t i = 0; i < num_sectors; i++) {
-        int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + (i * 512), 1);
+        int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + ((size_t)i * 512), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;
@@ -40,7 +40,7 @@ static int write_block(void *device, uint32_t block_num, const void *buffer, uin
     uint32_t num_sectors = block_size / 512;
     
     for (uint32_t i = 0; i < num_sectors; i++) {
-        int ret = virtio_blk_write(sector + i, (const uint8_t *)buffer + (i * 512), 1);
+        int ret = virtio_blk_write(sector + i, (const uint8_t *)buffer + ((size_t)i * 512), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;

@@ -65,8 +65,8 @@ void scheduler_enqueue(struct process *proc) {
         return;
     }
     
-    int old_count = queue_count;
-    int old_tail = queue_tail;
+    (void)queue_count;  // Suppress unused warning - used for debugging
+    (void)queue_tail;   // Suppress unused warning - used for debugging
     
     ready_queue[queue_tail] = proc;
     queue_tail = (queue_tail + 1) % READY_QUEUE_SIZE;
@@ -198,11 +198,8 @@ void schedule(void) {
     // Check if we should preempt current process
     int should_preempt = 0;
     
-    if (!current) {
-        // No current process, pick next
-        should_preempt = 1;
-    } else if (current->state != PROC_RUNNING) {
-        // Current process is not running (sleeping, zombie, etc.)
+    if (!current || current->state != PROC_RUNNING) {
+        // No current process or not running (sleeping, zombie, etc.)
         should_preempt = 1;
     } else if (current_time_slice == 0) {
         // Time slice expired

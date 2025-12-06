@@ -63,7 +63,7 @@ void pmm_init(uintptr_t mem_start, size_t mem_size) {
     total_pages = mem_size / PAGE_SIZE;
     
     // Limit to bitmap capacity
-    size_t max_pages = BITMAP_SIZE * BITS_PER_BYTE;
+    size_t max_pages = (size_t)BITMAP_SIZE * BITS_PER_BYTE;
     if (total_pages > max_pages) {
         total_pages = max_pages;
     }

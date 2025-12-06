@@ -114,7 +114,7 @@ static inline void compiler_barrier(void) {
  * 
  * Helper for reading device registers with proper ordering.
  */
-static inline uint32_t read32_barrier(volatile uint32_t *addr) {
+static inline uint32_t read32_barrier(const volatile uint32_t *addr) {
     uint32_t value = *addr;
     read_barrier();
     return value;

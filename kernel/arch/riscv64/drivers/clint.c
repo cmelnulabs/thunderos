@@ -9,8 +9,8 @@
 #define CLINT_REG_32(offset) ((volatile uint32_t *)(CLINT_BASE + (offset)))
 #define CLINT_REG_64(offset) ((volatile uint64_t *)(CLINT_BASE + (offset)))
 
-#define CLINT_MSIP_REG(hart) CLINT_REG_32(CLINT_MSIP_OFFSET + ((hart) * 4))
-#define CLINT_MTIMECMP_REG(hart) CLINT_REG_64(CLINT_MTIMECMP_OFFSET + ((hart) * 8))
+#define CLINT_MSIP_REG(hart) CLINT_REG_32(CLINT_MSIP_OFFSET + ((unsigned long)(hart) * 4UL))
+#define CLINT_MTIMECMP_REG(hart) CLINT_REG_64(CLINT_MTIMECMP_OFFSET + ((unsigned long)(hart) * 8UL))
 #define CLINT_MTIME_REG CLINT_REG_64(CLINT_MTIME_OFFSET)
 
 /* CSR access helpers */

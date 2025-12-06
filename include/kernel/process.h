@@ -55,7 +55,7 @@ typedef int32_t pid_t;
 #define USER_MMAP_START   0x40000000     // Memory mapped region (1GB)
 
 // Heap safety margin to prevent collision with stack
-#define HEAP_STACK_SAFETY_MARGIN (1024 * 1024)  // 1MB
+#define HEAP_STACK_SAFETY_MARGIN (1024UL * 1024UL)  // 1MB
 
 // Memory protection flags for VMAs
 #define VM_READ     0x01  // Readable

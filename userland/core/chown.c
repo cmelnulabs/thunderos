@@ -145,7 +145,8 @@ void _start(int argc, char **argv) {
     
     const char *owner_str = argv[1];
     const char *path = argv[2];
-    uint16_t new_uid, new_gid;
+    uint16_t new_uid;
+    uint16_t new_gid;
     
     // Parse owner:group
     if (parse_owner_group(owner_str, &new_uid, &new_gid) < 0) {

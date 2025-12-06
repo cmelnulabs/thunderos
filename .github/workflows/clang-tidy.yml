@@ -1,0 +1,52 @@
+name: Code Quality - Static Analysis
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'refactor/**'
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  clang-tidy:
+    name: clang-tidy Analysis
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy gcc-riscv64-unknown-elf
+
+      - name: Run clang-tidy analysis
+        run: |
+          chmod +x tests/static_analysis/run_clang_tidy.sh
+          ./tests/static_analysis/run_clang_tidy.sh 2>&1 | tee clang_tidy_results.txt
+          
+          # Extract summary
+          echo "## Code Quality Analysis Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### clang-tidy Scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          tail -20 clang_tidy_results.txt >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for errors
+        run: |
+          # Check if there are any real errors (not suppressed warnings)
+          if grep -q "Real errors (from source code):" clang_tidy_results.txt; then
+            ERROR_COUNT=$(grep "Real errors (from source code):" clang_tidy_results.txt | grep -oE "[0-9]+")
+            if [ "$ERROR_COUNT" -gt 0 ]; then
+              echo "❌ clang-tidy found $ERROR_COUNT error(s) that must be fixed"
+              exit 1
+            fi
+          fi
+          echo "✅ Code quality check passed - no critical errors found"
