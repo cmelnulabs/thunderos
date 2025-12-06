@@ -133,6 +133,8 @@ help:
 	@echo ""
 	@echo "$(BOLD)Debug Targets:$(RESET)"
 	@echo "  $(GREEN)make debug$(RESET)        Run QEMU with GDB server (port 1234)"
+	@echo "  $(GREEN)make gdb$(RESET)          Connect GDB client to debug session"
+	@echo "  $(GREEN)make qemu-debug-mem$(RESET) Run with memory/MMU logging"
 	@echo "  $(GREEN)make dump$(RESET)         Generate disassembly listing"
 	@echo ""
 	@echo "$(BOLD)Test Targets:$(RESET)"
@@ -405,6 +407,50 @@ dump: $(KERNEL_ELF)
 	@echo "$(BOLD)$(BLUE)[DUMP]$(RESET) Generating disassembly..."
 	@$(OBJDUMP) -d $< > $(BUILD_DIR)/thunderos.dump
 	@echo "$(GREEN)✓ Disassembly saved:$(RESET) $(BUILD_DIR)/thunderos.dump"
+
+# Memory debugging with QEMU tracing
+.PHONY: qemu-debug-mem
+qemu-debug-mem: $(KERNEL_ELF) $(BUILD_DIR)/fs.img
+	@echo ""
+	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(YELLOW)  Memory Debug Mode$(RESET)"
+	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)Logging:$(RESET) guest errors, interrupts only"
+	@echo "  $(CYAN)Output:$(RESET)  memory_debug.log"
+	@echo "  $(CYAN)Tip:$(RESET)     Add -d mmu for verbose MMU logging (large files!)"
+	@echo "$(BOLD)$(YELLOW)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@if command -v qemu-system-riscv64 >/dev/null 2>&1; then \
+		qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-d guest_errors,int -D memory_debug.log; \
+	elif [ -x /tmp/qemu-10.1.2/build/qemu-system-riscv64 ]; then \
+		/tmp/qemu-10.1.2/build/qemu-system-riscv64 $(QEMU_FLAGS) -kernel $(KERNEL_ELF) \
+			-global virtio-mmio.force-legacy=false \
+			-drive file=$(FS_IMG),if=none,format=raw,id=hd0 \
+			-device virtio-blk-device,drive=hd0 \
+			-d guest_errors,int -D memory_debug.log; \
+	else \
+		echo "$(RED)✗ ERROR:$(RESET) qemu-system-riscv64 not found"; \
+		exit 1; \
+	fi
+
+# GDB client helper
+.PHONY: gdb
+gdb: $(KERNEL_ELF)
+	@echo ""
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(BOLD)$(GREEN)  Connecting to GDB Server$(RESET)"
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "  $(CYAN)Target:$(RESET) localhost:1234"
+	@echo "  $(CYAN)Kernel:$(RESET) $(KERNEL_ELF)"
+	@echo "$(BOLD)$(GREEN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	riscv64-unknown-elf-gdb $(KERNEL_ELF) \
+		-ex "target remote :1234" \
+		-ex "layout split"
 
 # Quick run: build everything and run QEMU with shell
 run: qemu
