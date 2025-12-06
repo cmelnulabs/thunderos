@@ -9,8 +9,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Maximum number of interrupt sources */
-#define MAX_INTERRUPT_SOURCES 128
+/* Maximum number of interrupt sources (QEMU virt machine supports 96) */
+#define MAX_INTERRUPT_SOURCES 96
 
 /* Interrupt priority levels (1-7, 0 = disabled) */
 #define IRQ_PRIORITY_DISABLED 0

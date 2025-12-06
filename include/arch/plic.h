@@ -18,8 +18,10 @@
 #define PLIC_THRESHOLD_OFFSET  0x200000UL
 #define PLIC_CLAIM_OFFSET      0x200004UL
 
-/* Maximum number of interrupt sources (including reserved IRQ 0) */
-#define PLIC_MAX_IRQ 128
+/* Maximum number of interrupt sources (including reserved IRQ 0)
+ * QEMU virt machine supports IRQs 1-95, so 96 total including reserved 0
+ */
+#define PLIC_MAX_IRQ 96
 
 /* Context for supervisor mode, hart 0 */
 #define PLIC_CONTEXT_SUPERVISOR_HART0 1

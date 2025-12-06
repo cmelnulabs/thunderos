@@ -13,8 +13,10 @@
 #define PLIC_THRESHOLD_REG(context) PLIC_REG(PLIC_THRESHOLD_OFFSET + ((unsigned long)(context) * 0x1000UL))
 #define PLIC_CLAIM_REG(context) PLIC_REG(PLIC_CLAIM_OFFSET + ((unsigned long)(context) * 0x1000UL))
 
-/* Number of words needed for enable bits (128 interrupts / 32 bits per word) */
-#define PLIC_ENABLE_WORDS 4
+/* Number of words needed for enable bits (96 interrupts / 32 bits per word = 3 words)
+ * QEMU virt machine supports IRQs 1-95
+ */
+#define PLIC_ENABLE_WORDS 3
 
 /*
  * Initialize the PLIC
@@ -69,7 +71,7 @@ void plic_enable_interrupt(uint32_t irq_number, uint32_t context)
     volatile uint32_t *enable_reg = NULL;
     uint32_t current_value = 0;
 
-    if (irq_number == 0 || irq_number >= 128)
+    if (irq_number == 0 || irq_number >= PLIC_MAX_IRQ)
     {
         return;  /* IRQ 0 is reserved, ignore invalid IRQ numbers */
     }
@@ -92,7 +94,7 @@ void plic_disable_interrupt(uint32_t irq_number, uint32_t context)
     volatile uint32_t *enable_reg = NULL;
     uint32_t current_value = 0;
 
-    if (irq_number == 0 || irq_number >= 128)
+    if (irq_number == 0 || irq_number >= PLIC_MAX_IRQ)
     {
         return;  /* IRQ 0 is reserved, ignore invalid IRQ numbers */
     }
