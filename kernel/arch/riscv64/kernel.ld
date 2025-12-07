@@ -10,8 +10,8 @@ ENTRY(_entry)
 
 PHDRS
 {
-    text PT_LOAD FLAGS(5);  /* R + X = 5 */
-    data PT_LOAD FLAGS(6);  /* R + W = 6 */
+    text PT_LOAD FLAGS(5);  /* R + X = 5 = 0b101 (Read + Execute) */
+    data PT_LOAD FLAGS(6);  /* R + W = 6 = 0b110 (Read + Write) */
 }
 
 SECTIONS
