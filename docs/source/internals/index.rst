@@ -9,7 +9,6 @@ This section documents the internal implementation details of ThunderOS.
 
    bootloader
    linker_script
-   registers
    trap_handler
    interrupt_handling
    syscalls
@@ -47,7 +46,7 @@ Component Reference
    * - Category
      - Components
    * - **Boot & Core**
-     - :doc:`bootloader` · :doc:`linker_script` · :doc:`registers` · :doc:`trap_handler` · :doc:`interrupt_handling` · :doc:`syscalls`
+     - :doc:`bootloader` · :doc:`linker_script` · :doc:`trap_handler` · :doc:`interrupt_handling` · :doc:`syscalls`
    * - **Memory**
      - :doc:`pmm` · :doc:`kmalloc` · :doc:`paging` · :doc:`memory` · :doc:`dma` · :doc:`barrier`
    * - **Processes**
