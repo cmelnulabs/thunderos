@@ -189,9 +189,8 @@ static int virtqueue_get_used_buf(virtqueue_net_t *vq, uint16_t *desc_idx, uint3
 {
     read_barrier();
     
-    /* Read used index with volatile to prevent caching */
-    volatile uint16_t *used_idx_ptr = &vq->used->idx;
-    uint16_t device_idx = *used_idx_ptr;
+    /* Read used index directly to avoid unaligned pointer warning */
+    uint16_t device_idx = vq->used->idx;
     
     if (vq->last_seen_used == device_idx) {
         return -1;  /* No new completions */

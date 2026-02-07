@@ -65,9 +65,6 @@ void scheduler_enqueue(struct process *proc) {
         return;
     }
     
-    int old_count = queue_count;
-    int old_tail = queue_tail;
-    
     ready_queue[queue_tail] = proc;
     queue_tail = (queue_tail + 1) % READY_QUEUE_SIZE;
     queue_count++;

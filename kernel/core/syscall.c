@@ -20,6 +20,7 @@
 #include "fs/vfs.h"
 #include "net/icmp.h"
 #include "net/netif.h"
+#include "arch/interrupt.h"
 #include <stdint.h>
 #include <stddef.h>
 

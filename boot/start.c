@@ -129,11 +129,9 @@ void timerinit(void) {
     mie |= MIE_STIE;  // Enable supervisor timer interrupts
     w_mie(mie);
     
-    // Enable Sstc extension (Supervisor Timer Compare)
-    // This allows S-mode to write stimecmp CSR directly
-    unsigned long menvcfg = r_menvcfg();
-    menvcfg |= (1UL << 63);  // STCE bit - enable SSTC
-    w_menvcfg(menvcfg);
+    // Note: menvcfg.STCE (Sstc extension) is optional and not available in all RISC-V implementations
+    // QEMU with rv64gc doesn't support it, so we skip this configuration
+    // The OS will use mtime/mtimecmp through SBI calls instead
     
     // Allow S-mode to access time CSR
     unsigned long mcounteren = r_mcounteren();
