@@ -41,8 +41,8 @@ Complete Source Code
    
    PHDRS
    {
-       text PT_LOAD FLAGS(5);  /* R + X = 5 */
-       data PT_LOAD FLAGS(6);  /* R + W = 6 */
+       text PT_LOAD FLAGS(5);  /* R + X = 5 = 0b101 (Read + Execute) */
+       data PT_LOAD FLAGS(6);  /* R + W = 6 = 0b110 (Read + Write) */
    }
    
    SECTIONS
@@ -108,25 +108,100 @@ Complete Source Code
    ─────────────────────────────────────────────────────────────────
    0x80024000     212B      .data        Initialized data (R+W)
                             .sdata       Small data (R+W)
-                  188KB     .bss         Zero-initialized (R+W)
+                  188KB     .bss         Uninitialized (R+W)
                             .sbss        Small BSS (R+W)
    ─────────────────────────────────────────────────────────────────
    0x80055000     -         _kernel_end  Free memory starts here
    
    Total kernel size: ~330KB (338,606 bytes)
 
-Detailed Explanation
---------------------
+Sections
+--------
 
-1. Program Headers (Memory Protection)
+How Linker Symbols Work
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Before diving into individual sections, it's important to understand how the linker creates symbols that mark section boundaries.
+
+**The Location Counter (`.`):**
+
+The dot (`.`) is a special variable that tracks the **current address** as the linker places sections. It starts at the base address (0x80000000) and advances as content is added.
+
+**Creating Symbols with PROVIDE():**
+
+.. code-block:: ld
+
+   .data : {
+       PROVIDE(_data_start = .);  /* Captures address at start of .data */
+       *(.data .data.*)            /* Linker places all .data sections here */
+       PROVIDE(_data_end = .);    /* Captures address after all .data content */
+   } :data
+
+**How addresses are determined:**
+
+1. The location counter (`.`) reaches a specific address (e.g., 0x80024000 after alignment)
+2. ``PROVIDE(_data_start = .)`` → symbol captures current counter value
+3. Linker places all matching sections from object files
+4. Location counter advances by the total size of placed content
+5. ``PROVIDE(_data_end = .)`` → symbol captures new counter value
+
+**Key points:**
+
+- Addresses are **calculated dynamically** during linking, not hardcoded
+- They depend on actual content size from your compiled object files
+- Each build may have different addresses as code changes
+- Use ``riscv64-unknown-elf-nm build/thunderos.elf`` to see current values
+
+1. Output Architecture and Entry Point
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: ld
+
+   OUTPUT_ARCH(riscv)
+   ENTRY(_entry)
+
+**OUTPUT_ARCH(riscv)**
+   * Specifies target architecture: RISC-V
+   * Tells the linker to generate RISC-V 64-bit code
+   * Must match compiler target (``riscv64-unknown-elf-gcc``)
+   * Affects instruction encoding, calling conventions, and ABI
+
+**ENTRY(_entry)**
+   * Defines the entry point symbol: ``_entry``
+   * This is the FIRST instruction executed when QEMU loads the kernel
+   * ``_entry`` is defined in ``boot/entry.S`` at address **0x80000000**
+   * QEMU's ``-bios none`` mode jumps directly to this address in M-mode
+   * Debuggers (GDB) use this to set breakpoints at boot
+
+**Why _entry, not _start?**
+
+ThunderOS has a two-stage boot process:
+
+1. **M-mode entry** (``_entry`` in ``entry.S`` at 0x80000000) - Machine mode initialization
+2. **S-mode boot** (``_start`` in ``boot.S`` at 0x80004020) - Supervisor mode setup
+
+The linker's ``ENTRY()`` directive points to the very first instruction, which is ``_entry``.
+
+**Verification:**
+
+.. code-block:: bash
+
+   $ riscv64-unknown-elf-readelf -h build/thunderos.elf | grep Entry
+   Entry point address:               0x80000000
+   
+   $ riscv64-unknown-elf-nm build/thunderos.elf | grep -E "_entry|_start"
+   0000000080000000 T _entry
+   0000000080004020 T _start
+
+2. Program Headers (Memory Protection)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
 
    PHDRS
    {
-       text PT_LOAD FLAGS(5);  /* R + X = 5 */
-       data PT_LOAD FLAGS(6);  /* R + W = 6 */
+       text PT_LOAD FLAGS(5);  /* R + X = 5 = 0b101 (Read + Execute) */
+       data PT_LOAD FLAGS(6);  /* R + W = 6 = 0b110 (Read + Write) */
    }
 
 **What are Program Headers?**
@@ -200,51 +275,12 @@ You can verify the program headers in the built kernel:
 * First LOAD: Code + rodata (R E = Read Execute, 145KB)
 * Second LOAD: Data + BSS (RW = Read Write, 192KB)
 
-**Important:** These permissions are currently advisory. Once ThunderOS sets up the MMU and page tables, these will be enforced by hardware, causing exceptions if violated.
+.. warning::
 
-2. Output Architecture and Entry Point
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   These permissions are currently advisory. Once ThunderOS sets up the MMU and page tables, these will be enforced by hardware, causing exceptions if violated.
 
-.. code-block:: ld
-
-   OUTPUT_ARCH(riscv)
-   ENTRY(_entry)
-
-**OUTPUT_ARCH(riscv)**
-   * Specifies target architecture: RISC-V
-   * Tells the linker to generate RISC-V 64-bit code
-   * Must match compiler target (``riscv64-unknown-elf-gcc``)
-   * Affects instruction encoding, calling conventions, and ABI
-
-**ENTRY(_entry)**
-   * Defines the entry point symbol: ``_entry``
-   * This is the FIRST instruction executed when QEMU loads the kernel
-   * ``_entry`` is defined in ``boot/entry.S`` at address **0x80000000**
-   * QEMU's ``-bios none`` mode jumps directly to this address in M-mode
-   * Debuggers (GDB) use this to set breakpoints at boot
-
-**Why _entry, not _start?**
-
-ThunderOS has a two-stage boot process:
-
-1. **M-mode entry** (``_entry`` in ``entry.S`` at 0x80000000) - Machine mode initialization
-2. **S-mode boot** (``_start`` in ``boot.S`` at 0x80004020) - Supervisor mode setup
-
-The linker's ``ENTRY()`` directive points to the very first instruction, which is ``_entry``.
-
-**Verification:**
-
-.. code-block:: bash
-
-   $ riscv64-unknown-elf-readelf -h build/thunderos.elf | grep Entry
-   Entry point address:               0x80000000
-   
-   $ riscv64-unknown-elf-nm build/thunderos.elf | grep -E "^80000000|^80004020"
-   0000000080000000 T _entry
-   0000000080004020 T _start
-
-3. Base Address: 0x80000000
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Base Address
+~~~~~~~~~~~~
 
 .. code-block:: ld
 
@@ -317,7 +353,7 @@ We *could*, but:
 * Changing it requires modifying QEMU command line or using custom firmware
 * Following conventions makes the OS more portable
 
-4. Text Section (.text)
+3. Text Section (.text)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -363,7 +399,7 @@ In assembly (``entry.S``):
 .. code-block:: asm
 
    .section .text.entry
-   .globl _entry
+   .global _entry
    _entry:
        # First instruction at 0x80000000
        csrw sie, zero
@@ -410,7 +446,7 @@ These can be used in C code:
    ...
    0x800239b2     (end of .text)
 
-5. Read-Only Data Section (.rodata)
+4. Read-Only Data Section (.rodata)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -477,7 +513,7 @@ Modern systems sometimes use a third segment (R only) for ``.rodata``, but for T
    kernel_version[0] = 'X';  // Attempt to write to read-only memory
    // Result: Hardware exception → kernel panic
 
-6. Page Alignment for Memory Protection
+5. Page Alignment for Memory Protection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -526,7 +562,6 @@ Memory protection in RISC-V (and most architectures) works at **page granularity
 
 * **Cost**: Wastes space (up to 4095 bytes of padding)
 * **Benefit**: Essential for memory protection
-* **Result**: In ThunderOS, only ~622 bytes wasted (page boundary was close)
 
 **Why 4096?**
 
@@ -540,16 +575,15 @@ This is the RISC-V Sv39 page size. Other architectures use:
 
 .. code-block:: bash
 
-   $ riscv64-unknown-elf-readelf -S build/thunderos.elf
-   
-   [Nr] Name       Type      Address          Off    Size
-   [ 1] .text      PROGBITS  0000000080000000 001000 0239b2
-   [ 2] .rodata    PROGBITS  00000000800239c0 0249c0 000040
-   [ 3] .data      PROGBITS  0000000080024000 025000 0000d4  ← Aligned!
-   
-   0x80024000 is exactly divisible by 4096 (0x1000)
+   $ riscv64-unknown-elf-readelf -W -S build/thunderos.elf
 
-7. Data Section (.data)
+Check that the ``.data`` section's address is divisible by 4096 (0x1000). For example, if ``.data`` starts at 0x80024000, then 0x80024000 / 0x1000 = 0x80024, confirming it's page-aligned.
+
+.. note::
+
+   Actual addresses and sizes vary as the kernel develops. Use the command above to check your current build.
+
+6. Data Section (.data)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -597,14 +631,29 @@ The ``:data`` at the end assigns this to the ``data`` program header (R+W permis
 
 Currently very small (212 bytes) because:
 
-* Most kernel data is zero-initialized (goes in .bss)
+* Most kernel data is uninitialized (goes in .bss)
 * Kernel uses mostly stack and dynamically allocated memory
 * Few global variables need explicit initialization
 
 **Symbols Provided:**
 
-* ``_data_start`` (0x80024000)
-* ``_data_end`` (0x800240d4)
+These symbols are created by the linker using ``PROVIDE()`` directives (see "How Linker Symbols Work" above):
+
+* ``_data_start`` - Beginning of .data section
+* ``_data_end`` - End of .data section
+
+**Viewing Current Addresses:**
+
+Use this command to see the actual addresses of section boundary symbols in your built kernel:
+
+.. code-block:: bash
+
+   $ riscv64-unknown-elf-nm build/thunderos.elf | grep "_bss_start\|_bss_end\|_kernel_end"
+   0000000080025000 B _bss_start
+   0000000080054020 B _bss_end
+   0000000080055000 B _kernel_end
+
+The ``nm`` utility displays symbol names and addresses from the ELF binary. The letter prefix (``B`` for BSS, ``D`` for data) indicates the symbol type, and the hexadecimal addresses show where they're located in memory. Note that ``_data_start`` and ``_data_end`` may not appear in all builds if the linker optimizes them away.
 
 **Storage in Binary:**
 
@@ -624,7 +673,7 @@ The ``.data`` section MUST be stored in the ELF file because it contains specifi
 
 When loaded, these bytes are copied from the file to memory at 0x80024000.
 
-8. BSS Section (.bss)
+7. BSS Section (.bss)
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -636,13 +685,13 @@ When loaded, these bytes are copied from the file to memory at 0x80024000.
        PROVIDE(_bss_end = .);
    } :data
 
-**Purpose:** Contains zero-initialized variables
+**Purpose:** Contains uninitialized variables
 
 **BSS = "Block Started by Symbol"** (historical IBM assembler term)
 
 **What Goes Here:**
 
-All **uninitialized** (or explicitly zero-initialized) global and static variables:
+All **uninitialized** global and static variables:
 
 .. code-block:: c
 
@@ -664,16 +713,18 @@ All **uninitialized** (or explicitly zero-initialized) global and static variabl
 
 * Variables **≤8 bytes** may go in ``.sbss`` (small BSS, GP-relative addressing)
 * Larger variables go in regular ``.bss``
-* Both are zero-initialized; the difference is just addressing mode optimization
+* Both are uninitialized; the difference is just addressing mode optimization
 
 **The Key Optimization:**
 
 BSS data is **NOT stored in the binary file**. Instead:
 
-1. Linker records only the SIZE of .bss (188KB)
-2. Binary file doesn't contain 188KB of zeros
-3. At boot, ``boot.S`` zeros this memory region
-4. Saves disk space and load time
+This is a standard feature of the ELF (Executable and Linkable Format) used by most modern toolchains (including RISC-V, x86_64, ARM, and others)—not something RISC-V specific.
+
+1. The linker records only the SIZE of the .bss section (e.g., 188KB)
+2. The binary file does not contain that many zeros; the .bss section is marked as NOBITS in ELF
+3. At boot, the loader or boot code (e.g., ``boot.S``) zeros this memory region in RAM
+4. This saves disk space and load time
 
 **In ThunderOS:**
 
@@ -700,60 +751,74 @@ BSS data is **NOT stored in the binary file**. Instead:
 
    *(COMMON)
 
-This handles **tentative definitions** - a quirky C feature:
+The ``*(COMMON)`` directive handles **tentative definitions**, a legacy C feature where you can declare a global variable multiple times without initializers:
 
 .. code-block:: c
 
    // In file1.c:
-   int shared_var;  // Tentative definition
+   int shared_var;  // Tentative definition (no initializer, no extern)
    
    // In file2.c:
    int shared_var;  // Another tentative definition
    
-   // Linker merges these into ONE variable in COMMON/.bss
+   // Linker sees these declarations and merges them into ONE variable
 
-Modern code should avoid this (use ``extern`` properly), but the linker script handles it for compatibility.
+**How it works:**
 
-**Size in ThunderOS:**
+When the linker encounters multiple tentative definitions of the same variable across different source files, it doesn't treat this as a conflict. Instead, it allocates space for the variable once in the COMMON section (which becomes part of .bss) and resolves all references to point to that single location.
 
-188KB (192,552 bytes) - Much larger than .data (212 bytes) because:
+**Why this exists:**
 
-* **Stack space**: 16KB M-mode stack + 16KB S-mode stack
-* **Process table arrays**: ``process_t processes[MAX_PROCESSES]``
-* **Memory management structures**: Page tables, free lists
-* **Large buffers**: VirtIO buffers, DMA buffers
-* **All uninitialized globals**: Variables with no initializer
-
-Most kernel data is uninitialized (zero is fine), so BSS is much larger than .data.
-
-**Small Data Sections (.sdata and .sbss):**
-
-RISC-V supports **GP-relative addressing** for small data:
-
-* **GP register** (x3) holds a base address
-* Small variables (≤8 bytes) can be accessed with single instructions
-* ``lw a0, offset(gp)`` instead of ``lui + addi + lw`` (saves instructions)
-* Compiler automatically puts small globals in ``.sdata`` (initialized) or ``.sbss`` (uninitialized)
-* ThunderOS currently has very few small globals (just a few bytes each)
-
-**Example:**
+This was common in older C code before proper header files and ``extern`` declarations became standard practice. Modern C code should avoid this pattern and use proper declarations:
 
 .. code-block:: c
 
-   // These might go in .sdata/.sbss:
-   int small_counter;           // 4 bytes → .sbss
-   void *small_ptr;             // 8 bytes → .sbss
+   // Good practice - In header file (shared.h):
+   extern int shared_var;  // Declaration (no storage allocated)
    
-   // These go in regular .data/.bss:
-   char large_buffer[4096];     // 4KB → .bss
-   struct config settings;      // Large struct → .bss
+   // In exactly ONE source file (shared.c):
+   int shared_var;  // Definition (storage allocated)
+
+The linker script includes ``*(COMMON)`` for compatibility with legacy code and third-party libraries that might still use tentative definitions.
+
+**Size in ThunderOS:**
+
+The .bss section in ThunderOS is typically much larger than the .data section. This size difference reflects how the kernel manages its memory:
+
+**What's in BSS:**
+
+* **Stack space**: M-mode and S-mode stacks
+* **Process management**: ``process_t processes[MAX_PROCESSES]`` array
+* **Memory structures**: Page tables, free lists for the Physical Memory Manager
+* **I/O buffers**: Large buffers for VirtIO block device operations and DMA
+* **All uninitialized globals**: Any variable declared without an initializer
+
+**Why BSS is large:**
+
+Most kernel data structures don't need non-zero initial values. For example:
+
+* Process table entries are populated at runtime
+* Memory management structures are initialized by the PMM
+* Buffers are filled with data during I/O operations
+* Stacks grow as needed during execution
+
+Since these all start at zero (which is free in BSS), it's more efficient to leave them uninitialized than to store explicit zero values in the .data section.
+
+**Small Data Sections (.sdata and .sbss):**
+
+RISC-V toolchains may also create small data sections:
+
+* ``.sdata`` - Small initialized variables
+* ``.sbss`` - Small uninitialized variables
+
+These use a more efficient addressing mode for frequently-accessed small globals. The compiler automatically decides what goes in these sections based on size and optimization settings.
 
 **Symbols Provided:**
 
 * ``_bss_start`` (0x80025000) - Start of regular BSS
 * ``_bss_end`` (0x80054020) - End of all BSS (includes .sbss)
 
-9. Kernel End Marker
+8. Kernel End Marker
 ~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -820,7 +885,7 @@ The Physical Memory Manager (PMM) uses this to know where free RAM begins:
    $ riscv64-unknown-elf-nm build/thunderos.elf | grep _kernel_end
    0000000080055000 B _kernel_end
 
-10. Custom Section: User Exception Test
+9. Custom Section: User Exception Test
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -869,7 +934,7 @@ The kernel can use these to load and execute the test:
    memcpy(user_memory, user_exception_start, test_size);
    exec_user_program(user_memory);
 
-11. Discarded Sections
+10. Discarded Sections
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: ld
@@ -914,11 +979,10 @@ Debug information is in separate sections (``.debug_*``) which are automatically
    /DISCARD/ : {
        *(.note*)          /* Build notes */
        *(.gcc_except_table)  /* GCC exception tables */
-       *(.ARM.exidx*)     /* ARM-specific (not used on RISC-V) */
    }
 
-ThunderOS keeps it simple, discarding only what's clearly unnecessary. (.rodata)
 ThunderOS keeps it simple, discarding only what's clearly unnecessary.
+
 
 Symbols Provided to Code
 -------------------------
@@ -930,43 +994,31 @@ Symbol Table
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 20 55
+   :widths: 30 70
 
    * - Symbol
-     - Address
      - Description
    * - ``_text_start``
-     - 0x80000000
      - First byte of executable code
    * - ``_text_end``
-     - 0x800239b2
      - Last byte of code section
    * - ``_rodata_start``
-     - 0x800239c0
      - First byte of read-only data
    * - ``_rodata_end``
-     - 0x80023a00
      - Last byte of constants
    * - ``_data_start``
-     - 0x80024000
      - First byte of initialized data
    * - ``_data_end``
-     - 0x800240d4
      - Last byte of initialized variables
    * - ``_bss_start``
-     - 0x80025000
-     - First byte of zero-initialized data
+     - First byte of uninitialized data
    * - ``_bss_end``
-     - 0x80054020
      - Last byte of BSS section
    * - ``_kernel_end``
-     - 0x80055000
      - End of entire kernel image
    * - ``user_exception_start``
-     - 0x80055000
      - Start of embedded test binary
    * - ``user_exception_end``
-     - varies
      - End of embedded test binary
 
 Using Symbols in C Code
@@ -1108,7 +1160,7 @@ Placing Data in Specific Sections
 
 .. code-block:: c
 
-   // Force into .data (even if zero-initialized)
+   // Force into .data (even if uninitialized)
    int __attribute__((section(".data"))) 
    important_counter = 0;
    
@@ -1182,7 +1234,7 @@ Complete Memory Map
                       │              │                        via global pointer (gp)
                       ├──────────────┤
    0x80025000         │ .bss         │  ~188KB   R+W          Uninitialized vars
-                      │              │                        (zero-initialized at boot)
+                      │              │                        (zeroed at boot)
                       │              │                        Stacks, buffers, arrays
    0x80054020         ├──────────────┤
                       │ .sbss        │  ~few B   R+W          Small BSS (GP-relative)
@@ -1196,22 +1248,6 @@ Complete Memory Map
                       │              │                        page tables, heap
                       │              │
    0x88000000         └──────────────┘           ← End of 128MB RAM
-
-Section Sizes (from riscv64-unknown-elf-size)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: text
-
-   Section    Size (bytes)   Size (KB)    Percentage
-   ───────────────────────────────────────────────────
-   .text         145,842       142.4KB        43.1%
-   .rodata        (in text)    (in text)
-   .data             212         0.2KB         0.06%
-   .sdata         (small)      (small)
-   .bss          192,552       188.0KB        56.9%
-   .sbss          (small)      (small)
-   ───────────────────────────────────────────────────
-   Total         338,606       330.7KB       100%
 
 Binary File vs Memory
 ~~~~~~~~~~~~~~~~~~~~~
@@ -1313,294 +1349,6 @@ Useful Commands
    $ riscv64-unknown-elf-ld -Map=kernel.map -T kernel.ld ...
    $ cat kernel.map  # Shows detailed memory layout
 
-Common Issues and Solutions
-----------------------------
-
-1. Section Overlap
-~~~~~~~~~~~~~~~~~~
-
-**Error:**
-
-.. code-block:: text
-
-   section .data VMA [0x80023000, 0x80024000] overlaps section .text VMA [0x80000000, 0x80024500]
-
-**Cause:** Sections are running into each other (not enough space or missing alignment)
-
-**Solution:**
-
-* Add ``ALIGN(4096)`` between sections
-* Increase base address spacing
-* Check for very large arrays/buffers
-
-.. code-block:: ld
-
-   .text : { ... }
-   . = ALIGN(4096);  /* Force gap */
-   .data : { ... }
-
-2. Wrong Entry Point
-~~~~~~~~~~~~~~~~~~~~
-
-**Error:** Kernel doesn't boot, hangs, or crashes immediately
-
-**Symptoms:**
-
-* QEMU shows no output
-* GDB shows PC at wrong address
-* Illegal instruction trap
-
-**Causes & Solutions:**
-
-.. code-block:: ld
-
-   # WRONG:
-   ENTRY(_start)         # _start is at 0x80004020, not 0x80000000!
-   
-   # CORRECT:
-   ENTRY(_entry)         # _entry is at 0x80000000 (first instruction)
-
-Also verify in assembly:
-
-.. code-block:: asm
-
-   # Must be global and in .text.entry
-   .section .text.entry
-   .globl _entry         # ← MUST be global!
-   _entry:
-       ...
-
-3. Undefined Reference to Linker Symbols
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**Error:**
-
-.. code-block:: text
-
-   undefined reference to `_bss_start'
-
-**Cause:** Symbol not provided in linker script
-
-**Solution:** Add ``PROVIDE()`` directive:
-
-.. code-block:: ld
-
-   .bss : {
-       PROVIDE(_bss_start = .);  /* ← Add this */
-       *(.bss)
-       PROVIDE(_bss_end = .);    /* ← And this */
-   }
-
-4. Alignment Faults
-~~~~~~~~~~~~~~~~~~~
-
-**Error:**
-
-.. code-block:: text
-
-   Load address misaligned
-   Store/AMO address misaligned
-
-**Cause:** Data not aligned to natural boundaries (RISC-V requires aligned access)
-
-**Solutions:**
-
-In linker script:
-
-.. code-block:: ld
-
-   .data : ALIGN(8) {  /* Align to 8-byte boundary */
-       *(.data)
-   }
-
-In C code:
-
-.. code-block:: c
-
-   struct __attribute__((aligned(8))) my_struct {
-       uint64_t value;
-   };
-
-5. BSS Not Cleared
-~~~~~~~~~~~~~~~~~~
-
-**Symptom:** Variables contain garbage instead of zero
-
-**Cause:** Boot code isn't clearing BSS properly
-
-**Verify** ``boot.S`` clears BSS:
-
-.. code-block:: asm
-
-   clear_bss:
-       la t0, _bss_start
-       la t1, _bss_end
-   1:  sd zero, 0(t0)
-       addi t0, t0, 8
-       blt t0, t1, 1b    # Loop while t0 < t1
-
-**Debug:** Print in early boot:
-
-.. code-block:: c
-
-   extern char _bss_start[], _bss_end[];
-   
-   // Check if BSS was cleared
-   for (char *p = _bss_start; p < _bss_end; p++) {
-       if (*p != 0) {
-           uart_printf("BSS not cleared at %p!\n", p);
-       }
-   }
-
-6. Running Out of Memory
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**Error:**
-
-.. code-block:: text
-
-   region `ram' overflowed by 1024 bytes
-
-**Causes:**
-
-* Kernel too large (too much code/data)
-* Very large static arrays
-* Stack sizes too big
-
-**Solutions:**
-
-* Use dynamic allocation instead of static arrays
-* Reduce stack sizes
-* Enable compiler optimizations (``-Os`` or ``-O2``)
-* Check for bloat (unused code/libraries)
-
-.. code-block:: bash
-
-   # Find largest symbols:
-   $ riscv64-unknown-elf-nm --size-sort -S build/thunderos.elf | tail -20
-
-Advanced Topics
----------------
-
-Multiple Memory Regions
-~~~~~~~~~~~~~~~~~~~~~~~
-
-For systems with distinct RAM/ROM regions:
-
-.. code-block:: ld
-
-   MEMORY {
-       ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 1M
-       RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 128M
-   }
-   
-   SECTIONS {
-       .text : {
-           *(.text*)
-       } > ROM  /* Load in ROM */
-       
-       .data : {
-           *(.data*)
-       } > RAM AT> ROM  /* Load from ROM, run in RAM */
-   }
-
-The ``AT>`` directive means "load from ROM but execute in RAM" (useful for data that needs to be copied at boot).
-
-Load vs Execution Addresses
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Different load and execution addresses (used in bootloaders):
-
-.. code-block:: ld
-
-   .data 0x80000000 : AT(0x00100000) {
-       *(.data)
-   }
-
-* **VMA (Virtual Memory Address)**: 0x80000000 (where code expects it)
-* **LMA (Load Memory Address)**: 0x00100000 (where it's stored in ROM)
-* Boot code must copy from LMA to VMA
-
-Custom Sections for Special Data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: ld
-
-   /* Section for AI model weights */
-   .ai_models : {
-       PROVIDE(__ai_models_start = .);
-       *(.ai_models)
-       PROVIDE(__ai_models_end = .);
-   }
-   
-   /* Section for interrupt vectors */
-   .vectors : {
-       KEEP(*(.vectors))  /* Don't garbage collect */
-   } > ROM
-
-Then in C:
-
-.. code-block:: c
-
-   const float __attribute__((section(".ai_models")))
-   neural_weights[1000000] = { /* ... */ };
-
-Section Garbage Collection
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Remove unused functions to save space:
-
-**Compile with:**
-
-.. code-block:: bash
-
-   -ffunction-sections -fdata-sections
-
-**Link with:**
-
-.. code-block:: bash
-
-   --gc-sections
-
-**Linker script:**
-
-.. code-block:: ld
-
-   .text : {
-       /* Keep entry point */
-       KEEP(*(.text.entry))
-       KEEP(*(.text.boot))
-       
-       /* Rest can be garbage collected */
-       *(.text*)
-   }
-
-Debugging Linker Issues
-~~~~~~~~~~~~~~~~~~~~~~~
-
-**Verbose output:**
-
-.. code-block:: bash
-
-   riscv64-unknown-elf-ld --verbose ...
-
-**Generate map file:**
-
-.. code-block:: bash
-
-   riscv64-unknown-elf-ld -Map=kernel.map ...
-
-**Check specific symbol:**
-
-.. code-block:: bash
-
-   grep symbol_name kernel.map
-
-**View why a section was kept:**
-
-.. code-block:: bash
-
-   --print-gc-sections
 
 See Also
 --------

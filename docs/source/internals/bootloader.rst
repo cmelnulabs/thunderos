@@ -652,5 +652,5 @@ See Also
 --------
 
 * :doc:`linker_script` - Memory layout and section placement
-* :doc:`registers` - RISC-V register reference
+* :doc:`../riscv/assembly_guide` - RISC-V register reference
 * :doc:`../architecture` - Overall system architecture
