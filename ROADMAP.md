@@ -445,18 +445,31 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 **Focus:** Network connectivity
 
 ### Planned Features
-- [ ] VirtIO-net driver
+- [x] VirtIO-net driver (basic packet I/O)
+- [x] IP/ICMP protocol stack
+- [x] Basic ping utility
 - [ ] lwIP TCP/IP stack integration
 - [ ] Socket API (blocking, uses v0.9.0 primitives)
 - [ ] UDP and TCP support
-- [ ] Basic network utilities (ping, simple HTTP client)
+- [ ] DNS resolver for hostname resolution
+- [ ] Advanced network utilities (HTTP client, wget)
 - [ ] DHCP client for automatic IP configuration
 
 **Release Criteria:**
-- Can send and receive network packets
+- Can send and receive network packets ✓
+- Basic ICMP echo (ping) works
 - TCP/UDP sockets work reliably
 - Can fetch data from network (wget-like)
-- Basic network diagnostics available
+- DNS hostname resolution functional
+
+**Status:** In Progress (3/9 features) - Core packet I/O working
+
+### Recent Progress
+- Fixed RISC-V CSR compatibility (removed Sstc extension dependencies)
+- Converted timer driver from stimecmp CSR to CLINT MMIO
+- VirtIO-net driver operational with modern VirtIO mode
+- System boots successfully with networking enabled
+- IP/ICMP stack handles echo requests and replies
 
 ---
 
