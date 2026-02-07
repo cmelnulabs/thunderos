@@ -138,10 +138,8 @@ void timerinit(void) {
     mcounteren |= (1 << 1);  // TM bit - allow time CSR access
     w_mcounteren(mcounteren);
     
-    // Set stimecmp to maximum value to prevent spurious interrupts
-    // S-mode will program this properly when ready
-    unsigned long max_time = ~0UL;
-    w_stimecmp(max_time);
+    // Note: stimecmp CSR is part of Sstc extension (not available in rv64gc)
+    // The OS will use CLINT's mtime/mtimecmp through SBI calls or direct MMIO instead
     
     // Enable software and external interrupts in sie, but NOT timer yet
     // Timer will be enabled by hal_timer_init() when it's ready

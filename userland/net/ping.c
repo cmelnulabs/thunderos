@@ -82,12 +82,22 @@ static void print_ip(uint32_t ip) {
 }
 
 void _start(void) {
-    /* For now, just ping the default gateway (QEMU user-mode) */
+    /* Get command line arguments
+     * Note: In a real implementation, we'd parse argc/argv from stack
+     * For now, we'll use a simple approach assuming first arg after program name
+     */
+    
+    /* Default target: QEMU gateway */
     uint32_t target = (10 << 24) | (0 << 16) | (2 << 8) | 2;  /* 10.0.2.2 */
+    
+    /* TODO: Parse command line arguments from stack
+     * For now, just ping default gateway
+     * Future: Add argc/argv parsing to support: ping <ip_address>
+     */
     
     print("PING ");
     print_ip(target);
-    print("\n");
+    print(" (hardcoded - DNS/args not yet supported)\n");
     
     /* Call ping syscall */
     long rtt = syscall(SYS_NET_PING, target, 0, 0);

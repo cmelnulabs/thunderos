@@ -1,42 +1,26 @@
 /*
- * RISC-V Timer Driver - Fresh Implementation
+ * RISC-V Timer Driver
  * 
- * Simple timer interrupt implementation using SSTC extension.
- * Goal: Get continuous 100ms timer interrupts working.
+ * Uses CLINT MMIO for timer interrupts (compatible with all RISC-V implementations).
+ * Goal: Get continuous timer interrupts working without Sstc extension.
  */
 
 #include "hal/hal_timer.h"
 #include "hal/hal_uart.h"
 #include "drivers/vterm.h"
-
-#define TIMER_FREQ 10000000UL  // 10 MHz
+#include "arch/clint.h"
 
 static volatile unsigned long ticks = 0;
 static unsigned long timer_interval_us = 0;
 
-static inline unsigned long read_time(void) {
-    unsigned long time;
-    asm volatile("rdtime %0" : "=r"(time));
-    return time;
-}
-
-static inline void write_stimecmp(unsigned long value) {
-    asm volatile("csrw 0x14D, %0" :: "r"(value));
-}
-
 void hal_timer_init(unsigned long interval_us) {
     timer_interval_us = interval_us;
-    unsigned long interval_ticks = (TIMER_FREQ * interval_us) / 1000000;
-    unsigned long next_time = read_time() + interval_ticks;
+    unsigned long interval_ticks = (CLINT_TIMER_FREQ * interval_us) / 1000000;
     
-    // Set first timer deadline
-    write_stimecmp(next_time);
-    
-    // Enable timer interrupts in sie
-    unsigned long sie;
-    asm volatile("csrr %0, sie" : "=r"(sie));
-    sie |= (1 << 5);  // STIE bit
-    asm volatile("csrw sie, %0" :: "r"(sie));
+    // Initialize CLINT and set first timer deadline
+    clint_init();
+    clint_add_timer(interval_ticks);
+    clint_enable_timer_interrupt();
 }
 
 unsigned long hal_timer_get_ticks(void) {
@@ -44,9 +28,8 @@ unsigned long hal_timer_get_ticks(void) {
 }
 
 void hal_timer_set_next(unsigned long interval_us) {
-    unsigned long interval_ticks = (TIMER_FREQ * interval_us) / 1000000;
-    unsigned long next_time = read_time() + interval_ticks;
-    write_stimecmp(next_time);
+    unsigned long interval_ticks = (CLINT_TIMER_FREQ * interval_us) / 1000000;
+    clint_add_timer(interval_ticks);
 }
 
 void hal_timer_handle_interrupt(void) {
