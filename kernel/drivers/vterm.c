@@ -14,6 +14,7 @@
 #include <kernel/kstring.h>
 #include <kernel/signal.h>
 #include <kernel/process.h>
+#include <kernel/constants.h>
 #include <hal/hal_uart.h>
 #include <stddef.h>
 
@@ -436,10 +437,10 @@ void vterm_putc(char c)
         return;
         
     case '\t':
-        /* Tab to next 8-column boundary */
+        /* Tab to next VTERM_TAB_WIDTH-column boundary */
         do {
             vterm_putc(' ');
-        } while (term->cursor_col % 8 != 0 && term->cursor_col < term->cols);
+        } while (term->cursor_col % VTERM_TAB_WIDTH != 0 && term->cursor_col < term->cols);
         return;
         
     case '\0':
@@ -853,10 +854,10 @@ static void vterm_putc_internal(vterm_t *term, int index, char c)
         return;
         
     case '\t':
-        /* Tab to next 8-column boundary */
+        /* Tab to next VTERM_TAB_WIDTH-column boundary */
         do {
             vterm_putc_internal(term, index, ' ');
-        } while (term->cursor_col % 8 != 0 && term->cursor_col < term->cols);
+        } while (term->cursor_col % VTERM_TAB_WIDTH != 0 && term->cursor_col < term->cols);
         return;
         
     case '\0':

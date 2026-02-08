@@ -7,6 +7,7 @@
 #include "../include/mm/kmalloc.h"
 #include "../include/hal/hal_uart.h"
 #include "../include/kernel/errno.h"
+#include "../include/kernel/constants.h"
 #include <stddef.h>
 
 /**
@@ -15,11 +16,11 @@
 static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t block_size) {
     (void)device;
     
-    uint32_t sector = (block_num * block_size) / 512;
-    uint32_t num_sectors = block_size / 512;
+    uint32_t sector = (block_num * block_size) / SECTOR_SIZE;
+    uint32_t num_sectors = block_size / SECTOR_SIZE;
     
     for (uint32_t i = 0; i < num_sectors; i++) {
-        int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + ((size_t)i * 512), 1);
+        int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + ((size_t)i * SECTOR_SIZE), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;
@@ -36,11 +37,11 @@ static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t b
 static int write_block(void *device, uint32_t block_num, const void *buffer, uint32_t block_size) {
     (void)device;
     
-    uint32_t sector = (block_num * block_size) / 512;
-    uint32_t num_sectors = block_size / 512;
+    uint32_t sector = (block_num * block_size) / SECTOR_SIZE;
+    uint32_t num_sectors = block_size / SECTOR_SIZE;
     
     for (uint32_t i = 0; i < num_sectors; i++) {
-        int ret = virtio_blk_write(sector + i, (const uint8_t *)buffer + ((size_t)i * 512), 1);
+        int ret = virtio_blk_write(sector + i, (const uint8_t *)buffer + ((size_t)i * SECTOR_SIZE), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;
@@ -85,8 +86,8 @@ uint32_t ext2_alloc_block(ext2_fs_t *fs, uint32_t group) {
     /* Find first free block */
     uint32_t blocks_per_group = fs->superblock->s_blocks_per_group;
     for (uint32_t i = 0; i < blocks_per_group; i++) {
-        uint32_t byte = i / 8;
-        uint32_t bit = i % 8;
+        uint32_t byte = i / BITS_PER_BYTE;
+        uint32_t bit = i % BITS_PER_BYTE;
         
         if (!(bitmap[byte] & (1 << bit))) {
             /* Found free block */
@@ -148,8 +149,8 @@ int ext2_free_block(ext2_fs_t *fs, uint32_t block_num) {
     }
     
     /* Clear the bit */
-    uint32_t byte = offset / 8;
-    uint32_t bit = offset % 8;
+    uint32_t byte = offset / BITS_PER_BYTE;
+    uint32_t bit = offset % BITS_PER_BYTE;
     bitmap[byte] &= ~(1 << bit);
     
     /* Write bitmap back */
@@ -204,8 +205,8 @@ uint32_t ext2_alloc_inode(ext2_fs_t *fs, uint32_t group) {
     /* Find first free inode */
     uint32_t inodes_per_group = fs->superblock->s_inodes_per_group;
     for (uint32_t i = 0; i < inodes_per_group; i++) {
-        uint32_t byte = i / 8;
-        uint32_t bit = i % 8;
+        uint32_t byte = i / BITS_PER_BYTE;
+        uint32_t bit = i % BITS_PER_BYTE;
         
         if (!(bitmap[byte] & (1 << bit))) {
             /* Found free inode */
@@ -270,8 +271,8 @@ int ext2_free_inode(ext2_fs_t *fs, uint32_t inode_num) {
     }
     
     /* Clear the bit */
-    uint32_t byte = offset / 8;
-    uint32_t bit = offset % 8;
+    uint32_t byte = offset / BITS_PER_BYTE;
+    uint32_t bit = offset % BITS_PER_BYTE;
     bitmap[byte] &= ~(1 << bit);
     
     /* Write bitmap back */

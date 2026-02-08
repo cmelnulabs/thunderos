@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "kernel/kstring.h"
 #include "kernel/errno.h"
+#include "kernel/constants.h"
 #include "kernel/elf_loader.h"
 #include "trap.h"
 #include "fs/vfs.h"
@@ -246,7 +247,7 @@ int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap
      * them inaccessible. Copy now while they're still valid. */
     
     /* Copy path */
-    char path_buf[256];
+    char path_buf[ELF_PATH_BUFFER_SIZE];
     size_t path_len = 0;
     while (path[path_len] && path_len < sizeof(path_buf) - 1) {
         path_buf[path_len] = path[path_len];
@@ -418,8 +419,8 @@ int elf_exec_replace(const char *path, const char *argv[], int argc, struct trap
     while (vma) {
         vm_area_t *next = vma->next;
         
-        /* Check if this is the user stack (typically at high addresses like 0x3FFF8000) */
-        int is_stack = (vma->start >= 0x3FFF0000 && vma->start < 0x40000000);
+        /* Check if this is the user stack (typically at high addresses) */
+        int is_stack = (vma->start >= ELF_USER_STACK_BASE && vma->start < ELF_USER_STACK_TOP);
         
         if (!is_stack) {
             /* Free physical pages for code/data VMAs */

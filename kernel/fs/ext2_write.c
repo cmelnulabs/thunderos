@@ -7,6 +7,7 @@
 #include "../include/mm/kmalloc.h"
 #include "../include/hal/hal_uart.h"
 #include "../include/kernel/errno.h"
+#include "../include/kernel/constants.h"
 #include <stddef.h>
 
 /**
@@ -15,11 +16,11 @@
 static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t block_size) {
     (void)device;
     
-    uint32_t sector = (block_num * block_size) / 512;
-    uint32_t num_sectors = block_size / 512;
+    uint32_t sector = (block_num * block_size) / SECTOR_SIZE;
+    uint32_t num_sectors = block_size / SECTOR_SIZE;
     
     for (uint32_t i = 0; i < num_sectors; i++) {
-        int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + ((size_t)i * 512), 1);
+        int ret = virtio_blk_read(sector + i, (uint8_t *)buffer + ((size_t)i * SECTOR_SIZE), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;
@@ -73,13 +74,15 @@ static uint32_t get_or_alloc_block(ext2_fs_t *fs, ext2_inode_t *inode,
             }
             /* Zero the new block */
             uint8_t *zero_buf = (uint8_t *)kmalloc(fs->block_size);
-            if (zero_buf) {
-                for (uint32_t i = 0; i < fs->block_size; i++) {
-                    zero_buf[i] = 0;
-                }
-                write_block(fs->device, inode->i_block[file_block], zero_buf, fs->block_size);
-                kfree(zero_buf);
+            if (!zero_buf) {
+                set_errno(THUNDEROS_ENOMEM);
+                return 0;
             }
+            for (uint32_t i = 0; i < fs->block_size; i++) {
+                zero_buf[i] = 0;
+            }
+            write_block(fs->device, inode->i_block[file_block], zero_buf, fs->block_size);
+            kfree(zero_buf);
         }
         return inode->i_block[file_block];
     }
@@ -99,13 +102,15 @@ static uint32_t get_or_alloc_block(ext2_fs_t *fs, ext2_inode_t *inode,
             }
             /* Zero the indirect block */
             uint8_t *zero_buf = (uint8_t *)kmalloc(fs->block_size);
-            if (zero_buf) {
-                for (uint32_t i = 0; i < fs->block_size; i++) {
-                    zero_buf[i] = 0;
-                }
-                write_block(fs->device, inode->i_block[EXT2_IND_BLOCK], zero_buf, fs->block_size);
-                kfree(zero_buf);
+            if (!zero_buf) {
+                set_errno(THUNDEROS_ENOMEM);
+                return 0;
             }
+            for (uint32_t i = 0; i < fs->block_size; i++) {
+                zero_buf[i] = 0;
+            }
+            write_block(fs->device, inode->i_block[EXT2_IND_BLOCK], zero_buf, fs->block_size);
+            kfree(zero_buf);
         }
         
         /* Read indirect block */
@@ -132,13 +137,16 @@ static uint32_t get_or_alloc_block(ext2_fs_t *fs, ext2_inode_t *inode,
                        indirect_buffer, fs->block_size);
             /* Zero the new data block */
             uint8_t *zero_buf = (uint8_t *)kmalloc(fs->block_size);
-            if (zero_buf) {
-                for (uint32_t i = 0; i < fs->block_size; i++) {
-                    zero_buf[i] = 0;
-                }
-                write_block(fs->device, indirect_buffer[file_block], zero_buf, fs->block_size);
-                kfree(zero_buf);
+            if (!zero_buf) {
+                kfree(indirect_buffer);
+                set_errno(THUNDEROS_ENOMEM);
+                return 0;
             }
+            for (uint32_t i = 0; i < fs->block_size; i++) {
+                zero_buf[i] = 0;
+            }
+            write_block(fs->device, indirect_buffer[file_block], zero_buf, fs->block_size);
+            kfree(zero_buf);
         }
         
         block_num = indirect_buffer[file_block];
@@ -161,13 +169,15 @@ static uint32_t get_or_alloc_block(ext2_fs_t *fs, ext2_inode_t *inode,
             }
             /* Zero the double-indirect block */
             uint8_t *zero_buf = (uint8_t *)kmalloc(fs->block_size);
-            if (zero_buf) {
-                for (uint32_t i = 0; i < fs->block_size; i++) {
-                    zero_buf[i] = 0;
-                }
-                write_block(fs->device, inode->i_block[EXT2_DIND_BLOCK], zero_buf, fs->block_size);
-                kfree(zero_buf);
+            if (!zero_buf) {
+                set_errno(THUNDEROS_ENOMEM);
+                return 0;
             }
+            for (uint32_t i = 0; i < fs->block_size; i++) {
+                zero_buf[i] = 0;
+            }
+            write_block(fs->device, inode->i_block[EXT2_DIND_BLOCK], zero_buf, fs->block_size);
+            kfree(zero_buf);
         }
         
         /* Read double-indirect block */
@@ -198,13 +208,16 @@ static uint32_t get_or_alloc_block(ext2_fs_t *fs, ext2_inode_t *inode,
                        dindirect_buffer, fs->block_size);
             /* Zero the new indirect block */
             uint8_t *zero_buf = (uint8_t *)kmalloc(fs->block_size);
-            if (zero_buf) {
-                for (uint32_t i = 0; i < fs->block_size; i++) {
-                    zero_buf[i] = 0;
-                }
-                write_block(fs->device, indirect_block_num, zero_buf, fs->block_size);
-                kfree(zero_buf);
+            if (!zero_buf) {
+                kfree(dindirect_buffer);
+                set_errno(THUNDEROS_ENOMEM);
+                return 0;
             }
+            for (uint32_t i = 0; i < fs->block_size; i++) {
+                zero_buf[i] = 0;
+            }
+            write_block(fs->device, indirect_block_num, zero_buf, fs->block_size);
+            kfree(zero_buf);
         }
         
         kfree(dindirect_buffer);
@@ -237,13 +250,16 @@ static uint32_t get_or_alloc_block(ext2_fs_t *fs, ext2_inode_t *inode,
             write_block(fs->device, indirect_block_num, indirect_buffer, fs->block_size);
             /* Zero the new data block */
             uint8_t *zero_buf = (uint8_t *)kmalloc(fs->block_size);
-            if (zero_buf) {
-                for (uint32_t i = 0; i < fs->block_size; i++) {
-                    zero_buf[i] = 0;
-                }
-                write_block(fs->device, indirect_buffer[data_index], zero_buf, fs->block_size);
-                kfree(zero_buf);
+            if (!zero_buf) {
+                kfree(indirect_buffer);
+                set_errno(THUNDEROS_ENOMEM);
+                return 0;
             }
+            for (uint32_t i = 0; i < fs->block_size; i++) {
+                zero_buf[i] = 0;
+            }
+            write_block(fs->device, indirect_buffer[data_index], zero_buf, fs->block_size);
+            kfree(zero_buf);
         }
         
         block_num = indirect_buffer[data_index];
@@ -330,10 +346,10 @@ int ext2_write_file(ext2_fs_t *fs, ext2_inode_t *inode, uint32_t offset,
         inode->i_size = offset + bytes_written;
     }
     
-    /* Update i_blocks (number of 512-byte blocks) */
+    /* Update i_blocks (number of SECTOR_SIZE-byte blocks) */
     /* For simplicity, recalculate based on allocated blocks */
     uint32_t total_blocks = (inode->i_size + fs->block_size - 1) / fs->block_size;
-    inode->i_blocks = (total_blocks * fs->block_size) / 512;
+    inode->i_blocks = (total_blocks * fs->block_size) / SECTOR_SIZE;
     
     kfree(block_buffer);
     return bytes_written;
@@ -380,7 +396,7 @@ static int add_dir_entry(ext2_fs_t *fs, ext2_inode_t *dir_inode, uint32_t dir_in
     
     /* Allocate buffer for directory data */
     uint32_t dir_size = dir_inode->i_size;
-    uint8_t *dir_buffer = (uint8_t *)kmalloc(dir_size + required_len + 512);  /* Extra space */
+    uint8_t *dir_buffer = (uint8_t *)kmalloc(dir_size + required_len + SECTOR_SIZE);  /* Extra space */
     if (!dir_buffer) {
         hal_uart_puts("ext2: Failed to allocate directory buffer\n");
         RETURN_ERRNO(THUNDEROS_ENOMEM);
@@ -521,7 +537,7 @@ uint32_t ext2_create_file(ext2_fs_t *fs, uint32_t dir_inode_num, const char *nam
         ((uint8_t *)&new_inode)[i] = 0;
     }
     
-    new_inode.i_mode = EXT2_S_IFREG | (mode & 0xFFF);
+    new_inode.i_mode = EXT2_S_IFREG | (mode & EXT2_MODE_MASK);
     new_inode.i_uid = 0;
     new_inode.i_size = 0;
     new_inode.i_atime = 0;
@@ -600,7 +616,7 @@ uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name
         ((uint8_t *)&new_inode)[i] = 0;
     }
     
-    new_inode.i_mode = EXT2_S_IFDIR | (mode & 0xFFF);
+    new_inode.i_mode = EXT2_S_IFDIR | (mode & EXT2_MODE_MASK);
     new_inode.i_uid = 0;
     new_inode.i_size = fs->block_size;  /* Initially one block */
     new_inode.i_atime = 0;
@@ -609,7 +625,7 @@ uint32_t ext2_create_dir(ext2_fs_t *fs, uint32_t dir_inode_num, const char *name
     new_inode.i_dtime = 0;
     new_inode.i_gid = 0;
     new_inode.i_links_count = 2;  /* . and parent's link */
-    new_inode.i_blocks = (fs->block_size / 512);
+    new_inode.i_blocks = (fs->block_size / SECTOR_SIZE);
     
     /* Allocate first block for directory */
     uint32_t dir_block = ext2_alloc_block(fs, 0);

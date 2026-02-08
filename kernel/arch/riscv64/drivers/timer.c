@@ -8,8 +8,9 @@
 #include "hal/hal_timer.h"
 #include "hal/hal_uart.h"
 #include "drivers/vterm.h"
+#include "kernel/constants.h"
 
-#define TIMER_FREQ 10000000UL  // 10 MHz
+/* Timer frequency TIMER_FREQ_HZ and MICROSECONDS_PER_SECOND from constants.h */
 
 static volatile unsigned long ticks = 0;
 static unsigned long timer_interval_us = 0;
@@ -26,7 +27,7 @@ static inline void write_stimecmp(unsigned long value) {
 
 void hal_timer_init(unsigned long interval_us) {
     timer_interval_us = interval_us;
-    unsigned long interval_ticks = (TIMER_FREQ * interval_us) / 1000000;
+    unsigned long interval_ticks = (TIMER_FREQ_HZ * interval_us) / MICROSECONDS_PER_SECOND;
     unsigned long next_time = read_time() + interval_ticks;
     
     // Set first timer deadline
@@ -35,7 +36,7 @@ void hal_timer_init(unsigned long interval_us) {
     // Enable timer interrupts in sie
     unsigned long sie;
     asm volatile("csrr %0, sie" : "=r"(sie));
-    sie |= (1 << 5);  // STIE bit
+    sie |= SIE_STIE;  // Supervisor Timer Interrupt Enable
     asm volatile("csrw sie, %0" :: "r"(sie));
 }
 
@@ -44,7 +45,7 @@ unsigned long hal_timer_get_ticks(void) {
 }
 
 void hal_timer_set_next(unsigned long interval_us) {
-    unsigned long interval_ticks = (TIMER_FREQ * interval_us) / 1000000;
+    unsigned long interval_ticks = (TIMER_FREQ_HZ * interval_us) / MICROSECONDS_PER_SECOND;
     unsigned long next_time = read_time() + interval_ticks;
     write_stimecmp(next_time);
 }

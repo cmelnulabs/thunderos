@@ -8,6 +8,8 @@
 #include "kernel/panic.h"
 #include "kernel/signal.h"
 #include "kernel/errno.h"
+#include "kernel/constants.h"
+#include "drivers/vterm.h"
 #include "mm/pmm.h"
 #include "mm/kmalloc.h"
 #include "mm/paging.h"
@@ -643,7 +645,7 @@ pid_t process_fork(struct trap_frame *current_tf) {
     
     /* Copy parent's current working directory with proper null termination */
     int cwd_index = 0;
-    for (cwd_index = 0; cwd_index < 255 && parent->cwd[cwd_index]; cwd_index++) {
+    for (cwd_index = 0; cwd_index < MAX_CWD_LEN && parent->cwd[cwd_index]; cwd_index++) {
         child->cwd[cwd_index] = parent->cwd[cwd_index];
     }
     child->cwd[cwd_index] = '\0';
@@ -1461,7 +1463,7 @@ int process_set_tty(struct process *proc, int tty_index) {
     }
     
     /* Allow -1 (no controlling terminal) or 0-5 (valid VT index) */
-    if (tty_index < -1 || tty_index >= 6) {
+    if (tty_index < -1 || tty_index >= VTERM_MAX_TERMINALS) {
         return -1;
     }
     

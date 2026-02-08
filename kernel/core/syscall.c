@@ -9,6 +9,7 @@
 #include "kernel/mutex.h"
 #include "kernel/condvar.h"
 #include "kernel/rwlock.h"
+#include "kernel/constants.h"
 #include "hal/hal_timer.h"
 #include "mm/paging.h"
 #include "kernel/process.h"
@@ -24,20 +25,6 @@
 // External SBI functions for system shutdown/reboot
 extern void sbi_shutdown(void);
 extern void sbi_reboot(void);
-
-// Memory protection flags for mmap
-#define PROT_READ   0x1
-#define PROT_WRITE  0x2
-#define PROT_EXEC   0x4
-
-// Mapping flags for mmap
-#define MAP_PRIVATE     0x02
-#define MAP_ANONYMOUS   0x20
-
-// Constants
-#define KERNEL_SPACE_START 0x8000000000000000UL
-#define STDIN_FD  0
-#define STDOUT_FD 1
 #define STDERR_FD 2
 #define SYSCALL_ERROR ((uint64_t)-1)
 #define SYSCALL_SUCCESS 0
@@ -277,11 +264,11 @@ uint64_t sys_sleep(uint64_t milliseconds) {
     extern uint64_t hal_timer_get_ticks(void);
     uint64_t start_ticks = hal_timer_get_ticks();
     
-    /* Each tick is 100ms = 100 milliseconds
-     * So to sleep N ms, we need N/100 ticks
-     * But to avoid losing precision, round up: (N + 99) / 100
+    /* Each tick is TIMER_TICK_MS milliseconds
+     * So to sleep N ms, we need N/TIMER_TICK_MS ticks
+     * But to avoid losing precision, round up: (N + TIMER_TICK_MS-1) / TIMER_TICK_MS
      */
-    uint64_t ticks_to_wait = (milliseconds + 99) / 100;
+    uint64_t ticks_to_wait = (milliseconds + TIMER_TICK_MS - 1) / TIMER_TICK_MS;
     if (ticks_to_wait == 0) ticks_to_wait = 1;
     
     uint64_t target_ticks = start_ticks + ticks_to_wait;
@@ -389,7 +376,7 @@ uint64_t sys_gettime(void) {
     uint64_t ticks = hal_timer_get_ticks();
     
     // Convert ticks to milliseconds (each tick = 100ms)
-    return ticks * 100;
+    return ticks * TIMER_TICK_MS;
 }
 
 /**
@@ -1041,7 +1028,7 @@ struct thunderos_dirent {
     uint32_t d_ino;       /* Inode number */
     uint16_t d_reclen;    /* Record length */
     uint8_t  d_type;      /* File type */
-    char     d_name[256]; /* File name (null-terminated) */
+    char     d_name[MAX_NAME_LEN]; /* File name (null-terminated) */
 };
 
 /**
@@ -1102,7 +1089,7 @@ uint64_t sys_getdents(int fd, void *dirp, size_t count) {
     size_t bytes_written = 0;
     uint32_t index = file->pos;
     
-    char name[256];
+    char name[MAX_NAME_LEN];
     uint32_t inode_num;
     
     while (bytes_written + sizeof(struct thunderos_dirent) <= count) {
@@ -1120,7 +1107,7 @@ uint64_t sys_getdents(int fd, void *dirp, size_t count) {
         
         // Copy name
         uint32_t name_len = 0;
-        while (name[name_len] && name_len < 255) {
+        while (name[name_len] && name_len < (MAX_NAME_LEN - 1)) {
             entry->d_name[name_len] = name[name_len];
             name_len++;
         }
@@ -1323,7 +1310,7 @@ uint64_t sys_settty(int tty) {
     }
     
     /* Validate terminal index */
-    if (tty < -1 || tty >= 6) {  /* VTERM_MAX_TERMINALS = 6 */
+    if (tty < -1 || tty >= VTERM_MAX_TERMINALS) {
         return SYSCALL_ERROR;
     }
     
@@ -2157,6 +2144,7 @@ uint64_t syscall_handler(uint64_t syscall_number,
             
         default:
             hal_uart_puts("[SYSCALL] Invalid syscall number\n");
+            set_errno(THUNDEROS_ENOSYS);
             return_value = SYSCALL_ERROR;
             break;
     }

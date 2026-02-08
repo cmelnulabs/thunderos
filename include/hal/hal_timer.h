@@ -17,7 +17,9 @@
 #include <stdint.h>
 
 /* Timer frequency (QEMU virt machine) */
+#ifndef TIMER_FREQ_HZ
 #define TIMER_FREQ_HZ 10000000  /* 10 MHz */
+#endif
 #define TICKS_PER_MS  10000     /* Ticks per millisecond at 10MHz */
 
 /**

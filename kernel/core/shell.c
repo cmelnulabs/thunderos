@@ -6,6 +6,7 @@
 #include <kernel/shell.h>
 #include <kernel/process.h>
 #include <kernel/syscall.h>
+#include <kernel/constants.h>
 #include <hal/hal_uart.h>
 #include <kernel/kstring.h>
 #include <kernel/config.h>
@@ -13,10 +14,7 @@
 #include <kernel/elf_loader.h>
 #include <drivers/vterm.h>
 
-#define MAX_CMD_LEN 256
-#define MAX_ARGS 16
-
-static char input_buffer[MAX_CMD_LEN];
+static char input_buffer[SHELL_CMD_MAX_LEN];
 static int input_pos = 0;
 
 /**
@@ -119,7 +117,7 @@ static void shell_ls(int argument_count, char **argument_vector) {
     }
     
     /* List directory entries */
-    char entry_name[256];
+    char entry_name[MAX_NAME_LEN];
     uint32_t entry_inode = 0;
     uint32_t entry_index = 0;
     
@@ -154,7 +152,7 @@ static void shell_cat(int argument_count, char **argument_vector) {
     }
     
     /* Read and display contents */
-    char read_buffer[256];
+    char read_buffer[SHELL_READ_BUFFER_SIZE];
     int bytes_read = 0;
     
     while ((bytes_read = vfs_read(file_descriptor, read_buffer, sizeof(read_buffer) - 1)) > 0) {
@@ -250,11 +248,11 @@ static int shell_exec_program(const char *program_path, int argument_count, char
  * @param command_line Command line to execute
  */
 static void shell_execute(char *command_line) {
-    char *argument_vector[MAX_ARGS];
+    char *argument_vector[SHELL_MAX_ARGS];
     int argument_count = 0;
     
     /* Parse command line */
-    argument_count = shell_parse_args(command_line, argument_vector, MAX_ARGS);
+    argument_count = shell_parse_args(command_line, argument_vector, SHELL_MAX_ARGS);
     
     if (argument_count == 0) {
         return;  /* Empty command */
@@ -281,7 +279,7 @@ static void shell_execute(char *command_line) {
     }
     else {
         /* Try to execute as external program from /bin directory */
-        char program_path[256];
+        char program_path[SHELL_PATH_BUFFER_SIZE];
         program_path[0] = '\0';
         shell_strcat(program_path, "/bin/");
         shell_strcat(program_path, argument_vector[0]);
@@ -323,7 +321,7 @@ static void shell_process_char(char input_char) {
     }
     else if (input_char >= ASCII_PRINTABLE_MIN && input_char < ASCII_PRINTABLE_MAX) {
         /* Printable character - echo and store */
-        if (input_pos < MAX_CMD_LEN - 1) {
+        if (input_pos < SHELL_CMD_MAX_LEN - 1) {
             input_buffer[input_pos++] = input_char;
             hal_uart_putc(input_char);
         }

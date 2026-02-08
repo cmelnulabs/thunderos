@@ -7,6 +7,7 @@
 #include "../include/mm/kmalloc.h"
 #include "../include/hal/hal_uart.h"
 #include "../include/kernel/errno.h"
+#include "../include/kernel/constants.h"
 #include <stddef.h>
 
 /**
@@ -15,14 +16,14 @@
 static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t block_size) {
     (void)device;  /* Device parameter unused - we use global device */
     
-    /* Calculate sector number (sectors are 512 bytes) */
-    uint32_t sector = (block_num * block_size) / 512;
-    uint32_t num_sectors = block_size / 512;
+    /* Calculate sector number (sectors are SECTOR_SIZE bytes) */
+    uint32_t sector = (block_num * block_size) / SECTOR_SIZE;
+    uint32_t num_sectors = block_size / SECTOR_SIZE;
     
     /* Read sectors */
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_read(sector + i, 
-                                  (uint8_t *)buffer + ((size_t)i * 512), 1);
+                                  (uint8_t *)buffer + ((size_t)i * SECTOR_SIZE), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;

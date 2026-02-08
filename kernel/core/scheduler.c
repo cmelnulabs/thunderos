@@ -7,6 +7,7 @@
 #include "kernel/scheduler.h"
 #include "kernel/process.h"
 #include "kernel/config.h"
+#include "kernel/constants.h"
 #include "kernel/panic.h"
 #include "hal/hal_uart.h"
 #include "arch/interrupt.h"
@@ -23,9 +24,9 @@ static volatile int sched_lock = 0;
 
 // Time slice for round-robin scheduling
 // Calculated based on TIMER_INTERVAL_US from config.h
-// Desired time slice: 1 second = 1,000,000 microseconds
-// TIME_SLICE = 1,000,000 / TIMER_INTERVAL_US ticks
-#define TIME_SLICE (1000000 / TIMER_INTERVAL_US)
+// Desired time slice: 1 second = MICROSECONDS_PER_SECOND microseconds
+// TIME_SLICE = MICROSECONDS_PER_SECOND / TIMER_INTERVAL_US ticks
+#define TIME_SLICE (MICROSECONDS_PER_SECOND / TIMER_INTERVAL_US)
 static uint64_t current_time_slice = 0;
 
 // Simple spinlock functions
@@ -241,7 +242,7 @@ void schedule(void) {
             // Local variable 'old_state' now points to the new process's stack frame
             // which contains garbage or the wrong value.
             // We must enable interrupts and return WITHOUT using old_state.
-            interrupt_restore(1);  // Always enable interrupts after context switch
+            interrupt_restore(INTERRUPTS_ENABLED);  // Always enable interrupts after context switch
             return;
         }
     }

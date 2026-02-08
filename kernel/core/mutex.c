@@ -10,6 +10,7 @@
 #include "kernel/process.h"
 #include "kernel/scheduler.h"
 #include "kernel/errno.h"
+#include "kernel/constants.h"
 #include "arch/interrupt.h"
 
 /* Forward declaration to avoid circular includes */
@@ -79,16 +80,14 @@ void mutex_lock(mutex_t *mutex) {
  */
 int mutex_trylock(mutex_t *mutex) {
     if (!mutex) {
-        set_errno(THUNDEROS_EINVAL);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     uint64_t flags = interrupt_save_disable();
     
     if (mutex->locked == MUTEX_LOCKED) {
         interrupt_restore(flags);
-        set_errno(THUNDEROS_EBUSY);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EBUSY);
     }
     
     /* Acquire the lock */
@@ -199,16 +198,14 @@ void semaphore_wait(semaphore_t *sem) {
  */
 int semaphore_trywait(semaphore_t *sem) {
     if (!sem) {
-        set_errno(THUNDEROS_EINVAL);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     uint64_t flags = interrupt_save_disable();
     
     if (sem->count <= 0) {
         interrupt_restore(flags);
-        set_errno(THUNDEROS_EAGAIN);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EAGAIN);
     }
     
     sem->count--;

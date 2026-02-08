@@ -8,6 +8,7 @@
 #include "hal/hal_uart.h"
 #include "kernel/kstring.h"
 #include "kernel/errno.h"
+#include "kernel/constants.h"
 #include "arch/sbi.h"
 
 // Kernel root page table (allocated statically for bootstrap)
@@ -236,8 +237,8 @@ void paging_init(uintptr_t kernel_start, uintptr_t kernel_end) {
     // QEMU virt machine: 128MB from 0x80000000 to 0x88000000
     hal_uart_puts("Identity mapping all RAM (128MB)\n");
     
-    uintptr_t ram_start = 0x80000000;
-    uintptr_t ram_end = 0x88000000;
+    uintptr_t ram_start = QEMU_RAM_START;
+    uintptr_t ram_end = QEMU_RAM_END;
     
     addr = ram_start;
     while (addr < ram_end) {
@@ -256,25 +257,25 @@ void paging_init(uintptr_t kernel_start, uintptr_t kernel_end) {
         addr += PAGE_SIZE;
     }
     
-    // Map UART MMIO region (0x10000000)
+    // Map UART MMIO region
     hal_uart_puts("Mapping UART MMIO\n");
-    if (map_page(&kernel_page_table, 0x10000000, 0x10000000, PTE_KERNEL_DATA) != 0) {
+    if (map_page(&kernel_page_table, QEMU_UART0_BASE, QEMU_UART0_BASE, PTE_KERNEL_DATA) != 0) {
         hal_uart_puts("Failed to map UART\n");
         return;
     }
     
-    // Map VirtIO MMIO regions (0x10001000 - 0x10008000, 8 devices)
+    // Map VirtIO MMIO regions
     hal_uart_puts("Mapping VirtIO MMIO\n");
-    for (uintptr_t addr = 0x10001000; addr <= 0x10008000; addr += 0x1000) {
+    for (uintptr_t addr = QEMU_VIRTIO_BASE; addr <= QEMU_VIRTIO_END; addr += QEMU_VIRTIO_STRIDE) {
         if (map_page(&kernel_page_table, addr, addr, PTE_KERNEL_DATA) != 0) {
             hal_uart_puts("Failed to map VirtIO\n");
             return;
         }
     }
     
-    // Map CLINT MMIO region (0x2000000)
+    // Map CLINT MMIO region
     hal_uart_puts("Mapping CLINT MMIO\n");
-    if (map_page(&kernel_page_table, 0x2000000, 0x2000000, PTE_KERNEL_DATA) != 0) {
+    if (map_page(&kernel_page_table, QEMU_CLINT_BASE, QEMU_CLINT_BASE, PTE_KERNEL_DATA) != 0) {
         hal_uart_puts("Failed to map CLINT\n");
         return;
     }
@@ -406,15 +407,14 @@ page_table_t *create_user_page_table(void) {
     // Map UART MMIO region so supervisor mode can write to console
     // After switching to user page table, kernel trap handlers still need
     // to access UART for debug output and logging
-    if (map_page(user_pt, 0x10000000, 0x10000000, PTE_KERNEL_DATA) != 0) {
+    if (map_page(user_pt, QEMU_UART0_BASE, QEMU_UART0_BASE, PTE_KERNEL_DATA) != 0) {
         kfree(user_pt);
         return NULL;
     }
     
     // Map VirtIO MMIO regions for block device and GPU access
     // Kernel needs this during syscalls that access filesystem and graphics
-    // Map all 8 VirtIO slots (0x10001000 - 0x10008000)
-    for (uintptr_t addr = 0x10001000; addr <= 0x10008000; addr += 0x1000) {
+    for (uintptr_t addr = QEMU_VIRTIO_BASE; addr <= QEMU_VIRTIO_END; addr += QEMU_VIRTIO_STRIDE) {
         if (map_page(user_pt, addr, addr, PTE_KERNEL_DATA) != 0) {
             kfree(user_pt);
             return NULL;
@@ -423,7 +423,7 @@ page_table_t *create_user_page_table(void) {
     
     // Map CLINT MMIO region for timer and interrupt handling
     // Supervisor mode needs this for IPI and scheduling timer management
-    if (map_page(user_pt, 0x2000000, 0x2000000, PTE_KERNEL_DATA) != 0) {
+    if (map_page(user_pt, QEMU_CLINT_BASE, QEMU_CLINT_BASE, PTE_KERNEL_DATA) != 0) {
         kfree(user_pt);
         return NULL;
     }

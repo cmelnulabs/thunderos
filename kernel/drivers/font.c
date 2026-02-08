@@ -7,6 +7,7 @@
 
 #include <drivers/font.h>
 #include <drivers/framebuffer.h>
+#include <kernel/constants.h>
 #include <stddef.h>
 
 /*
@@ -370,7 +371,7 @@ void font_draw_string(uint32_t x, uint32_t y, const char *str, uint32_t fg, uint
             cx = x;
             y += FONT_HEIGHT;
         } else if (*str == '\t') {
-            cx += FONT_WIDTH * 4;  /* 4-space tabs */
+            cx += FONT_WIDTH * FONT_TAB_WIDTH;  /* FONT_TAB_WIDTH-space tabs */
         } else {
             font_draw_char(cx, y, *str, fg, bg);
             cx += FONT_WIDTH;
