@@ -72,8 +72,14 @@
 #define SYS_RWLOCK_WRITE_LOCK  59  // Acquire write lock (blocking)
 #define SYS_RWLOCK_WRITE_UNLOCK 60 // Release write lock
 #define SYS_RWLOCK_DESTROY     61  // Destroy a reader-writer lock
+#define SYS_SOCKET        100  // Create a socket
+#define SYS_BIND          101  // Bind socket to address
+#define SYS_SENDTO        102  // Send data on socket
+#define SYS_RECVFROM      103  // Receive data from socket
+#define SYS_POWEROFF      200  // Power off the system
+#define SYS_REBOOT        201  // Reboot the system
 
-#define SYSCALL_COUNT   62
+#define SYSCALL_COUNT   202
 
 // RISC-V Syscall ABI:
 // - Syscall number in a7 (x17)

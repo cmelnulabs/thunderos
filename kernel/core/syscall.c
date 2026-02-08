@@ -21,6 +21,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// External SBI functions for system shutdown/reboot
+extern void sbi_shutdown(void);
+extern void sbi_reboot(void);
+
 // Memory protection flags for mmap
 #define PROT_READ   0x1
 #define PROT_WRITE  0x2
@@ -2122,6 +2126,34 @@ uint64_t syscall_handler(uint64_t syscall_number,
         case SYS_EXEC:
             return_value = SYSCALL_ERROR;
             break;
+            
+        case SYS_POWEROFF: {
+            /* Power off the system */
+            hal_uart_puts("\n=====================================\n");
+            hal_uart_puts("  System Poweroff Requested\n");
+            hal_uart_puts("=====================================\n");
+            
+            clear_errno();  // Clear errno before non-returning operation
+            sbi_shutdown();
+            
+            /* Should not reach here */
+            return_value = 0;
+            break;
+        }
+        
+        case SYS_REBOOT: {
+            /* Reboot the system */
+            hal_uart_puts("\n=====================================\n");
+            hal_uart_puts("  System Reboot Requested\n");
+            hal_uart_puts("=====================================\n");
+            
+            clear_errno();  // Clear errno before non-returning operation
+            sbi_reboot();
+            
+            /* Should not reach here */
+            return_value = 0;
+            break;
+        }
             
         default:
             hal_uart_puts("[SYSCALL] Invalid syscall number\n");
