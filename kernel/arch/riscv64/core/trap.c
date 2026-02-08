@@ -9,6 +9,7 @@
 #include "kernel/process.h"
 #include "kernel/signal.h"
 #include "kernel/kstring.h"
+#include "kernel/constants.h"
 
 /* Forward declaration for external interrupt handler */
 void handle_external_interrupt(void);
@@ -32,8 +33,7 @@ static inline unsigned long read_sstatus(void) {
     return x;
 }
 
-// SPP bit in sstatus register (bit 8) indicates previous privilege level
-#define SSTATUS_SPP_BIT 8
+// SPP bit in sstatus register (SSTATUS_SPP_BIT from constants.h) indicates previous privilege level
 
 // Check if trap occurred from user mode
 static int trap_from_user_mode(void) {
@@ -87,19 +87,9 @@ static void handle_exception(struct trap_frame *tf, unsigned long cause) {
         
         uint64_t ret = syscall_handler_with_frame(tf, syscall_num, tf->a0, tf->a1, tf->a2, tf->a3, tf->a4, tf->a5);
         
-        // Special case: execve success (SYS_EXECVE==20, ret==0)
-        // On successful exec, trap frame is already configured to jump to new program
+        // Special case: execve success - trap frame already configured for new program
         // Don't modify a0 or sepc
-        if (syscall_num == 20 && ret == 0) {
-            // Exec succeeded - trap frame already set up, just return
-            return;
-        }
-        
-        // Special case: execve success (SYS_EXECVE==20, ret==0)
-        // On successful exec, trap frame is already configured to jump to new program
-        // Don't modify a0 or sepc
-        if (syscall_num == 20 && ret == 0) {
-            // Exec succeeded - trap frame already set up, just return
+        if (syscall_num == SYS_EXECVE && ret == 0) {
             return;
         }
         

@@ -5,11 +5,9 @@
 #include "kernel/signal.h"
 #include "kernel/process.h"
 #include "kernel/errno.h"
+#include "kernel/constants.h"
 #include "kernel/kstring.h"
 #include "hal/hal_uart.h"
-
-// Exit code when process terminated by signal (128 + signal number convention)
-#define SIGNAL_EXIT_BASE 128
 
 // External process functions
 extern struct process *process_current(void);
@@ -92,14 +90,12 @@ sighandler_t signal_default_action(int signum) {
  */
 int signal_send(struct process *proc, int signum) {
     if (!proc || signum <= 0 || signum >= NSIG) {
-        set_errno(THUNDEROS_EINVAL);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     // Can't send signals to UNUSED or ZOMBIE processes
     if (proc->state == PROC_UNUSED || proc->state == PROC_ZOMBIE) {
-        set_errno(THUNDEROS_ESRCH);  // No such process
-        return -1;
+        RETURN_ERRNO(THUNDEROS_ESRCH);
     }
     
     // Handle SIGCONT specially - must immediately wake stopped process
@@ -193,8 +189,8 @@ void signal_default_stop(struct process *proc) {
     proc->state = PROC_STOPPED;
     
     // Store exit status with stop signal info (for waitpid)
-    // Upper byte = signal number, lower byte = 0x7f indicates stopped
-    proc->exit_code = (SIGTSTP << 8) | 0x7f;
+    // Upper byte = signal number, lower byte = WAIT_STOPPED_INDICATOR
+    proc->exit_code = (SIGTSTP << 8) | WAIT_STOPPED_INDICATOR;
     
     // Notify parent with SIGCHLD so it can detect the stop
     if (proc->parent) {

@@ -9,6 +9,7 @@
 #include "mm/kmalloc.h"
 #include "mm/pmm.h"
 #include "kernel/panic.h"
+#include "kernel/errno.h"
 #include "hal/hal_uart.h"
 
 // Allocation header (stored at start of each allocation)
@@ -44,6 +45,7 @@ void *kmalloc(size_t size) {
     }
     
     if (page_addr == 0) {
+        set_errno(THUNDEROS_ENOMEM);
         return NULL;
     }
     
@@ -53,6 +55,8 @@ void *kmalloc(size_t size) {
     header->pages = pages_needed;
     header->magic = KMALLOC_MAGIC;
     
+    // Clear errno on success
+    clear_errno();
     // Return pointer after header
     return (void *)(page_addr + HEADER_SIZE);
 }
@@ -93,5 +97,6 @@ void *kmalloc_aligned(size_t size, size_t align) {
     }
     
     hal_uart_puts("kmalloc_aligned: Alignment > PAGE_SIZE not yet supported\n");
+    set_errno(THUNDEROS_ENOSYS);
     return NULL;
 }

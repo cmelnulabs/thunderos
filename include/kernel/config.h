@@ -7,9 +7,7 @@
 #ifndef KERNEL_CONFIG_H
 #define KERNEL_CONFIG_H
 
-/* ASCII character ranges */
-#define ASCII_PRINTABLE_MIN 32   /* Space character */
-#define ASCII_PRINTABLE_MAX 127  /* DEL character (exclusive) */
+#include "kernel/constants.h"  /* Include constants - some are shared */
 
 // Timer configuration
 // Timer interrupt interval in microseconds

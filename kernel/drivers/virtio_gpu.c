@@ -13,6 +13,7 @@
 #include <arch/barrier.h>
 #include <hal/hal_uart.h>
 #include <kernel/errno.h>
+#include <kernel/constants.h>
 #include <stddef.h>
 
 /* Helper macros for MMIO register access */
@@ -149,13 +150,13 @@ static int gpu_send_command(void *cmd, size_t cmd_size, void *resp, size_t resp_
     /* Setup command descriptor (device reads) */
     vq->desc[desc0].addr = cmd_phys;
     vq->desc[desc0].len = cmd_size;
-    vq->desc[desc0].flags = 1;  /* VIRTQ_DESC_F_NEXT */
+    vq->desc[desc0].flags = VIRTQ_DESC_F_NEXT;
     vq->desc[desc0].next = desc1;
     
     /* Setup response descriptor (device writes) */
     vq->desc[desc1].addr = resp_phys;
     vq->desc[desc1].len = resp_size;
-    vq->desc[desc1].flags = 2;  /* VIRTQ_DESC_F_WRITE */
+    vq->desc[desc1].flags = VIRTQ_DESC_F_WRITE;
     vq->desc[desc1].next = 0;
     
     /* Memory barrier */

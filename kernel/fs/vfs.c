@@ -9,14 +9,14 @@
 #include "../../include/kernel/errno.h"
 #include "../../include/kernel/pipe.h"
 #include "../../include/kernel/process.h"
+#include "../../include/kernel/constants.h"
 #include <stddef.h>
 
 /* ========================================================================
  * Constants
  * ======================================================================== */
 
-#define PATH_COMPONENT_MAX   64    /* Maximum number of path components */
-#define COMPONENT_NAME_MAX   256   /* Maximum length of a single component */
+/* Use MAX_PATH_COMPONENTS and MAX_PATH_COMPONENT_LEN from constants.h */
 
 /* ========================================================================
  * Global state
@@ -90,7 +90,7 @@ static int normalize_build_absolute(const char *path, char *working, size_t work
  */
 static int normalize_resolve_components(const char *working, char *normalized, size_t size) {
     /* Component storage - each component is a null-terminated string */
-    static char component_storage[PATH_COMPONENT_MAX][COMPONENT_NAME_MAX];
+    static char component_storage[MAX_PATH_COMPONENTS][MAX_PATH_COMPONENT_LEN];
     int component_count = 0;
     
     const char *cursor = working;
@@ -117,10 +117,10 @@ static int normalize_resolve_components(const char *working, char *normalized, s
             /* At root, silently ignore (can't go above root) */
         } else {
             /* Regular component, copy to storage */
-            if (component_count < PATH_COMPONENT_MAX) {
+            if (component_count < MAX_PATH_COMPONENTS) {
                 size_t copy_len = component_length;
-                if (copy_len >= COMPONENT_NAME_MAX) {
-                    copy_len = COMPONENT_NAME_MAX - 1;
+                if (copy_len >= MAX_PATH_COMPONENT_LEN) {
+                    copy_len = MAX_PATH_COMPONENT_LEN - 1;
                 }
                 for (size_t i = 0; i < copy_len; i++) {
                     component_storage[component_count][i] = component_start[i];
@@ -363,13 +363,13 @@ vfs_node_t *vfs_resolve_path(const char *path) {
     /* Skip leading slash and walk the path */
     const char *cursor = normalized_path + 1;
     vfs_node_t *current_node = g_root_fs->root;
-    char component_name[COMPONENT_NAME_MAX];
+    char component_name[MAX_PATH_COMPONENT_LEN];
     
     while (*cursor) {
         /* Extract path component */
         uint32_t name_index = 0;
         while (*cursor && *cursor != '/') {
-            if (name_index < COMPONENT_NAME_MAX - 1) {
+            if (name_index < MAX_PATH_COMPONENT_LEN - 1) {
                 component_name[name_index++] = *cursor;
             }
             cursor++;

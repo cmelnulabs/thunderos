@@ -8,6 +8,7 @@
 
 #include "kernel/rwlock.h"
 #include "kernel/errno.h"
+#include "kernel/constants.h"
 #include "arch/interrupt.h"
 
 /**
@@ -63,8 +64,7 @@ void rwlock_read_lock(rwlock_t *rw) {
  */
 int rwlock_read_trylock(rwlock_t *rw) {
     if (!rw) {
-        set_errno(THUNDEROS_EINVAL);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     uint64_t flags = interrupt_save_disable();
@@ -72,8 +72,7 @@ int rwlock_read_trylock(rwlock_t *rw) {
     /* Cannot acquire if writer holds or writers waiting */
     if (rw->writer || rw->writers_waiting > 0) {
         interrupt_restore(flags);
-        set_errno(THUNDEROS_EBUSY);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EBUSY);
     }
     
     /* Acquired read lock */
@@ -153,8 +152,7 @@ void rwlock_write_lock(rwlock_t *rw) {
  */
 int rwlock_write_trylock(rwlock_t *rw) {
     if (!rw) {
-        set_errno(THUNDEROS_EINVAL);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EINVAL);
     }
     
     uint64_t flags = interrupt_save_disable();
@@ -162,8 +160,7 @@ int rwlock_write_trylock(rwlock_t *rw) {
     /* Cannot acquire if readers hold or writer holds */
     if (rw->readers > 0 || rw->writer) {
         interrupt_restore(flags);
-        set_errno(THUNDEROS_EBUSY);
-        return -1;
+        RETURN_ERRNO(THUNDEROS_EBUSY);
     }
     
     /* Acquired write lock */

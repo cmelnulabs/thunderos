@@ -19,6 +19,7 @@
 #include "kernel/shell.h"
 #include "kernel/pipe.h"
 #include "kernel/elf_loader.h"
+#include "kernel/constants.h"
 #include "drivers/virtio_blk.h"
 #include "drivers/virtio_gpu.h"
 #include "drivers/framebuffer.h"
@@ -212,12 +213,12 @@ static int init_gpu_device(void) {
                         hal_uart_puts("[OK] Virtual terminals initialized (6 VTs, Alt+1-6 to switch)\n");
                         
                         /* Display boot message on VT1 */
-                        vterm_set_colors(14, 0);  /* Bright cyan on black */
+                        vterm_set_colors(ANSI_COLOR_BRIGHT_CYAN, ANSI_COLOR_BLACK);
                         vterm_puts("========================================\n");
                         vterm_puts("    ThunderOS - RISC-V AI OS\n");
                         vterm_puts("    Virtual Terminal 1\n");
                         vterm_puts("========================================\n\n");
-                        vterm_set_colors(7, 0);  /* Reset to default */
+                        vterm_set_colors(ANSI_COLOR_WHITE, ANSI_COLOR_BLACK);  /* Reset to default */
                         vterm_flush();
                     } else {
                         /* Fall back to simple framebuffer console */
@@ -320,7 +321,7 @@ static void launch_shell(void) {
 
     /* Launch shells on first 2 VTs for testing */
     int num_shells = vterm_available() ? 2 : 1;
-    int shell_pids[6] = {-1, -1, -1, -1, -1, -1};
+    int shell_pids[VTERM_MAX_TERMINALS] = {-1, -1, -1, -1, -1, -1};
     
     for (int i = 0; i < num_shells; i++) {
         shell_pids[i] = launch_shell_on_vt(i);

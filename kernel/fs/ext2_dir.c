@@ -6,6 +6,7 @@
 #include "../include/hal/hal_uart.h"
 #include "../include/mm/kmalloc.h"
 #include "../include/kernel/errno.h"
+#include "../include/kernel/constants.h"
 #include <stddef.h>
 
 /**

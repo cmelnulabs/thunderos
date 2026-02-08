@@ -1,0 +1,487 @@
+[
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/core/trap.c -o /dev/null",
+    "file": "kernel/arch/riscv64/core/trap.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/debug_var.c -o /dev/null",
+    "file": "kernel/arch/riscv64/debug_var.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/drivers/clint.c -o /dev/null",
+    "file": "kernel/arch/riscv64/drivers/clint.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/drivers/interrupt.c -o /dev/null",
+    "file": "kernel/arch/riscv64/drivers/interrupt.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/drivers/plic.c -o /dev/null",
+    "file": "kernel/arch/riscv64/drivers/plic.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/drivers/sbi.c -o /dev/null",
+    "file": "kernel/arch/riscv64/drivers/sbi.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/drivers/timer.c -o /dev/null",
+    "file": "kernel/arch/riscv64/drivers/timer.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/arch/riscv64/drivers/uart.c -o /dev/null",
+    "file": "kernel/arch/riscv64/drivers/uart.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/condvar.c -o /dev/null",
+    "file": "kernel/core/condvar.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/elf_loader.c -o /dev/null",
+    "file": "kernel/core/elf_loader.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/errno.c -o /dev/null",
+    "file": "kernel/core/errno.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/mutex.c -o /dev/null",
+    "file": "kernel/core/mutex.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/panic.c -o /dev/null",
+    "file": "kernel/core/panic.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/pipe.c -o /dev/null",
+    "file": "kernel/core/pipe.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/process.c -o /dev/null",
+    "file": "kernel/core/process.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/rwlock.c -o /dev/null",
+    "file": "kernel/core/rwlock.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/scheduler.c -o /dev/null",
+    "file": "kernel/core/scheduler.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/shell.c -o /dev/null",
+    "file": "kernel/core/shell.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/signal.c -o /dev/null",
+    "file": "kernel/core/signal.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/syscall.c -o /dev/null",
+    "file": "kernel/core/syscall.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/time.c -o /dev/null",
+    "file": "kernel/core/time.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/core/wait_queue.c -o /dev/null",
+    "file": "kernel/core/wait_queue.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/drivers/fbconsole.c -o /dev/null",
+    "file": "kernel/drivers/fbconsole.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/drivers/font.c -o /dev/null",
+    "file": "kernel/drivers/font.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/drivers/framebuffer.c -o /dev/null",
+    "file": "kernel/drivers/framebuffer.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/drivers/virtio_blk.c -o /dev/null",
+    "file": "kernel/drivers/virtio_blk.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/drivers/virtio_gpu.c -o /dev/null",
+    "file": "kernel/drivers/virtio_gpu.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/drivers/vterm.c -o /dev/null",
+    "file": "kernel/drivers/vterm.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/ext2_alloc.c -o /dev/null",
+    "file": "kernel/fs/ext2_alloc.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/ext2_dir.c -o /dev/null",
+    "file": "kernel/fs/ext2_dir.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/ext2_file.c -o /dev/null",
+    "file": "kernel/fs/ext2_file.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/ext2_inode.c -o /dev/null",
+    "file": "kernel/fs/ext2_inode.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/ext2_super.c -o /dev/null",
+    "file": "kernel/fs/ext2_super.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/ext2_vfs.c -o /dev/null",
+    "file": "kernel/fs/ext2_vfs.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/ext2_write.c -o /dev/null",
+    "file": "kernel/fs/ext2_write.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/fs/vfs.c -o /dev/null",
+    "file": "kernel/fs/vfs.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/main.c -o /dev/null",
+    "file": "kernel/main.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/mm/dma.c -o /dev/null",
+    "file": "kernel/mm/dma.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/mm/kmalloc.c -o /dev/null",
+    "file": "kernel/mm/kmalloc.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/mm/paging.c -o /dev/null",
+    "file": "kernel/mm/paging.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/mm/pmm.c -o /dev/null",
+    "file": "kernel/mm/pmm.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c kernel/utils/kstring.c -o /dev/null",
+    "file": "kernel/utils/kstring.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c tests/framework/kunit.c -o /dev/null",
+    "file": "tests/framework/kunit.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c tests/unit/test_elf.c -o /dev/null",
+    "file": "tests/unit/test_elf.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c tests/unit/test_memory_isolation.c -o /dev/null",
+    "file": "tests/unit/test_memory_isolation.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c tests/unit/test_memory_mgmt.c -o /dev/null",
+    "file": "tests/unit/test_memory_mgmt.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c tests/unit/test_vterm.c -o /dev/null",
+    "file": "tests/unit/test_vterm.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/bin/ush.c -o /dev/null",
+    "file": "userland/bin/ush.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/cat.c -o /dev/null",
+    "file": "userland/core/cat.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/chmod.c -o /dev/null",
+    "file": "userland/core/chmod.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/chown.c -o /dev/null",
+    "file": "userland/core/chown.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/clear.c -o /dev/null",
+    "file": "userland/core/clear.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/ls.c -o /dev/null",
+    "file": "userland/core/ls.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/mkdir.c -o /dev/null",
+    "file": "userland/core/mkdir.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/pwd.c -o /dev/null",
+    "file": "userland/core/pwd.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/rm.c -o /dev/null",
+    "file": "userland/core/rm.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/rmdir.c -o /dev/null",
+    "file": "userland/core/rmdir.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/sleep.c -o /dev/null",
+    "file": "userland/core/sleep.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/core/touch.c -o /dev/null",
+    "file": "userland/core/touch.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/net/udp_network_test.c -o /dev/null",
+    "file": "userland/net/udp_network_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/kill.c -o /dev/null",
+    "file": "userland/system/kill.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/poweroff.c -o /dev/null",
+    "file": "userland/system/poweroff.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/ps.c -o /dev/null",
+    "file": "userland/system/ps.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/reboot.c -o /dev/null",
+    "file": "userland/system/reboot.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/tty.c -o /dev/null",
+    "file": "userland/system/tty.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/uname.c -o /dev/null",
+    "file": "userland/system/uname.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/uptime.c -o /dev/null",
+    "file": "userland/system/uptime.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/system/whoami.c -o /dev/null",
+    "file": "userland/system/whoami.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/clock.c -o /dev/null",
+    "file": "userland/tests/clock.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/condvar_test.c -o /dev/null",
+    "file": "userland/tests/condvar_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/exec_test.c -o /dev/null",
+    "file": "userland/tests/exec_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/exit_test.c -o /dev/null",
+    "file": "userland/tests/exit_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/fork_simple_test.c -o /dev/null",
+    "file": "userland/tests/fork_simple_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/fork_test.c -o /dev/null",
+    "file": "userland/tests/fork_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/hello.c -o /dev/null",
+    "file": "userland/tests/hello.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/mutex_test.c -o /dev/null",
+    "file": "userland/tests/mutex_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/pipe_simple_test.c -o /dev/null",
+    "file": "userland/tests/pipe_simple_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/pipe_test.c -o /dev/null",
+    "file": "userland/tests/pipe_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/rwlock_test.c -o /dev/null",
+    "file": "userland/tests/rwlock_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/signal_test.c -o /dev/null",
+    "file": "userland/tests/signal_test.c"
+  }
+,
+  {
+    "directory": "/workspace",
+    "command": "riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -ffreestanding -fno-common -O0 -g -Wall -Wextra -I./include -c userland/tests/syscall_test.c -o /dev/null",
+    "file": "userland/tests/syscall_test.c"
+  }
+]

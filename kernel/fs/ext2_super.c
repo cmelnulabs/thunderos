@@ -8,6 +8,7 @@
 #include "../include/mm/dma.h"
 #include "../include/hal/hal_uart.h"
 #include "../include/kernel/errno.h"
+#include "../include/kernel/constants.h"
 #include <stddef.h>
 
 /**
@@ -16,14 +17,14 @@
 static int read_block(void *device, uint32_t block_num, void *buffer, uint32_t block_size) {
     (void)device;  /* Device parameter unused - we use global device */
     
-    /* Calculate sector number (sectors are 512 bytes) */
-    uint32_t sector = (block_num * block_size) / 512;
-    uint32_t num_sectors = block_size / 512;
+    /* Calculate sector number (sectors are SECTOR_SIZE bytes) */
+    uint32_t sector = (block_num * block_size) / SECTOR_SIZE;
+    uint32_t num_sectors = block_size / SECTOR_SIZE;
     
     /* Read sectors */
     for (uint32_t i = 0; i < num_sectors; i++) {
         int ret = virtio_blk_read(sector + i, 
-                                  (uint8_t *)buffer + ((size_t)i * 512), 1);
+                                  (uint8_t *)buffer + ((size_t)i * SECTOR_SIZE), 1);
         if (ret != 1) {
             set_errno(THUNDEROS_EIO);
             return -1;
@@ -47,13 +48,13 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     fs->superblock = NULL;
     fs->group_desc = NULL;
     
-    /* Allocate buffer for superblock (1024 bytes) */
+    /* Allocate buffer for superblock (EXT2_MIN_BLOCK_SIZE bytes) */
     fs->superblock = (ext2_superblock_t *)kmalloc(EXT2_SUPERBLOCK_SIZE);
     if (!fs->superblock) {
         RETURN_ERRNO(THUNDEROS_ENOMEM);
     }
     
-    /* Read first two sectors (superblock starts at byte 1024) */
+    /* Read first two sectors (superblock starts at byte EXT2_SUPERBLOCK_OFFSET) */
     /* Sector 0 = bytes 0-511, Sector 1 = bytes 512-1023, Sector 2 = bytes 1024-1535 */
     uint8_t *sb_buffer = (uint8_t *)fs->superblock;
     
@@ -74,7 +75,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     }
     
     /* Read sector 3 (offset 1536) into second 512 bytes of superblock */
-    ret = virtio_blk_read(3, sb_buffer + 512, 1);
+    ret = virtio_blk_read(3, sb_buffer + SECTOR_SIZE, 1);
     if (ret != 1) {
         kfree(fs->superblock);
         fs->superblock = NULL;
@@ -89,7 +90,7 @@ int ext2_mount(ext2_fs_t *fs, void *device) {
     }
     
     /* Calculate block size */
-    fs->block_size = 1024 << fs->superblock->s_log_block_size;
+    fs->block_size = EXT2_MIN_BLOCK_SIZE << fs->superblock->s_log_block_size;
     
     /* Validate block size */
     if (fs->block_size < EXT2_MIN_BLOCK_SIZE || fs->block_size > EXT2_MAX_BLOCK_SIZE) {
