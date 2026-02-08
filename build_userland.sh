@@ -108,6 +108,8 @@ build_program "uptime" "uptime" "system"
 build_program "whoami" "whoami" "system"
 build_program "tty" "tty" "system"
 build_program "kill" "kill" "system"
+build_program "poweroff" "poweroff" "system"
+build_program "reboot" "reboot" "system"
 
 # User applications
 print_section "User Applications"

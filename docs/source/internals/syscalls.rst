@@ -8,7 +8,7 @@ System calls (syscalls) provide the interface between user-space programs and th
 
 **Current Status:**
 
-ThunderOS v0.8.0 implements **43 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, directory navigation, terminal control, file descriptor manipulation, and file permissions.
+ThunderOS v0.10.0 implements **45 system calls** covering process management, I/O, filesystem operations, signals, memory management, inter-process communication, process creation, directory navigation, terminal control, file descriptor manipulation, file permissions, and system control.
 
 **Key Features:**
 
@@ -2213,6 +2213,124 @@ Change file owner and group.
 **Note:**
 
 Currently, only root (UID 0) can change file ownership. Attempting to change ownership as a non-root user will fail with ``THUNDEROS_EPERM``.
+
+System Control
+~~~~~~~~~~~~~~
+
+sys_poweroff (200)
+^^^^^^^^^^^^^^^^^^
+
+Gracefully shutdown the system.
+
+.. code-block:: c
+
+   int sys_poweroff(void);
+
+**Parameters:**
+
+* None
+
+**Return Value:**
+
+* Does not return on success (system powers off)
+* ``-1`` on error if shutdown fails (should never happen in normal operation)
+
+**Implementation:**
+
+Calls ``sbi_shutdown()`` which attempts multiple shutdown methods:
+
+1. **QEMU test device** (0x100000) - Most reliable on QEMU
+2. **SBI SRST extension** - Modern firmware shutdown interface
+3. **Legacy SBI shutdown** - Fallback for older firmware
+4. **WFI loop** - Last resort if all methods fail
+
+The function switches to the kernel page table before accessing the QEMU test device to ensure proper MMIO access.
+
+**Example:**
+
+.. code-block:: c
+
+   #define SYS_POWEROFF 200
+   
+   int poweroff(void) {
+       register long a7 asm("a7") = SYS_POWEROFF;
+       register long a0 asm("a0");
+       asm volatile("ecall" : "=r"(a0) : "r"(a7) : "memory");
+       return a0;  // Should never return
+   }
+   
+   int main(void) {
+       // Shutdown the system
+       poweroff();
+       return 0;  // Unreachable
+   }
+
+**User Command:**
+
+.. code-block:: bash
+
+   ush> poweroff
+
+**Note:**
+
+This syscall clears ``errno`` before initiating shutdown since it's a non-returning operation.
+
+sys_reboot (201)
+^^^^^^^^^^^^^^^^
+
+Reboot the system.
+
+.. code-block:: c
+
+   int sys_reboot(void);
+
+**Parameters:**
+
+* None
+
+**Return Value:**
+
+* Does not return on success (system reboots)
+* ``-1`` on error if reboot fails (should never happen in normal operation)
+
+**Implementation:**
+
+Calls ``sbi_reboot()`` which attempts multiple reboot methods:
+
+1. **QEMU test device** (0x100000) - Writes 0x7777 for reset
+2. **SBI SRST extension** - Cold reboot via firmware
+3. **WFI loop** - Last resort if all methods fail
+
+Like ``sys_poweroff``, this function switches to the kernel page table before accessing MMIO devices.
+
+**Example:**
+
+.. code-block:: c
+
+   #define SYS_REBOOT 201
+   
+   int reboot(void) {
+       register long a7 asm("a7") = SYS_REBOOT;
+       register long a0 asm("a0");
+       asm volatile("ecall" : "=r"(a0) : "r"(a7) : "memory");
+       return a0;  // Should never return
+   }
+   
+   int main(void) {
+       // Reboot the system
+       reboot();
+       return 0;  // Unreachable
+   }
+
+**User Command:**
+
+.. code-block:: bash
+
+   ush> reboot
+
+**Note:**
+
+This syscall clears ``errno`` before initiating reboot since it's a non-returning operation.
 
 Testing
 -------

@@ -419,28 +419,78 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.9.0 - "Synchronization"
+## Version 0.9.0 - "Synchronization" ✅ RELEASED
+
+**Status:** Released on December 10, 2025
 
 **Focus:** Blocking I/O and synchronization primitives
 
-### Planned Features
-- [x] Wait queues for blocking I/O (pipe, network, disk)
-- [x] Mutexes and semaphores
-- [x] Condition variables
-- [x] Reader-writer locks
-- [x] Proper wakeup mechanisms for sleeping processes
+### Completed Features
+- ✅ Wait queues for blocking I/O (pipe, network, disk)
+- ✅ Mutexes and semaphores
+- ✅ Condition variables
+- ✅ Reader-writer locks
+- ✅ Proper wakeup mechanisms for sleeping processes
 
-**Release Criteria:**
-- Blocking I/O works properly with wakeup mechanisms
-- Pipes block readers when empty, writers when full
-- Mutex/semaphore primitives functional
-- No busy-waiting in kernel
+### Testing Completed
+- ✅ Blocking I/O works properly with wakeup mechanisms
+- ✅ Pipes block readers when empty, writers when full
+- ✅ Mutex/semaphore primitives functional
+- ✅ No busy-waiting in kernel
 
-**Status:** Complete (5/5 features) - Ready for release
+**Release Criteria:** ✅ All met
+- ✅ Blocking I/O works properly with wakeup mechanisms
+- ✅ Pipes block readers when empty, writers when full
+- ✅ Mutex/semaphore primitives functional
+- ✅ No busy-waiting in kernel
 
 ---
 
-## Version 0.10.0 - "Networking"
+## Version 0.10.0 - "System Control" ✅ RELEASED
+
+**Status:** Released on February 8, 2026
+
+**Focus:** System shutdown and reboot functionality
+
+### Completed Features
+- ✅ SBI (Supervisor Binary Interface) driver
+  - ✅ SBI ecall wrapper for M-mode firmware communication
+  - ✅ SRST extension support (modern reset/shutdown)
+  - ✅ Legacy SBI shutdown support
+  - ✅ QEMU test device integration for reliable shutdown/reboot
+- ✅ System control syscalls
+  - ✅ `sys_poweroff` (200) - Graceful system shutdown
+  - ✅ `sys_reboot` (201) - System reboot
+- ✅ Userland utilities
+  - ✅ `poweroff` - Shutdown command
+  - ✅ `reboot` - Reboot command
+- ✅ MMIO device support
+  - ✅ QEMU test device mapped at 0x100000
+  - ✅ Page table switching for kernel MMIO access
+  - ✅ Multiple fallback methods for reliability
+- ✅ Code quality
+  - ✅ All constants properly named (no magic numbers)
+  - ✅ Comprehensive documentation
+  - ✅ Proper errno handling throughout
+  - ✅ Clean coding standards compliance
+
+### Testing Completed
+- ✅ Poweroff command exits QEMU cleanly
+- ✅ Reboot command restarts system successfully
+- ✅ QEMU test device access via page table switching
+- ✅ SBI fallback chain tested (test device → SRST → legacy)
+- ✅ No page faults or crashes
+
+**Release Criteria:** ✅ All met
+- ✅ System can be shut down gracefully from user space
+- ✅ System can be rebooted from user space
+- ✅ Multiple shutdown methods for reliability
+- ✅ Clean code with no magic numbers
+- ✅ Full documentation
+
+---
+
+## Version 0.11.0 - "Networking"
 
 **Focus:** Network connectivity
 
@@ -460,7 +510,7 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.11.0 - "Performance"
+## Version 0.12.0 - "Performance"
 
 **Focus:** Optimization and multi-core support
 
@@ -481,7 +531,7 @@ Initial attempt at VirtIO block driver revealed fundamental gaps in memory infra
 
 ---
 
-## Version 0.12.0 - "Hardware Ready"
+## Version 0.13.0 - "Hardware Ready"
 
 **Focus:** Real hardware support
 
@@ -594,6 +644,6 @@ See the [Issues](https://github.com/cmelnu/thunderos/issues) page for specific t
 
 ---
 
-**Last Updated:** November 2025
+**Last Updated:** February 2026
 
 For detailed technical documentation, see [docs/](docs/) directory.

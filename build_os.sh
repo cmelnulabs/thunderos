@@ -31,9 +31,10 @@ main() {
     echo ""
     echo "Creating ext2 filesystem image (${FS_SIZE})..."
     
-    # Create temporary directory for filesystem contents
+    # Create temporary directory for filesystem contents (force clean)
     rm -rf build/testfs
-    mkdir -p build/testfs/bin
+    mkdir -m 755 build/testfs
+    mkdir -m 755 build/testfs/bin
     
     # Add test files
     echo "Hello from ThunderOS ext2 filesystem!" > build/testfs/test.txt
@@ -46,7 +47,7 @@ main() {
         ./build_userland.sh 2>/dev/null || echo "⚠ Userland build skipped"
         
         # Copy userland binaries if they exist
-        for prog in cat ls hello clock pwd mkdir rmdir touch rm clear sleep ush ps uname uptime whoami tty kill; do
+        for prog in cat ls hello clock pwd mkdir rmdir touch rm clear sleep ush ps uname uptime whoami tty kill poweroff reboot; do
             if [[ -f "userland/build/${prog}" ]]; then
                 cp "userland/build/${prog}" build/testfs/bin/
                 echo "  Added /bin/${prog}"

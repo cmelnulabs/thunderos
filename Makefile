@@ -237,6 +237,8 @@ force_fs: userland
 	@cp userland/build/whoami $(BUILD_DIR)/testfs/bin/whoami 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) whoami not built"
 	@cp userland/build/tty $(BUILD_DIR)/testfs/bin/tty 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) tty not built"
 	@cp userland/build/kill $(BUILD_DIR)/testfs/bin/kill 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) kill not built"
+	@cp userland/build/poweroff $(BUILD_DIR)/testfs/bin/poweroff 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) poweroff not built"
+	@cp userland/build/reboot $(BUILD_DIR)/testfs/bin/reboot 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) reboot not built"
 	@cp userland/build/signal_test $(BUILD_DIR)/testfs/bin/signal_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) signal_test not built"
 	@cp userland/build/pipe_test $(BUILD_DIR)/testfs/bin/pipe_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_test not built"
 	@cp userland/build/pipe_simple_test $(BUILD_DIR)/testfs/bin/pipe_simple_test 2>/dev/null || echo "  $(YELLOW)Warning:$(RESET) pipe_simple_test not built"

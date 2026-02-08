@@ -8,6 +8,7 @@
 #include "hal/hal_uart.h"
 #include "kernel/kstring.h"
 #include "kernel/errno.h"
+#include "arch/sbi.h"
 
 // Kernel root page table (allocated statically for bootstrap)
 static page_table_t kernel_page_table __attribute__((aligned(PAGE_SIZE)));
@@ -275,6 +276,13 @@ void paging_init(uintptr_t kernel_start, uintptr_t kernel_end) {
     hal_uart_puts("Mapping CLINT MMIO\n");
     if (map_page(&kernel_page_table, 0x2000000, 0x2000000, PTE_KERNEL_DATA) != 0) {
         hal_uart_puts("Failed to map CLINT\n");
+        return;
+    }
+    
+    // Map QEMU test device (QEMU_TEST_DEVICE_ADDR)
+    hal_uart_puts("Mapping QEMU test device\n");
+    if (map_page(&kernel_page_table, QEMU_TEST_DEVICE_ADDR, QEMU_TEST_DEVICE_ADDR, PTE_KERNEL_DATA) != 0) {
+        hal_uart_puts("Failed to map QEMU test device\n");
         return;
     }
     
