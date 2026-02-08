@@ -13,3 +13,5 @@ tests/outputs/
 test_output.txt
 *_output.txt
 DEBUG_JOURNAL.md
+clang_tidy_analysis.txt
+compile_commands.json
